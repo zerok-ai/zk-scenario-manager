@@ -1,0 +1,4 @@
+redis:
+  host: redis.redis.svc.cluster.local
+  port: 6379
+  readTimeout: 20
