@@ -1,19 +1,30 @@
 package main
 
 import (
-	config "scenario-manager/internal/config"
+	"fmt"
+	"scenario-manager/internal/config"
 	"scenario-manager/internal/filters"
 )
 
 func main() {
+
+	fmt.Printf("Hello from zk-scenario-manager\n")
+
 	// read configuration from the file and environment variables
-	var cfg config.AppConfigs
-	if err := config.ProcessArgs(&cfg); err != nil {
+	cfg, err := config.ProcessArgs()
+	if err != nil {
 		panic(err)
 	}
 
 	//start business logic
-	if err := filters.Start(cfg); err != nil {
+	done := make(chan bool)
+	if err := filters.Start(*cfg); err != nil {
 		panic(err)
 	}
+
+	// Block the main goroutine until termination signal is received
+	<-done
+
+	// Execution continues here when termination signal is received
+	fmt.Println("Main function has terminated.")
 }

@@ -1,0 +1,6 @@
+resources:
+  - namespace.yaml
+  - deployment.yaml
+namespace: zk-client
+commonLabels:
+  app: zk-scenario-manager

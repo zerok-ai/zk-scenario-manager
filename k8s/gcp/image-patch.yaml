@@ -1,0 +1,11 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: zk-daemonset
+spec:
+  template:
+    spec:
+      containers:
+        - name: zk-daemonset
+          image: us-west1-docker.pkg.dev/zerok-dev/zk-client/zk-daemonset:1.0
+          imagePullPolicy: Always
