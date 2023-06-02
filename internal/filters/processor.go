@@ -3,8 +3,8 @@ package filters
 import (
 	"time"
 
+	zkTicker "github.com/zerok-ai/zk-utils-go/ticker"
 	"scenario-manager/internal/config"
-	zktime "scenario-manager/zk-utils-go/time"
 )
 
 const (
@@ -27,11 +27,11 @@ func Start(cfg config.AppConfigs) error {
 
 	// trigger recurring filter pull
 	tickerFilterPull = time.NewTicker(filterPullTickInterval)
-	zktime.RunTaskOnTicks(tickerFilterPull, filterProcessor.FetchNewFilters)
+	zkTicker.RunTaskOnTicks(tickerFilterPull, filterProcessor.FetchNewFilters)
 
 	// trigger recurring processing of trace data against filters
 	tickerTraceProcessor = time.NewTicker(filterProcessingTickInterval)
-	zktime.RunTaskOnTicks(tickerTraceProcessor, processFilters)
+	zkTicker.RunTaskOnTicks(tickerTraceProcessor, processFilters)
 
 	return nil
 }

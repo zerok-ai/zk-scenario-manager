@@ -4,10 +4,10 @@ import (
 	"flag"
 	"fmt"
 	"github.com/ilyakaznacheev/cleanenv"
+	zkHttpConfig "github.com/zerok-ai/zk-utils-go/http/config"
+	zkLogsConfig "github.com/zerok-ai/zk-utils-go/logs/config"
+	zkRedis "github.com/zerok-ai/zk-utils-go/storage/redis"
 	"os"
-	config4 "scenario-manager/zk-utils-go/http/config"
-	config3 "scenario-manager/zk-utils-go/logs/config"
-	config2 "scenario-manager/zk-utils-go/redis/config"
 )
 
 type SuprSendConfig struct {
@@ -37,15 +37,15 @@ type RouterConfigs struct {
 
 // AppConfigs is an application configuration structure
 type AppConfigs struct {
-	Redis      config2.RedisConfig `yaml:"redis"`
-	Server     ServerConfig        `yaml:"server"`
-	AuthConfig AuthConfig          `yaml:"auth"`
-	LogsConfig config3.LogsConfig  `yaml:"logs"`
-	Http       config4.HttpConfig  `yaml:"http"`
-	Pixie      PixieConfig         `yaml:"pixie"`
-	Router     RouterConfigs       `yaml:"router"`
-	Greeting   string              `env:"GREETING" env-description:"Greeting phrase" env-default:"Hello!"`
-	SuprSend   SuprSendConfig      `yaml:"suprsend"`
+	Redis      zkRedis.RedisConfig     `yaml:"redis"`
+	Server     ServerConfig            `yaml:"server"`
+	AuthConfig AuthConfig              `yaml:"auth"`
+	LogsConfig zkLogsConfig.LogsConfig `yaml:"logs"`
+	Http       zkHttpConfig.HttpConfig `yaml:"http"`
+	Pixie      PixieConfig             `yaml:"pixie"`
+	Router     RouterConfigs           `yaml:"router"`
+	Greeting   string                  `env:"GREETING" env-description:"Greeting phrase" env-default:"Hello!"`
+	SuprSend   SuprSendConfig          `yaml:"suprsend"`
 }
 
 // Args command-line parameters

@@ -1,3 +1,4 @@
 zk-utils-go/vendor
 vendor
 .idea/*
+/zk-scenario-manager
