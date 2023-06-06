@@ -18,9 +18,11 @@ func main() {
 
 	//start business logic
 	done := make(chan bool)
-	if err := filters.Start(*cfg); err != nil {
+	filterProcessor, err := filters.NewScenarioManager(*cfg)
+	if err != nil {
 		panic(err)
 	}
+	filterProcessor.Init()
 
 	// Block the main goroutine until termination signal is received
 	<-done

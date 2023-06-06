@@ -39,6 +39,10 @@ github.com/zerok-ai/zk-utils-go v0.4.7-0.20230601123619-d36209bf467b h1:QcsZbVfT
 github.com/zerok-ai/zk-utils-go v0.4.7-0.20230601123619-d36209bf467b/go.mod h1:S5Ho55oX/x3vYhUUf2b6tr4sRDXefbcuk6oik/06KYU=
 github.com/zerok-ai/zk-utils-go v0.4.7-0.20230602103729-7a7471f1df4f h1:FD9SLzoD/4wkRFd0VuesXWtkgQOw2eZYdFpedud5uL8=
 github.com/zerok-ai/zk-utils-go v0.4.7-0.20230602103729-7a7471f1df4f/go.mod h1:S5Ho55oX/x3vYhUUf2b6tr4sRDXefbcuk6oik/06KYU=
+github.com/zerok-ai/zk-utils-go v0.4.7-0.20230606053007-3ce18289efea h1:nrqarBSVYxxaS1IkyAX1t2IfNK40fhevSfHbVGlqROg=
+github.com/zerok-ai/zk-utils-go v0.4.7-0.20230606053007-3ce18289efea/go.mod h1:S5Ho55oX/x3vYhUUf2b6tr4sRDXefbcuk6oik/06KYU=
+github.com/zerok-ai/zk-utils-go v0.4.7-0.20230606063643-0b10dbdbd571 h1:94Laq9lpPOPJszXHtrMEbEC5/jVhFq2/M+Vdi3gHV9E=
+github.com/zerok-ai/zk-utils-go v0.4.7-0.20230606063643-0b10dbdbd571/go.mod h1:S5Ho55oX/x3vYhUUf2b6tr4sRDXefbcuk6oik/06KYU=
 gopkg.in/check.v1 v0.0.0-20161208181325-20d25e280405/go.mod h1:Co6ibVJAznAaIkqp8huTwlJQCZ016jof/cbN4VW5Yz0=
 gopkg.in/check.v1 v1.0.0-20190902080502-41f04d3bba15 h1:YR8cESwS4TdDjEe65xsg0ogRM/Nc3DYOhEAlW+xobZo=
 gopkg.in/check.v1 v1.0.0-20190902080502-41f04d3bba15/go.mod h1:Co6ibVJAznAaIkqp8huTwlJQCZ016jof/cbN4VW5Yz0=

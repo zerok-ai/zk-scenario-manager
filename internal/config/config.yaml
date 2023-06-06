@@ -2,4 +2,7 @@ redis:
   host: redis.redis.svc.cluster.local
   port: 6379
   readTimeout: 20
-  db: 0
+  db:
+    traces: 1
+    scenarios: 6
+

@@ -5,7 +5,7 @@ go 1.20
 require (
 	github.com/ilyakaznacheev/cleanenv v1.4.2
 	github.com/redis/go-redis/v9 v9.0.5
-	github.com/zerok-ai/zk-utils-go v0.4.7-0.20230602103729-7a7471f1df4f
+	github.com/zerok-ai/zk-utils-go v0.4.7-0.20230606063643-0b10dbdbd571
 )
 
 require (
