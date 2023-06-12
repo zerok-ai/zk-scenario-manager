@@ -1,10 +1,9 @@
-package filters
+package populatedata
 
 import (
 	"fmt"
 	"github.com/zerok-ai/zk-utils-go/interfaces"
-	"github.com/zerok-ai/zk-utils-go/storage"
-	"github.com/zerok-ai/zk-utils-go/storage/model"
+	storage "github.com/zerok-ai/zk-utils-go/storage/redis"
 	ticker "github.com/zerok-ai/zk-utils-go/ticker"
 	"time"
 )
@@ -27,7 +26,7 @@ type StringPopulator struct {
 	keyPrefix      string
 }
 
-func GetStringPopulator(taskName string, dbname string, redisConfig *model.RedisConfig, keyPrefix string, increment int) *StringPopulator {
+func GetStringPopulator(taskName string, dbname string, redisConfig *storage.RedisConfig, keyPrefix string, increment int) *StringPopulator {
 	vs, err := storage.GetVersionedStore(redisConfig, dbname, false, RedisVal(""))
 	if err != nil {
 		return nil

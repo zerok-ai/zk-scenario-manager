@@ -41,7 +41,9 @@ data:
       host: redis.zk-client.svc.cluster.local
       port: 6379
       readTimeout: 20
-      db: 6
+      db:     
+        scenario: 6
+        traces: 1
 kind: ConfigMap
 metadata:
   name: zk-scenario-manager
