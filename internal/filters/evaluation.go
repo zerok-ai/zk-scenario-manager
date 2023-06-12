@@ -16,7 +16,7 @@ type TraceEvaluator struct {
 func (te TraceEvaluator) EvalScenario() (*string, error) {
 	resultKey, err := te.evalFilter(te.scenario.Filter)
 	if err != nil {
-		err = te.traceStore.SetExpiryForSet(*resultKey, ttlForTransientSets)
+		err = te.traceStore.SetExpiryForSet(*resultKey, TTLForTransientSets)
 	}
 	return resultKey, err
 }

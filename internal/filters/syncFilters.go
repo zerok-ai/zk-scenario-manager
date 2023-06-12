@@ -53,7 +53,7 @@ func (f ScenarioManager) processFilters() {
 	}
 
 	for _, scenario := range scenarios {
-		set, err := TraceEvaluator{scenario, f.traceStore, namesOfAllSets}.EvalScenario()
+		_, err := TraceEvaluator{scenario, f.traceStore, namesOfAllSets}.EvalScenario()
 		if err != nil {
 			continue
 		}
