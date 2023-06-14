@@ -1,0 +1,7 @@
+redis:
+  host: 127.0.0.1
+  port: 6379
+  dbs:
+    traces: 1
+    scenarios: 6
+  readTimeout: 20

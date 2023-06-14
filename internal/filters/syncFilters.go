@@ -1,72 +1,63 @@
 package filters
 
 import (
+	"fmt"
+	"github.com/redis/go-redis/v9"
+	"github.com/zerok-ai/zk-utils-go/scenario/model"
+	store "github.com/zerok-ai/zk-utils-go/storage/redis"
+	ticker "github.com/zerok-ai/zk-utils-go/ticker"
 	"scenario-manager/internal/config"
-	//"scenario-manager/internal/storage"
+	"time"
 )
 
 const (
-	filterDb int = 8
+	FilterProcessingTickInterval               = 10 * time.Minute
+	TTLForTransientSets          time.Duration = 2 * time.Minute
 )
 
-type FilterProcessor struct {
-	Filters        map[string]string //TODO this should be map[string]Filter
-	filterVersions map[string]string
-	//versionedStore *storage.VersionedStore
+type ScenarioManager struct {
+	scenarioStore *store.VersionedStore[model.Scenario]
+
+	traceStore  *TraceStore
+	redisClient *redis.Client
 }
 
-func NewFilterProcessor(appConfig config.AppConfigs) *FilterProcessor {
-	//vs := storage.GetVersionedStore(appConfig, filterDb)
-	//fltrs, _ := vs.GetAllVersions()
-	return &FilterProcessor{
-		//versionedStore: vs,
-		//Filters:        fltrs,
+func NewScenarioManager(cfg config.AppConfigs) (*ScenarioManager, error) {
+	vs, err := store.GetVersionedStore(cfg.Redis, "scenarios", true, model.Scenario{})
+	if err != nil {
+		return nil, err
 	}
+
+	ts := GetTraceStore(cfg.Redis, TTLForTransientSets)
+
+	fp := ScenarioManager{
+		scenarioStore: vs,
+		traceStore:    ts,
+	}
+	return &fp, nil
 }
 
-func (fp FilterProcessor) FetchNewFilters() {
-
-	// 1. get the new filter versions for each filter
-	//newFilterVersions, err := fp.versionedStore.GetAllVersions()
-	//if err != nil {
-	//	log.Println("Error in getting filter versions:", err)
-	//	return
-	//}
-	//
-	//// 2. collect the filters which have the same version in a new map
-	//newFilters := map[string]string{}
-	//missingOrOldFilters := []string{}
-	//for key, newVersion := range newFilterVersions {
-	//	oldVersion, ok := fp.filterVersions[key]
-	//	if ok {
-	//		if oldVersion == newVersion {
-	//			newFilters[key] = fp.Filters[key]
-	//			continue
-	//		}
-	//	}
-	//	missingOrOldFilters = append(missingOrOldFilters, key)
-	//}
-	//
-	//// 3. get the filters which don't exist
-	//newRawFilters, err := fp.versionedStore.GetValuesForKeys(missingOrOldFilters)
-	//if err != nil {
-	//	log.Println("Error in getting newFilters:", err)
-	//	return
-	//}
-	//loadInToFilterMap(missingOrOldFilters, newRawFilters, newFilters)
-	//
-	//// 4. assign the new objects to filter processors
-	//fp.Filters = newFilters
-	//fp.filterVersions = newFilterVersions
+func (f ScenarioManager) Init() {
+	// trigger recurring processing of trace data against filters
+	tickerTask := ticker.GetNewTickerTask("filter-processor", FilterProcessingTickInterval, f.processFilters)
+	tickerTask.Start()
+	f.processFilters()
 }
 
-func loadInToFilterMap(keys []string, interfaceSlice []interface{}, stringMap map[string]string) map[string]string {
-	for i, v := range interfaceSlice {
-		str, ok := v.(string)
-		if !ok {
+func (f ScenarioManager) processFilters() {
+	scenarios := f.scenarioStore.GetAllValues()
+	namesOfAllSets, err := f.traceStore.GetAllKeys()
+	if err != nil {
+		fmt.Println("Error getting all keys from traceStore ", err)
+		return
+	}
+
+	for _, scenario := range scenarios {
+		_, err := TraceEvaluator{scenario, f.traceStore, namesOfAllSets}.EvalScenario()
+		if err != nil {
 			continue
 		}
-		stringMap[keys[i]] = str
 	}
-	return stringMap
+
+	//TODO	 push data to scenario collector
 }

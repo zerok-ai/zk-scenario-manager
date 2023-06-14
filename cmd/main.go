@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"scenario-manager/internal/config"
 	"scenario-manager/internal/filters"
 	"scenario-manager/internal/tracePersistence"
@@ -16,7 +17,26 @@ import (
 
 var LogTag = "main"
 
+func start(cfg config.AppConfigs) {
+
+	//start business logic
+	done := make(chan bool)
+	filterProcessor, err := filters.NewScenarioManager(cfg)
+	if err != nil {
+		panic(err)
+	}
+	filterProcessor.Init()
+
+	// Block the main goroutine until termination signal is received
+	<-done
+
+	// Execution continues here when termination signal is received
+	fmt.Println("Main function has terminated.")
+}
+
 func main() {
+	fmt.Printf("Hello from zk-scenario-manager\n")
+
 	// read configuration from the file and environment variables
 	var cfg config.AppConfigs
 	if err := zkConfig.ProcessArgs[config.AppConfigs](&cfg); err != nil {
@@ -38,6 +58,12 @@ func main() {
 	if err := filters.Start(cfg); err != nil {
 		panic(err)
 	}
+
+	filterProcessor, err := filters.NewScenarioManager(cfg)
+	if err != nil {
+		panic(err)
+	}
+	filterProcessor.Init()
 
 	app := newApp(zkPostgresRepo)
 
