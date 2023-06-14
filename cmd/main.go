@@ -54,10 +54,7 @@ func main() {
 
 	zkLogger.Debug(LogTag, "Parsed Configuration", cfg)
 
-	//start business logic
-	if err := filters.Start(cfg); err != nil {
-		panic(err)
-	}
+	start(cfg)
 
 	filterProcessor, err := filters.NewScenarioManager(cfg)
 	if err != nil {
@@ -67,11 +64,11 @@ func main() {
 
 	app := newApp(zkPostgresRepo)
 
-	config := iris.WithConfiguration(iris.Configuration{
+	configurator := iris.WithConfiguration(iris.Configuration{
 		DisablePathCorrection: true,
 		LogLevel:              "debug",
 	})
-	app.Listen(":"+cfg.Server.Port, config)
+	app.Listen(":"+cfg.Server.Port, configurator)
 }
 
 func newApp(db sqlDB.DatabaseRepo) *iris.Application {

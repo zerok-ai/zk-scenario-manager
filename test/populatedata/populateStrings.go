@@ -3,7 +3,8 @@ package populatedata
 import (
 	"fmt"
 	"github.com/zerok-ai/zk-utils-go/interfaces"
-	storage "github.com/zerok-ai/zk-utils-go/storage/redis"
+	"github.com/zerok-ai/zk-utils-go/storage/redis"
+	redisConfig "github.com/zerok-ai/zk-utils-go/storage/redis/config"
 	ticker "github.com/zerok-ai/zk-utils-go/ticker"
 	"time"
 )
@@ -20,14 +21,14 @@ func (s RedisVal) Equals(otherInterface interfaces.ZKComparable) bool {
 
 type StringPopulator struct {
 	counter        int
-	versionedStore *storage.VersionedStore[RedisVal]
+	versionedStore *redis.VersionedStore[RedisVal]
 	taskName       string
 	increment      int
 	keyPrefix      string
 }
 
-func GetStringPopulator(taskName string, dbname string, redisConfig *storage.RedisConfig, keyPrefix string, increment int) *StringPopulator {
-	vs, err := storage.GetVersionedStore(redisConfig, dbname, false, RedisVal(""))
+func GetStringPopulator(taskName string, dbname string, redisConfig *redisConfig.RedisConfig, keyPrefix string, increment int) *StringPopulator {
+	vs, err := redis.GetVersionedStore(redisConfig, dbname, false, RedisVal(""))
 	if err != nil {
 		return nil
 	}
@@ -54,7 +55,7 @@ func (sp StringPopulator) Start(timeInterval time.Duration) error {
 func (sp StringPopulator) populateData(counter int) {
 	key := fmt.Sprintf("%s%n", sp.keyPrefix, counter)
 	err := sp.versionedStore.SetValue(key, RedisVal(key))
-	if err != nil && err != storage.LATEST {
+	if err != nil && err != redis.LATEST {
 		fmt.Println("populateData error in setting value ", err.Error())
 		return
 	}

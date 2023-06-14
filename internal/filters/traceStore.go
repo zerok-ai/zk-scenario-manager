@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/redis/go-redis/v9"
-	storage "github.com/zerok-ai/zk-utils-go/storage/redis"
+	redisConfig "github.com/zerok-ai/zk-utils-go/storage/redis/config"
 	"time"
 )
 
@@ -21,7 +21,7 @@ func (t TraceStore) initialize() *TraceStore {
 	return &t
 }
 
-func GetTraceStore(redisConfig *storage.RedisConfig, ttlForTransientSets time.Duration) *TraceStore {
+func GetTraceStore(redisConfig *redisConfig.RedisConfig, ttlForTransientSets time.Duration) *TraceStore {
 
 	dbName := "traces"
 	if redisConfig == nil {

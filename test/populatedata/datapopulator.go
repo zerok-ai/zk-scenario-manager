@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/zerok-ai/zk-utils-go/scenario/model"
-	storage "github.com/zerok-ai/zk-utils-go/storage/redis"
+	storage "github.com/zerok-ai/zk-utils-go/storage/redis/config"
 	"io"
 	"os"
 )
