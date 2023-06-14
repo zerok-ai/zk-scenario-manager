@@ -198,7 +198,7 @@ func doBulkInsertForTraceList(tx *sql.Tx, dbRepo sqlDB.DatabaseRepo, traceData, 
 		return err
 	}
 
-	err = bulkInsert(tx, dbRepo, TraceTablePostgres, []string{TraceId, SpanId, RequestPayload, ResponsePayload}, traceData)
+	err = bulkInsert(tx, dbRepo, TraceRawDataTablePostgres, []string{TraceId, SpanId, RequestPayload, ResponsePayload}, traceData)
 	if err != nil {
 		zkLogger.Info(LogTag, "Error in bulk insert traceRawData table", err)
 		return err
