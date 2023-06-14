@@ -1,0 +1,18 @@
+server:
+  host: localhost
+  port: 80
+
+logs:
+  color: true
+  level: DEBUG
+
+http:
+  debug: true
+
+
+postgres:
+  host: "localhost"
+  port: 5432
+  user: "pl"
+  password: "pl"
+  dbname: "pl"

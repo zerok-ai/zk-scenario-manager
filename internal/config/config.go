@@ -1,13 +1,9 @@
 package config
 
 import (
-	"flag"
-	"fmt"
-	"github.com/ilyakaznacheev/cleanenv"
 	zkHttpConfig "github.com/zerok-ai/zk-utils-go/http/config"
 	zkLogsConfig "github.com/zerok-ai/zk-utils-go/logs/config"
-	zkRedis "github.com/zerok-ai/zk-utils-go/storage/redis"
-	"os"
+	zkUtilsPostgresConfig "github.com/zerok-ai/zk-utils-go/storage/sqlDB/postgres/config"
 )
 
 type SuprSendConfig struct {
@@ -37,46 +33,14 @@ type RouterConfigs struct {
 
 // AppConfigs is an application configuration structure
 type AppConfigs struct {
-	Redis      zkRedis.RedisConfig     `yaml:"redis"`
-	Server     ServerConfig            `yaml:"server"`
-	AuthConfig AuthConfig              `yaml:"auth"`
-	LogsConfig zkLogsConfig.LogsConfig `yaml:"logs"`
-	Http       zkHttpConfig.HttpConfig `yaml:"http"`
-	Pixie      PixieConfig             `yaml:"pixie"`
-	Router     RouterConfigs           `yaml:"router"`
-	Greeting   string                  `env:"GREETING" env-description:"Greeting phrase" env-default:"Hello!"`
-	SuprSend   SuprSendConfig          `yaml:"suprsend"`
-}
-
-// Args command-line parameters
-type Args struct {
-	ConfigPath string
-}
-
-// ProcessArgs processes and handles CLI arguments
-func ProcessArgs(cfg interface{}) error {
-	var a Args
-
-	flagSet := flag.NewFlagSet("server", 1)
-	flagSet.StringVar(&a.ConfigPath, "c", "config.yaml", "Path to configuration file")
-
-	fu := flagSet.Usage
-	flagSet.Usage = func() {
-		fu()
-		envHelp, _ := cleanenv.GetDescription(cfg, nil)
-		if _, err := fmt.Fprintln(flagSet.Output()); err != nil {
-			return
-		}
-
-		_, err := fmt.Fprintln(flagSet.Output(), envHelp)
-		if err != nil {
-			return
-		}
-	}
-
-	if err := flagSet.Parse(os.Args[1:]); err != nil {
-		return err
-	}
-
-	return cleanenv.ReadConfig(a.ConfigPath, &cfg)
+	//Redis      zkRedis.RedisConfig                  `yaml:"redis"`
+	Postgres   zkUtilsPostgresConfig.PostgresConfig `yaml:"postgres"`
+	Server     ServerConfig                         `yaml:"server"`
+	AuthConfig AuthConfig                           `yaml:"auth"`
+	LogsConfig zkLogsConfig.LogsConfig              `yaml:"logs"`
+	Http       zkHttpConfig.HttpConfig              `yaml:"http"`
+	Pixie      PixieConfig                          `yaml:"pixie"`
+	Router     RouterConfigs                        `yaml:"router"`
+	Greeting   string                               `env:"GREETING" env-description:"Greeting phrase" env-default:"Hello!"`
+	SuprSend   SuprSendConfig                       `yaml:"suprsend"`
 }

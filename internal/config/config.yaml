@@ -1,4 +1,25 @@
+server:
+  host: localhost
+  port: 80
+
+logs:
+  color: true
+  level: DEBUG
+
+http:
+  debug: true
+
 redis:
   host: redis.redis.svc.cluster.local
   port: 6379
   readTimeout: 20
+
+postgres:
+  host: "localhost"
+  port: 5432
+  user: "pl"
+  password: "pl"
+  dbname: "pl"
+  max_connections: 5
+  max_idle_connections: 5
+  connection_max_lifetime_in_minutes: 10

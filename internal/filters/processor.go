@@ -3,7 +3,6 @@ package filters
 import (
 	"time"
 
-	zkTicker "github.com/zerok-ai/zk-utils-go/ticker"
 	"scenario-manager/internal/config"
 )
 
@@ -23,15 +22,15 @@ var (
 func Start(cfg config.AppConfigs) error {
 
 	// initialize the image store
-	filterProcessor := NewFilterProcessor(cfg)
-
-	// trigger recurring filter pull
-	tickerFilterPull = time.NewTicker(filterPullTickInterval)
-	zkTicker.RunTaskOnTicks(tickerFilterPull, filterProcessor.FetchNewFilters)
-
-	// trigger recurring processing of trace data against filters
-	tickerTraceProcessor = time.NewTicker(filterProcessingTickInterval)
-	zkTicker.RunTaskOnTicks(tickerTraceProcessor, processFilters)
+	//filterProcessor := NewFilterProcessor(cfg)
+	//
+	//// trigger recurring filter pull
+	//tickerFilterPull = time.NewTicker(filterPullTickInterval)
+	//zkTicker.RunTaskOnTicks(tickerFilterPull, filterProcessor.FetchNewFilters)
+	//
+	//// trigger recurring processing of trace data against filters
+	//tickerTraceProcessor = time.NewTicker(filterProcessingTickInterval)
+	//zkTicker.RunTaskOnTicks(tickerTraceProcessor, processFilters)
 
 	return nil
 }

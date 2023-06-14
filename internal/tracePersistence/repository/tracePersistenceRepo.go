@@ -1,86 +1,85 @@
 package repository
 
 import (
-	"context"
-	"fmt"
-	zklogger "github.com/zerok-ai/zk-utils-go/logs"
+	"database/sql"
 	"log"
 	"scenario-manager/internal/tracePersistence/model"
+	"scenario-manager/internal/tracePersistence/model/dto"
 
+	"github.com/lib/pq"
+	zkCommon "github.com/zerok-ai/zk-utils-go/common"
 	"github.com/zerok-ai/zk-utils-go/interfaces"
-	zkUtilsPostgres "github.com/zerok-ai/zk-utils-go/storage/sqlDB/postgres"
-	zkUtilsPostgresConfig "github.com/zerok-ai/zk-utils-go/storage/sqlDB/postgres/config"
+	zkLogger "github.com/zerok-ai/zk-utils-go/logs"
+	"github.com/zerok-ai/zk-utils-go/storage/sqlDB"
 )
 
 const (
 	TraceTablePostgres         = "trace"
-	TraceMetaDataTablePostgres = "trace_meta_data"
+	TraceMetadataTablePostgres = "trace_metadata"
 	TraceRawDataTablePostgres  = "trace_raw_data"
 
 	ScenarioId      = "scenario_id"
 	ScenarioVersion = "scenario_version"
 	TraceId         = "trace_id"
 	SpanId          = "span_id"
-	MetaData        = "meta_data"
+	Source          = "source"
+	Destination     = "destination"
+	Error           = "error"
+	Metadata        = "metadata"
+	LatencyMs       = "latency_ms"
 	Protocol        = "protocol"
 	RequestPayload  = "request_payload"
 	ResponsePayload = "response_payload"
 
-	GetTraceQuery         = "SELECT scenario_version, trace_id FROM trace WHERE scenario_id=$1 OFFSET=$2 LIMIT =$3"
-	GetTraceRawDataQuery  = "SELECT request_payload, response_payload FROM trace_raw_data WHERE trace_id=$1 AND span_id=$2 OFFSET=$3 LIMIT =$4"
-	GetTraceMetaDataQuery = "SELECT protocol, meta_data FROM trace_meta_data WHERE trace_id=$1 AND span_id=$2 OFFSET=$3 LIMIT =$4"
+	GetTraceQuery                              = "SELECT scenario_version, trace_id FROM trace WHERE scenario_id=$1 LIMIT $2 OFFSET $3"
+	GetTraceRawDataQuery                       = "SELECT request_payload, response_payload FROM trace_raw_data WHERE trace_id=$1 AND span_id=$2 LIMIT $3 OFFSET $4"
+	GetTraceMetadataQueryUsingTraceIdAndSpanId = "SELECT span_id, source, destination, error, metadata, latency_ms, protocol FROM trace_metadata WHERE trace_id=$1 AND span_id=$2 LIMIT $3 OFFSET $4"
+	GetTraceMetadataQueryUsingTraceId          = "SELECT span_id, source, destination, error, metadata, latency_ms, protocol FROM trace_metadata WHERE trace_id=$1 LIMIT $2 OFFSET $3"
 
 	InsertTraceQuery         = "INSERT INTO trace (scenario_id, scenario_version, trace_id) VALUES ($1, $2, $3)"
-	InsertTraceMetaDataQuery = "INSERT INTO trace_meta_data (trace_id, span_id, meta_data, protocol) VALUES ($1, $2, $3, $4)"
-	InsertTraceRawDataQuery  = "INSERT INTO trace_raw_data (trace_id, span_id, request_body, response_body) VALUES ($1, $2, $3, $4)"
+	InsertTraceMetadataQuery = "INSERT INTO trace_metadata (trace_id, span_id, source, destination, error, metadata, latency_ms, protocol) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)"
+	InsertTraceRawDataQuery  = "INSERT INTO trace_raw_data (trace_id, span_id, request_payload, response_payload) VALUES ($1, $2, $3, $4)"
+
+	UpsertTraceQuery         = "INSERT INTO trace (scenario_id, scenario_version, trace_id) VALUES ($1, $2, $3) ON CONFLICT (scenario_id) DO NOTHING"
+	UpsertTraceMetadataQuery = "INSERT INTO trace_metadata (trace_id, span_id, source, destination, error, metadata, latency_ms, protocol) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) ON CONFLICT (trace_id) DO NOTHING"
+	UpsertTraceRawDataQuery  = "INSERT INTO trace_raw_data (trace_id, span_id, request_payload, response_payload) VALUES ($1, $2, $3, $4) ON CONFLICT (trace_id) DO NOTHING"
 )
 
 var LogTag = "zk_trace_persistence_repo"
 
 type TracePersistenceRepo interface {
-	GetTraces(scenarioId string, offset, limit int) ([]model.TraceTable, error)
-	GetTracesMetaData(traceId, spanId string, offset, limit int) ([]model.TraceMetaDataTable, error)
-	GetTracesRawData(traceId, spanId string, offset, limit int) ([]model.TraceRawDataTable, error)
-	SaveTraceList([]model.TraceDto) error
-	SaveTrace(model.TraceDto) error
+	GetTraces(scenarioId string, offset, limit int) ([]dto.TraceTableDto, error)
+	GetTracesMetadata(traceId, spanId string, offset, limit int) ([]dto.TraceMetadataTableDto, error)
+	GetTracesRawData(traceId, spanId string, offset, limit int) ([]dto.TraceRawDataTableDto, error)
+	SaveTraceList([]*dto.TraceTableDto, []*dto.TraceMetadataTableDto, []*dto.TraceRawDataTableDto) error
+	SaveTrace(*model.Trace) error
 }
 
 type tracePersistenceRepo struct {
+	dbRepo sqlDB.DatabaseRepo
 }
 
-func NewTracePersistenceRepo() TracePersistenceRepo {
-	return &tracePersistenceRepo{}
+func NewTracePersistenceRepo(dbRepo sqlDB.DatabaseRepo) TracePersistenceRepo {
+	return &tracePersistenceRepo{dbRepo: dbRepo}
 }
 
-func (z tracePersistenceRepo) GetTraces(scenarioId string, offset, limit int) ([]model.TraceTable, error) {
-	c := zkUtilsPostgresConfig.PostgresConfig{
-		Host:     "localhost",
-		Port:     5432,
-		User:     "pl",
-		Password: "pl",
-		Dbname:   "pl",
-	}
-
-	zkUtilsPostgres.Init(c)
-
-	dbRepo := zkUtilsPostgres.NewZkPostgresRepo()
-	db := dbRepo.CreateConnection()
-	defer db.Close()
-
-	rows, err, closeRow := dbRepo.GetAll(db, GetTraceQuery, []any{scenarioId, offset, limit})
+func (z tracePersistenceRepo) GetTraces(scenarioId string, offset, limit int) ([]dto.TraceTableDto, error) {
+	rows, err, closeRow := z.dbRepo.GetAll(GetTraceQuery, []any{scenarioId, limit, offset})
 	defer closeRow()
 
 	if err != nil || rows == nil {
-		fmt.Print("error")
+		zkLogger.Error(LogTag, err)
+		return nil, err
 	}
 
-	var responseArr []model.TraceTable
+	var responseArr []dto.TraceTableDto
 	for rows.Next() {
-		var rawData model.TraceTable
+		var rawData dto.TraceTableDto
 		err := rows.Scan(&rawData.ScenarioVersion, &rawData.TraceId)
 		if err != nil {
 			log.Fatal(err)
 		}
+		rawData.ScenarioId = scenarioId
 
 		responseArr = append(responseArr, rawData)
 	}
@@ -88,187 +87,250 @@ func (z tracePersistenceRepo) GetTraces(scenarioId string, offset, limit int) ([
 	return responseArr, nil
 }
 
-func (z tracePersistenceRepo) GetTracesMetaData(traceId, spanId string, offset, limit int) ([]model.TraceMetaDataTable, error) {
-	c := zkUtilsPostgresConfig.PostgresConfig{
-		Host:     "localhost",
-		Port:     5432,
-		User:     "pl",
-		Password: "pl",
-		Dbname:   "pl",
+func (z tracePersistenceRepo) GetTracesMetadata(traceId, spanId string, offset, limit int) ([]dto.TraceMetadataTableDto, error) {
+	var query string
+	var params []any
+	if zkCommon.IsEmpty(spanId) {
+		query = GetTraceMetadataQueryUsingTraceId
+		params = []any{traceId, limit, offset}
+	} else {
+		query = GetTraceMetadataQueryUsingTraceIdAndSpanId
+		params = []any{traceId, spanId, limit, offset}
 	}
 
-	zkUtilsPostgres.Init(c)
-
-	dbRepo := zkUtilsPostgres.NewZkPostgresRepo()
-	db := dbRepo.CreateConnection()
-	defer db.Close()
-
-	rows, err, closeRow := dbRepo.GetAll(db, GetTraceMetaDataQuery, []any{traceId, spanId, offset, limit})
+	rows, err, closeRow := z.dbRepo.GetAll(query, params)
 	defer closeRow()
 
 	if err != nil || rows == nil {
-		fmt.Print("error")
+		zkLogger.Error(LogTag, err)
+		return nil, err
 	}
 
-	var responseArr []model.TraceMetaDataTable
+	var responseArr []dto.TraceMetadataTableDto
 	for rows.Next() {
-		var rawData model.TraceMetaDataTable
-		err := rows.Scan(&rawData.Protocol, &rawData.MetaData)
+		var rawData dto.TraceMetadataTableDto
+		err := rows.Scan(&rawData.SpanId, &rawData.Source, &rawData.Destination, &rawData.Error, &rawData.Metadata, &rawData.LatencyMs, &rawData.Protocol)
 		if err != nil {
 			log.Fatal(err)
 		}
 
+		rawData.TraceId = traceId
 		responseArr = append(responseArr, rawData)
 	}
 
 	return responseArr, nil
 }
 
-func (z tracePersistenceRepo) GetTracesRawData(traceId, spanId string, offset, limit int) ([]model.TraceRawDataTable, error) {
-	c := zkUtilsPostgresConfig.PostgresConfig{
-		Host:     "localhost",
-		Port:     5432,
-		User:     "pl",
-		Password: "pl",
-		Dbname:   "pl",
-	}
-
-	zkUtilsPostgres.Init(c)
-
-	dbRepo := zkUtilsPostgres.NewZkPostgresRepo()
-	db := dbRepo.CreateConnection()
-	defer db.Close()
-
-	rows, err, closeRow := dbRepo.GetAll(db, GetTraceRawDataQuery, []any{traceId, spanId, offset, limit})
+func (z tracePersistenceRepo) GetTracesRawData(traceId, spanId string, offset, limit int) ([]dto.TraceRawDataTableDto, error) {
+	rows, err, closeRow := z.dbRepo.GetAll(GetTraceRawDataQuery, []any{traceId, spanId, limit, offset})
 	defer closeRow()
 
 	if err != nil || rows == nil {
-		fmt.Print("error")
+		zkLogger.Error(LogTag, err)
+		return nil, err
 	}
 
-	var responseArr []model.TraceRawDataTable
+	var responseArr []dto.TraceRawDataTableDto
 	for rows.Next() {
-		var rawData model.TraceRawDataTable
-		err := rows.Scan(&rawData.ResponsePayload, &rawData.ResponsePayload)
+		var rawData dto.TraceRawDataTableDto
+		err := rows.Scan(&rawData.RequestPayload, &rawData.ResponsePayload)
 		if err != nil {
 			log.Fatal(err)
 		}
-
+		rawData.TraceId = traceId
+		rawData.SpanId = spanId
 		responseArr = append(responseArr, rawData)
 	}
 
 	return responseArr, nil
 }
 
-func (z tracePersistenceRepo) SaveTraceList(traceDtoList []model.TraceDto) error {
-
-	c := zkUtilsPostgresConfig.PostgresConfig{
-		Host:     "localhost",
-		Port:     5432,
-		User:     "pl",
-		Password: "pl",
-		Dbname:   "pl",
-	}
-
-	zkUtilsPostgres.Init(c)
-
-	dbRepo := zkUtilsPostgres.NewZkPostgresRepo()
-	db := dbRepo.CreateConnection()
-	defer db.Close()
-
-	ctx := context.Background()
-	tx, err := db.BeginTx(ctx, nil)
-	if err != nil {
-		zklogger.Debug(LogTag, "unable to create txn, "+err.Error())
-		return err
-	}
-
-	// TODO: understand this code below
-	defer func() {
-		if p := recover(); p != nil {
-			tx.Rollback()
-			panic(p)
-		} else if err != nil {
-			tx.Rollback()
-		} else {
-			err = tx.Commit()
-		}
-	}()
-	//dbErr := {}.Build(zkErrors.ZK_ERROR_DB_ERROR, nil)
-
+func (z tracePersistenceRepo) SaveTraceList(t []*dto.TraceTableDto, tmd []*dto.TraceMetadataTableDto, trd []*dto.TraceRawDataTableDto) error {
 	traceTableData := make([]interfaces.DbArgs, 0)
-	traceTableMetaData := make([]interfaces.DbArgs, 0)
+	traceTableMetadata := make([]interfaces.DbArgs, 0)
 	traceTableRawData := make([]interfaces.DbArgs, 0)
-	for _, v := range traceDtoList {
-		traceTableData = append(traceTableData, model.GetTraceTableData(v))
-		traceTableMetaData = append(traceTableMetaData, model.GetTraceTableMetaData(v))
-		traceTableRawData = append(traceTableRawData, model.GetTraceTableRawData(v))
+	for i := range t {
+		traceTableData = append(traceTableData, t[i])
+		traceTableMetadata = append(traceTableMetadata, tmd[i])
+		traceTableRawData = append(traceTableRawData, trd[i])
 	}
 
-	err = dbRepo.BulkInsert(tx, TraceTablePostgres, []string{ScenarioId, ScenarioVersion, TraceId}, traceTableData)
+	tx, err := z.dbRepo.CreateTransaction()
 	if err != nil {
+		zkLogger.Info(LogTag, "Error Creating transaction")
 		return err
 	}
 
-	err = dbRepo.BulkInsert(tx, TraceMetaDataTablePostgres, []string{TraceId, SpanId, MetaData, Protocol}, traceTableMetaData)
+	err = doBulkInsertForTraceList(tx, z.dbRepo, traceTableData, traceTableMetadata, traceTableRawData)
+	if err == nil {
+		tx.Commit()
+		return nil
+	}
+	tx.Rollback()
+
+	tx, err = z.dbRepo.CreateTransaction()
 	if err != nil {
+		zkLogger.Info(LogTag, "Error Creating transaction")
 		return err
 	}
-
-	err = dbRepo.BulkInsert(tx, TraceRawDataTablePostgres, []string{TraceId, SpanId, RequestPayload, ResponsePayload}, traceTableRawData)
-	if err != nil {
-		return err
+	zkLogger.Info(LogTag, "CopyIn failed, starting upsert")
+	err = doBulkUpsertForTraceList(tx, z.dbRepo, traceTableData, traceTableMetadata, traceTableRawData)
+	if err == nil {
+		tx.Commit()
+		return nil
 	}
 
+	tx.Rollback()
 	return err
 }
 
-func (z tracePersistenceRepo) SaveTrace(traceDto model.TraceDto) error {
-	c := zkUtilsPostgresConfig.PostgresConfig{
-		Host:     "localhost",
-		Port:     5432,
-		User:     "pl",
-		Password: "pl",
-		Dbname:   "pl",
-	}
+func doBulkInsertForTraceList(tx *sql.Tx, dbRepo sqlDB.DatabaseRepo, traceData, traceMetadata, traceRawData []interfaces.DbArgs) error {
 
-	zkUtilsPostgres.Init(c)
-
-	dbRepo := zkUtilsPostgres.NewZkPostgresRepo()
-	db := dbRepo.CreateConnection()
-	defer db.Close()
-
-	ctx := context.Background()
-	tx, err := db.BeginTx(ctx, nil)
-
-	// TODO: understand this code below
-	defer func() {
-		if p := recover(); p != nil {
-			tx.Rollback()
-			panic(p)
-		} else if err != nil {
-			tx.Rollback()
-		} else {
-			err = tx.Commit()
-		}
-	}()
-
+	err := bulkInsert(tx, dbRepo, TraceTablePostgres, []string{ScenarioId, ScenarioVersion, TraceId}, traceData)
 	if err != nil {
+		zkLogger.Info(LogTag, "Error in bulk insert trace table", err)
 		return err
 	}
 
-	err = dbRepo.InsertInTransaction(tx, InsertTraceQuery, []any{traceDto.ScenarioId, traceDto.ScenarioVersion, traceDto.TraceId})
+	err = bulkInsert(tx, dbRepo, TraceMetadataTablePostgres, []string{TraceId, SpanId, Source, Destination, Error, Metadata, LatencyMs, Protocol}, traceData)
 	if err != nil {
+		zkLogger.Info(LogTag, "Error in bulk insert traceMetadata table", err)
 		return err
 	}
-	err = dbRepo.InsertInTransaction(tx, InsertTraceMetaDataQuery, []any{traceDto.TraceId, traceDto.SpanId, traceDto.MetaData, traceDto.Protocol})
+
+	err = bulkInsert(tx, dbRepo, TraceTablePostgres, []string{TraceId, SpanId, RequestPayload, ResponsePayload}, traceData)
 	if err != nil {
-		return err
-	}
-	err = dbRepo.InsertInTransaction(tx, InsertTraceRawDataQuery, []any{traceDto.TraceId, traceDto.SpanId, traceDto.RequestPayload, traceDto.RequestPayload})
-	if err != nil {
+		zkLogger.Info(LogTag, "Error in bulk insert traceRawData table", err)
 		return err
 	}
 
 	return nil
+}
+
+func bulkInsert(tx *sql.Tx, dbRepo sqlDB.DatabaseRepo, table string, columns []string, data []interfaces.DbArgs) error {
+
+	stmt, err := GetStmtForCopyIn(tx, table, columns)
+	if err != nil {
+		zkLogger.Info(LogTag, "Error Creating statement for copyIn", err)
+		return err
+	}
+
+	err = dbRepo.BulkInsertUsingCopyIn(stmt, data)
+	if err != nil {
+		zkLogger.Info(LogTag, "Error in bulk insert", err)
+		return err
+	}
+	return nil
+}
+
+func doBulkUpsertForTraceList(tx *sql.Tx, dbRepo sqlDB.DatabaseRepo, traceData, traceMetadata, traceRawData []interfaces.DbArgs) error {
+
+	err := bulkUpsert(tx, dbRepo, UpsertTraceQuery, traceData)
+	if err != nil {
+		zkLogger.Error(LogTag, "Error in bulk upsert for trace table", err)
+		return err
+	}
+
+	err = bulkUpsert(tx, dbRepo, UpsertTraceMetadataQuery, traceMetadata)
+	if err != nil {
+		zkLogger.Error(LogTag, "Error in bulk upsert for trace table", err)
+		return err
+	}
+
+	err = bulkUpsert(tx, dbRepo, UpsertTraceRawDataQuery, traceRawData)
+	if err != nil {
+		zkLogger.Error(LogTag, "Error in bulk upsert for trace table", err)
+		return err
+	}
+
+	return nil
+}
+
+func bulkUpsert(tx *sql.Tx, dbRepo sqlDB.DatabaseRepo, query string, data []interfaces.DbArgs) error {
+	stmt, err := GetStmtRawQuery(tx, query)
+	if err != nil {
+		zkLogger.Info(LogTag, "Error Creating statement for upsert", err)
+		return err
+	}
+
+	err = dbRepo.BulkUpsert(stmt, data)
+	if err != nil {
+		zkLogger.Info(LogTag, "Error in bulk upsert ", err)
+		return err
+	}
+	return nil
+}
+
+func (z tracePersistenceRepo) SaveTrace(trace *model.Trace) error {
+	tx, err := z.dbRepo.CreateTransaction()
+	if err != nil {
+		zkLogger.Info(LogTag, "Error Creating transaction")
+		return err
+	}
+
+	t, tmd, trd, convertErr := dto.ConvertTraceToTraceDto(*trace)
+	dbRepo := z.dbRepo
+
+	if convertErr != nil {
+		return *convertErr
+	}
+
+	err = doUpsert(tx, dbRepo, UpsertTraceQuery, t)
+	if err != nil {
+		tx.Rollback()
+		zkLogger.Error(LogTag, "Error in upsert for trace table", err)
+		return err
+	}
+
+	err = doUpsert(tx, dbRepo, UpsertTraceMetadataQuery, tmd)
+	if err != nil {
+		tx.Rollback()
+		zkLogger.Error(LogTag, "Error in upsert for traceMetadata table", err)
+		return err
+	}
+
+	err = doUpsert(tx, dbRepo, UpsertTraceRawDataQuery, trd)
+	if err != nil {
+		tx.Rollback()
+		zkLogger.Error(LogTag, "Error in upsert for traceRawData table", err)
+		return err
+	}
+
+	tx.Commit()
+
+	return nil
+}
+
+func doUpsert(tx *sql.Tx, dbRepo sqlDB.DatabaseRepo, query string, data interfaces.DbArgs) error {
+	stmt, errT := GetStmtRawQuery(tx, query)
+	if errT != nil {
+		zkLogger.Error(LogTag, "Error Creating statement for upsert", errT)
+		return errT
+	}
+
+	err := dbRepo.Upsert(stmt, data)
+	if err != nil {
+		zkLogger.Error(LogTag, "Error in upsert", err)
+		return err
+	}
+
+	return nil
+}
+
+func GetStmtForCopyIn(tx *sql.Tx, tableName string, columns []string) (*sql.Stmt, error) {
+	stmt, err := tx.Prepare(pq.CopyIn(tableName, columns...))
+	if err != nil {
+		zkLogger.Error(LogTag, "Error preparing insert statement:", err)
+		return nil, err
+	}
+	return stmt, nil
+}
+
+func GetStmtRawQuery(tx *sql.Tx, stmt string) (*sql.Stmt, error) {
+	preparedStmt, err := tx.Prepare(stmt)
+	if err != nil {
+		zkLogger.Error(LogTag, "Error preparing insert statement:", err)
+		return nil, err
+	}
+	return preparedStmt, nil
 }

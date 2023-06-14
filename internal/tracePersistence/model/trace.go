@@ -1,139 +1,47 @@
 package model
 
 import (
+	"database/sql/driver"
 	"encoding/json"
-	zkCrypto "github.com/zerok-ai/zk-utils-go/crypto"
+	"errors"
 )
 
-type Trace struct {
-	ScenarioId      string                 `json:"scenario_id"`
-	ScenarioVersion string                 `json:"scenario_version"`
-	TraceId         string                 `json:"trace_id"`
-	SpanId          string                 `json:"span_id"`
-	MetaData        map[string]interface{} `json:"meta_data"`
-	Protocol        string                 `json:"protocol"`
-	RequestPayload  string                 `json:"request_payload"`
-	ResponsePayload string                 `json:"response_payload"`
+var LogTag = "zk_trace_model"
+
+type Trace struct { // all the non pointer fields are mandatory
+	ScenarioId      string   `json:"scenario_id"`
+	ScenarioVersion string   `json:"scenario_version"`
+	TraceId         string   `json:"trace_id"`
+	SpanId          string   `json:"span_id"`
+	Source          string   `json:"source"`
+	Destination     string   `json:"destination"`
+	Error           *bool    `json:"error"`      // marked pointer as they should not be nil, if nil return error
+	Metadata        Metadata `json:"metadata"`   // could be empty, so not check here
+	LatencyMs       *float32 `json:"latency_ms"` // marked pointer as they should not be nil, if nil return error
+	Protocol        string   `json:"protocol"`
+	RequestPayload  string   `json:"request_payload"`
+	ResponsePayload string   `json:"response_payload"`
 }
 
-type TraceDto struct {
-	ScenarioId      string                 `json:"scenario_id"`
-	ScenarioVersion string                 `json:"scenario_version"`
-	TraceId         string                 `json:"trace_id"`
-	SpanId          string                 `json:"span_id"`
-	MetaData        map[string]interface{} `json:"meta_data"`
-	Protocol        string                 `json:"protocol"`
-	RequestPayload  []byte                 `json:"request_payload"`
-	ResponsePayload []byte                 `json:"response_payload"`
+type Metadata map[string]interface{}
+
+// Value Make the Attrs struct implement the driver.Valuer interface. This method
+// simply returns the JSON-encoded representation of the struct.
+func (a Metadata) Value() (driver.Value, error) {
+	return json.Marshal(a)
 }
 
-type TraceTable struct {
-	ScenarioId      string `json:"scenario_id"`
-	ScenarioVersion string `json:"scenario_version"`
-	TraceId         string `json:"trace_id"`
+// Scan Make the Attrs struct implement the sql.Scanner interface. This method
+// simply decodes a JSON-encoded value into the struct fields.
+func (a *Metadata) Scan(value interface{}) error {
+	b, ok := value.([]byte)
+	if !ok {
+		return errors.New("type assertion to []byte failed")
+	}
+
+	return json.Unmarshal(b, &a)
 }
 
-type TraceMetaDataTable struct {
-	TraceId  string `json:"trace_id"`
-	SpanId   string `json:"span_id"`
-	MetaData string `json:"meta_data"`
-	Protocol string `json:"protocol"`
-}
-
-type TraceRawDataTable struct {
-	TraceId         string `json:"trace_id"`
-	SpanId          string `json:"span_id"`
-	RequestPayload  []byte `json:"request_payload"`
-	ResponsePayload []byte `json:"response_payload"`
-}
-
-type TraceRawDataResponseObject struct {
-	TraceId         string `json:"trace_id"`
-	SpanId          string `json:"span_id"`
-	RequestPayload  string `json:"request_payload"`
-	ResponsePayload string `json:"response_payload"`
-}
-
-func (t TraceTable) GetArgs() []any {
+func (t Trace) GetAllColumns() []any {
 	return []any{t.ScenarioId, t.ScenarioVersion, t.TraceId}
-}
-
-func (t TraceMetaDataTable) GetArgs() []any {
-	return []any{t.TraceId, t.SpanId, t.MetaData, t.Protocol}
-}
-
-func (t TraceRawDataTable) GetArgs() []any {
-	return []any{t.TraceId, t.SpanId, t.RequestPayload, t.ResponsePayload}
-}
-
-func GetTraceTableData(t TraceDto) TraceTable {
-	return TraceTable{
-		ScenarioId:      t.ScenarioId,
-		ScenarioVersion: t.ScenarioVersion,
-		TraceId:         t.TraceId,
-	}
-}
-
-func GetTraceTableMetaData(t TraceDto) TraceMetaDataTable {
-	s, _ := json.Marshal(t.MetaData)
-	return TraceMetaDataTable{
-		TraceId:  t.TraceId,
-		SpanId:   t.SpanId,
-		MetaData: string(s),
-		Protocol: t.Protocol,
-	}
-}
-
-func GetTraceTableRawData(t TraceDto) TraceRawDataTable {
-	return TraceRawDataTable{
-		TraceId:         t.TraceId,
-		SpanId:          t.SpanId,
-		RequestPayload:  t.RequestPayload,
-		ResponsePayload: t.ResponsePayload,
-	}
-}
-
-func ConvertTraceToTraceDto(t Trace) (*TraceDto, *error) {
-	var traceDto TraceDto
-
-	reqCompressedStr, err := zkCrypto.CompressString(t.RequestPayload)
-	if err != nil {
-		return nil, &err
-	}
-
-	resCompressedStr, err := zkCrypto.CompressString(t.ResponsePayload)
-	if err != nil {
-		return nil, &err
-	}
-
-	traceDto.ScenarioId = t.ScenarioId
-	traceDto.ScenarioVersion = t.ScenarioVersion
-	traceDto.TraceId = t.TraceId
-	traceDto.SpanId = t.SpanId
-	traceDto.Protocol = t.Protocol
-	traceDto.MetaData = t.MetaData
-	traceDto.RequestPayload = reqCompressedStr
-	traceDto.ResponsePayload = resCompressedStr
-
-	return &traceDto, nil
-}
-
-func ConvertTraceRawDataToTraceRawDataResponse(t TraceRawDataTable) (*TraceRawDataResponseObject, *error) {
-	var resp TraceRawDataResponseObject
-	reqDeompressedStr, err := zkCrypto.DecompressString(t.RequestPayload)
-	if err != nil {
-		return nil, &err
-	}
-
-	resDecompressedStr, err := zkCrypto.DecompressString(t.ResponsePayload)
-	if err != nil {
-		return nil, &err
-	}
-
-	resp.TraceId = t.TraceId
-	resp.SpanId = t.SpanId
-	resp.RequestPayload = reqDeompressedStr
-	resp.ResponsePayload = resDecompressedStr
-
-	return &resp, nil
 }

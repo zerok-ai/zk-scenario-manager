@@ -3,6 +3,8 @@ package service
 import (
 	"fmt"
 	"scenario-manager/internal/tracePersistence/model"
+	"scenario-manager/internal/tracePersistence/model/dto"
+	"scenario-manager/internal/tracePersistence/model/response"
 	"scenario-manager/internal/tracePersistence/repository"
 
 	zkCommon "github.com/zerok-ai/zk-utils-go/common"
@@ -13,9 +15,9 @@ import (
 var LogTag = "zk_trace_persistence_service"
 
 type TracePersistenceService interface {
-	GetTraces(scenarioId string, offset, limit int) (*[]model.TraceTable, *zkErrors.ZkError)
-	GetTracesMetaData(traceId, spanId string, offset, limit int) (*[]model.TraceMetaDataTable, *zkErrors.ZkError)
-	GetTracesRawData(traceId, spanId string, offset, limit int) (*[]model.TraceRawDataResponseObject, *zkErrors.ZkError)
+	GetTraces(scenarioId string, offset, limit int) (traceresponse.TraceResponse, *zkErrors.ZkError)
+	GetTracesMetadata(traceId, spanId string, offset, limit int) (traceresponse.TraceMetadataResponse, *zkErrors.ZkError)
+	GetTracesRawData(traceId, spanId string, offset, limit int) (traceresponse.TraceRawDataResponse, *zkErrors.ZkError)
 	SaveTraceList([]model.Trace) *zkErrors.ZkError
 	SaveTrace(model.Trace) *zkErrors.ZkError
 }
@@ -28,58 +30,66 @@ type tracePersistenceService struct {
 	repo repository.TracePersistenceRepo
 }
 
-func (s tracePersistenceService) GetTraces(scenarioId string, offset, limit int) (*[]model.TraceTable, *zkErrors.ZkError) {
-	if offset < 0 || limit < 0 {
+func (s tracePersistenceService) GetTraces(scenarioId string, offset, limit int) (traceresponse.TraceResponse, *zkErrors.ZkError) {
+	var response traceresponse.TraceResponse
+	if offset < 0 || limit < 1 {
 		zkErr := zkErrors.ZkErrorBuilder{}.Build(zkErrors.ZkErrorBadRequest, nil)
-		return nil, &zkErr
+		return response, &zkErr
 	}
 
 	data, err := s.repo.GetTraces(scenarioId, offset, limit)
 	if err == nil {
-		return &data, nil
+		response, respErr := traceresponse.ConvertTraceToTraceResponse(data)
+		if respErr != nil {
+			zkLogger.Error(LogTag, err)
+		}
+		return *response, nil
 	}
 	zkErr := zkErrors.ZkErrorBuilder{}.Build(zkErrors.ZkErrorDbError, nil)
-	return nil, &zkErr
+	return response, &zkErr
 }
 
-func (s tracePersistenceService) GetTracesMetaData(traceId, spanId string, offset, limit int) (*[]model.TraceMetaDataTable, *zkErrors.ZkError) {
+func (s tracePersistenceService) GetTracesMetadata(traceId, spanId string, offset, limit int) (traceresponse.TraceMetadataResponse, *zkErrors.ZkError) {
+	var response traceresponse.TraceMetadataResponse
+
 	if offset < 0 || limit < 0 {
 		zkErr := zkErrors.ZkErrorBuilder{}.Build(zkErrors.ZkErrorBadRequest, nil)
-		return nil, &zkErr
+		return response, &zkErr
 	}
 
-	data, err := s.repo.GetTracesMetaData(traceId, spanId, offset, limit)
-	if err == nil {
-		return &data, nil
+	data, err := s.repo.GetTracesMetadata(traceId, spanId, offset, limit)
+	if err != nil {
+		zkErr := zkErrors.ZkErrorBuilder{}.Build(zkErrors.ZkErrorDbError, nil)
+		return response, &zkErr
 	}
-	zkErr := zkErrors.ZkErrorBuilder{}.Build(zkErrors.ZkErrorDbError, nil)
-	return nil, &zkErr
+
+	x, respErr := traceresponse.ConvertTraceMetadataToTraceMetadataResponse(data)
+	if respErr != nil {
+		zkLogger.Error(LogTag, err)
+	}
+	return *x, nil
 }
 
-func (s tracePersistenceService) GetTracesRawData(traceId, spanId string, offset, limit int) (*[]model.TraceRawDataResponseObject, *zkErrors.ZkError) {
+func (s tracePersistenceService) GetTracesRawData(traceId, spanId string, offset, limit int) (traceresponse.TraceRawDataResponse, *zkErrors.ZkError) {
+	var response traceresponse.TraceRawDataResponse
 	//TODO: discuss if the below condition of limit > 100 is fine. or it should be read from some config
 	threshold := 100
 	if offset < 0 || limit < 0 || limit > threshold {
 		zkErr := zkErrors.ZkErrorBuilder{}.Build(zkErrors.ZkErrorBadRequest, fmt.Sprintf("either offset or limit < 0 or limit > %d", threshold))
-		return nil, &zkErr
+		return response, &zkErr
 	}
 
 	data, err := s.repo.GetTracesRawData(traceId, spanId, offset, limit)
 	if err != nil {
 		zkErr := zkErrors.ZkErrorBuilder{}.Build(zkErrors.ZkErrorDbError, nil)
-		return nil, &zkErr
+		return response, &zkErr
 	}
 
-	respArr := make([]model.TraceRawDataResponseObject, 0)
-
-	for _, d := range data {
-		c, err := model.ConvertTraceRawDataToTraceRawDataResponse(d)
-		if err != nil {
-			zkLogger.Error(LogTag, err)
-		}
-		respArr = append(respArr, *c)
+	x, respErr := traceresponse.ConvertTraceRawDataToTraceRawDataResponse(data)
+	if respErr != nil {
+		zkLogger.Error(LogTag, err)
 	}
-	return &respArr, nil
+	return *x, nil
 }
 
 func (s tracePersistenceService) SaveTraceList(traces []model.Trace) *zkErrors.ZkError {
@@ -87,22 +97,27 @@ func (s tracePersistenceService) SaveTraceList(traces []model.Trace) *zkErrors.Z
 		return zkCommon.ToPtr(zkErrors.ZkErrorBuilder{}.Build(zkErrors.ZkErrorBadRequest, "length of traces is 0"))
 	}
 
-	//TODO: discuss if the below condition of length > 100 is fine. or it should be read from some config
+	// TODO: discuss if the below condition of length > 100 is fine. or it should be read from some config
 	threshold := 100
 	if len(traces) > threshold {
 		return zkCommon.ToPtr(zkErrors.ZkErrorBuilder{}.Build(zkErrors.ZkErrorBadRequest, fmt.Sprintf("length of traces is > %d", threshold)))
 	}
 
-	traceDtoList := make([]model.TraceDto, 0)
+	traceDtoList := make([]*dto.TraceTableDto, 0)
+	traceMetadataDtoList := make([]*dto.TraceMetadataTableDto, 0)
+	traceRawDataDtoList := make([]*dto.TraceRawDataTableDto, 0)
 	for _, t := range traces {
-		c, err := model.ConvertTraceToTraceDto(t)
+		t, tmd, trd, err := dto.ConvertTraceToTraceDto(t)
 		if err != nil {
 			zkLogger.Error(LogTag, err)
+			continue
 		}
-		traceDtoList = append(traceDtoList, *c)
+		traceDtoList = append(traceDtoList, t)
+		traceMetadataDtoList = append(traceMetadataDtoList, tmd)
+		traceRawDataDtoList = append(traceRawDataDtoList, trd)
 	}
 
-	err := s.repo.SaveTraceList(traceDtoList)
+	err := s.repo.SaveTraceList(traceDtoList, traceMetadataDtoList, traceRawDataDtoList)
 	if err != nil {
 		zkErr := zkErrors.ZkErrorBuilder{}.Build(zkErrors.ZkErrorDbError, nil)
 		return &zkErr
@@ -117,12 +132,7 @@ func (s tracePersistenceService) SaveTrace(trace model.Trace) *zkErrors.ZkError 
 		return zkErr
 	}
 
-	traceDto, err := model.ConvertTraceToTraceDto(trace)
-	if err != nil {
-		zkLogger.Error(LogTag, err)
-	}
-
-	repoErr := s.repo.SaveTrace(*traceDto)
+	repoErr := s.repo.SaveTrace(&trace)
 	if repoErr != nil {
 		zkErr := zkErrors.ZkErrorBuilder{}.Build(zkErrors.ZkErrorDbError, nil)
 		return &zkErr
@@ -157,8 +167,23 @@ func validateTrace(trace model.Trace) (bool, *zkErrors.ZkError) {
 		return false, zkCommon.ToPtr(zkErrors.ZkErrorBuilder{}.Build(zkErrors.ZkErrorBadRequest, "invalid data"))
 	}
 
-	if trace.MetaData == nil {
-		zkLogger.Error(LogTag, "meta data empty")
+	if trace.Source == "" {
+		zkLogger.Error(LogTag, "source empty")
+		return false, zkCommon.ToPtr(zkErrors.ZkErrorBuilder{}.Build(zkErrors.ZkErrorBadRequest, "invalid data"))
+	}
+
+	if trace.Destination == "" {
+		zkLogger.Error(LogTag, "destination empty")
+		return false, zkCommon.ToPtr(zkErrors.ZkErrorBuilder{}.Build(zkErrors.ZkErrorBadRequest, "invalid data"))
+	}
+
+	if trace.Error == nil {
+		zkLogger.Error(LogTag, "error empty")
+		return false, zkCommon.ToPtr(zkErrors.ZkErrorBuilder{}.Build(zkErrors.ZkErrorBadRequest, "invalid data"))
+	}
+
+	if trace.LatencyMs == nil {
+		zkLogger.Error(LogTag, "latency_ms empty")
 		return false, zkCommon.ToPtr(zkErrors.ZkErrorBuilder{}.Build(zkErrors.ZkErrorBadRequest, "invalid data"))
 	}
 
