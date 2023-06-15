@@ -8,7 +8,7 @@ require (
 	github.com/kataras/iris/v12 v12.2.0
 	github.com/lib/pq v1.10.9
 	github.com/redis/go-redis/v9 v9.0.5
-	github.com/zerok-ai/zk-utils-go v0.4.7-0.20230614095300-fbb970d7e984
+	github.com/zerok-ai/zk-utils-go v0.4.7-0.20230615073921-cb1fd79959a5
 )
 
 require (

@@ -253,11 +253,12 @@ func bulkUpsert(tx *sql.Tx, dbRepo sqlDB.DatabaseRepo, query string, data []inte
 		return err
 	}
 
-	err = dbRepo.BulkUpsert(stmt, data)
+	_, err = dbRepo.BulkUpsert(stmt, data)
 	if err != nil {
 		zkLogger.Info(LogTag, "Error in bulk upsert ", err)
 		return err
 	}
+
 	return nil
 }
 
@@ -308,7 +309,7 @@ func doUpsert(tx *sql.Tx, dbRepo sqlDB.DatabaseRepo, query string, data interfac
 		return errT
 	}
 
-	err := dbRepo.Upsert(stmt, data)
+	_, err := dbRepo.Upsert(stmt, data)
 	if err != nil {
 		zkLogger.Error(LogTag, "Error in upsert", err)
 		return err

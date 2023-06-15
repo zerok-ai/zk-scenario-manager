@@ -47,12 +47,12 @@ func ConvertTraceToTraceDto(t model.Trace) (*TraceTableDto, *TraceMetadataTableD
 	var traceMetadataDto TraceMetadataTableDto
 	var traceRawDataDto TraceRawDataTableDto
 
-	requestCompressedStr, err := zkCrypto.CompressString(t.RequestPayload)
+	requestCompressedStr, err := zkCrypto.CompressStringGzip(t.RequestPayload)
 	if err != nil {
 		return nil, nil, nil, &err
 	}
 
-	responseCompressedStr, err := zkCrypto.CompressString(t.ResponsePayload)
+	responseCompressedStr, err := zkCrypto.CompressStringGzip(t.ResponsePayload)
 	if err != nil {
 		return nil, nil, nil, &err
 	}

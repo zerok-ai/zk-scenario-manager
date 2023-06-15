@@ -20,12 +20,12 @@ type SpanRawDataDetails struct {
 func ConvertTraceRawDataToTraceRawDataResponse(t []dto.TraceRawDataTableDto) (*TraceRawDataResponse, *error) {
 	respMap := make(map[string]SpanRawDataDetails, 0)
 	for _, v := range t {
-		reqDecompressedStr, err := crypto.DecompressString(v.RequestPayload)
+		reqDecompressedStr, err := crypto.DecompressStringGzip(v.RequestPayload)
 		if err != nil {
 			return nil, &err
 		}
 
-		resDecompressedStr, err := crypto.DecompressString(v.ResponsePayload)
+		resDecompressedStr, err := crypto.DecompressStringGzip(v.ResponsePayload)
 		if err != nil {
 			zkLogger.Error(LogTag, err)
 			return nil, &err
