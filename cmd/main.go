@@ -17,23 +17,6 @@ import (
 
 var LogTag = "main"
 
-func start(cfg config.AppConfigs) {
-
-	//start business logic
-	done := make(chan bool)
-	filterProcessor, err := filters.NewScenarioManager(cfg)
-	if err != nil {
-		panic(err)
-	}
-	filterProcessor.Init()
-
-	// Block the main goroutine until termination signal is received
-	<-done
-
-	// Execution continues here when termination signal is received
-	fmt.Println("Main function has terminated.")
-}
-
 func main() {
 	fmt.Printf("Hello from zk-scenario-manager\n")
 
@@ -53,8 +36,6 @@ func main() {
 	}
 
 	zkLogger.Debug(LogTag, "Parsed Configuration", cfg)
-
-	start(cfg)
 
 	filterProcessor, err := filters.NewScenarioManager(cfg)
 	if err != nil {

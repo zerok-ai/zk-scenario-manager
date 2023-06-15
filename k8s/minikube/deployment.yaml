@@ -32,6 +32,11 @@ spec:
           volumeMounts:
             - name: config
               mountPath: /zk/config
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 80
+            successThreshold: 3
 
 ---
 apiVersion: v1
