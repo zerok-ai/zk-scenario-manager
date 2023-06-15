@@ -253,11 +253,18 @@ func bulkUpsert(tx *sql.Tx, dbRepo sqlDB.DatabaseRepo, query string, data []inte
 		return err
 	}
 
-	_, err = dbRepo.BulkUpsert(stmt, data)
+	results, err := dbRepo.BulkUpsert(stmt, data)
 	if err != nil {
 		zkLogger.Info(LogTag, "Error in bulk upsert ", err)
 		return err
 	}
+
+	var upsertCount int64
+	for _, v := range results {
+		c, _ := v.RowsAffected()
+		upsertCount += c
+	}
+	zkLogger.Info(LogTag, "bulk upsert count:", upsertCount)
 
 	return nil
 }
