@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/redis/go-redis/v9"
-	storage "github.com/zerok-ai/zk-utils-go/storage/redis"
+	"github.com/zerok-ai/zk-utils-go/storage/redis/config"
 	"time"
 )
 
@@ -21,12 +21,10 @@ func (t TraceStore) initialize() *TraceStore {
 	return &t
 }
 
-func GetTraceStore(redisConfig *storage.RedisConfig, ttlForTransientSets time.Duration) *TraceStore {
+func GetTraceStore(redisConfig config.RedisConfig, ttlForTransientSets time.Duration) *TraceStore {
 
 	dbName := "traces"
-	if redisConfig == nil {
-		return nil
-	}
+	fmt.Println("GetTraceStore: redisConfig= ", redisConfig, "dbName= ", dbName, "dbID= ", redisConfig.DBs[dbName])
 	readTimeout := time.Duration(redisConfig.ReadTimeout) * time.Second
 	_redisClient := redis.NewClient(&redis.Options{
 		Addr:        fmt.Sprint(redisConfig.Host, ":", redisConfig.Port),
@@ -71,14 +69,9 @@ func (t TraceStore) Add(setName string, key string) error {
 	return err
 }
 
-func (t TraceStore) GetAllValues(setName string) (*[]string, error) {
+func (t TraceStore) GetAllValuesFromSet(setName string) ([]string, error) {
 	// Get all members of a set
-	result, err := t.redisClient.SMembers(ctx, setName).Result()
-	if err != nil {
-		fmt.Println("Error performing union and store:", err)
-		return nil, err
-	}
-	return &result, nil
+	return t.redisClient.SMembers(ctx, setName).Result()
 }
 
 func (t TraceStore) NewUnionSet(resultKey string, keys ...string) error {
@@ -137,4 +130,21 @@ func (t TraceStore) SetExpiryForSet(resultKey string, expiration time.Duration) 
 		fmt.Println("Error setting expiry for set :", resultKey, err)
 	}
 	return err
+}
+
+func (t TraceStore) RenameSet(key, newKey string) error {
+	fmt.Println("Renaming set:", key, "to", newKey)
+	_, err := t.redisClient.Rename(ctx, key, newKey).Result()
+	if err != nil {
+		fmt.Println("Error renaming set:", err)
+	}
+	return err
+}
+
+func (t TraceStore) SetExists(key string) bool {
+	exists, err := t.redisClient.Exists(ctx, key).Result()
+	if err != nil {
+		fmt.Println("Error checking if set exists:", err)
+	}
+	return exists == 1
 }

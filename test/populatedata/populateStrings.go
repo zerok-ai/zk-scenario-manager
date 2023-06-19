@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/zerok-ai/zk-utils-go/interfaces"
 	storage "github.com/zerok-ai/zk-utils-go/storage/redis"
+	"github.com/zerok-ai/zk-utils-go/storage/redis/config"
 	ticker "github.com/zerok-ai/zk-utils-go/ticker"
 	"time"
 )
@@ -26,11 +27,8 @@ type StringPopulator struct {
 	keyPrefix      string
 }
 
-func GetStringPopulator(taskName string, dbname string, redisConfig *storage.RedisConfig, keyPrefix string, increment int) *StringPopulator {
-	vs, err := storage.GetVersionedStore(redisConfig, dbname, false, RedisVal(""))
-	if err != nil {
-		return nil
-	}
+func GetStringPopulator(taskName string, dbname string, redisConfig config.RedisConfig, keyPrefix string, increment int) *StringPopulator {
+	vs := storage.GetVersionedStore(redisConfig, dbname, false, RedisVal(""))
 	sp := StringPopulator{
 		versionedStore: vs,
 		taskName:       taskName,

@@ -5,20 +5,32 @@ import (
 	"github.com/zerok-ai/zk-utils-go/scenario/model"
 	"sort"
 	"strings"
+	"time"
 )
 
 type TraceEvaluator struct {
-	scenario       *model.Scenario
-	traceStore     *TraceStore
-	namesOfAllSets []string
+	scenario                   *model.Scenario
+	traceStore                 *TraceStore
+	namesOfAllSets             []string
+	ttlForTransientScenarioSet time.Duration
 }
 
-func (te TraceEvaluator) EvalScenario() (*string, error) {
+func (te TraceEvaluator) EvalScenario(resultSetNamePrefix string) (*string, error) {
+	fmt.Println("Evaluating scenario", te.scenario)
 	resultKey, err := te.evalFilter(te.scenario.Filter)
-	if err != nil {
-		err = te.traceStore.SetExpiryForSet(*resultKey, TTLForTransientSets)
+
+	if err == nil && te.traceStore.SetExists(*resultKey) {
+		if err = te.traceStore.SetExpiryForSet(*resultKey, te.ttlForTransientScenarioSet); err != nil {
+			return nil, err
+		}
+		resultSetName := resultSetNamePrefix + *resultKey
+		fmt.Println("Evaluating scenario resultSetNamePrefix = ", resultSetNamePrefix, " *resultKey = ", *resultKey, "resultSetName = ", resultSetName)
+		if err = te.traceStore.RenameSet(*resultKey, resultSetName); err != nil {
+			return nil, err
+		}
+		return &resultSetName, err
 	}
-	return resultKey, err
+	return nil, err
 }
 
 func (te TraceEvaluator) evalFilter(f model.Filter) (*string, error) {
@@ -68,13 +80,14 @@ func (te TraceEvaluator) evalFilters(f model.Filters) (*[]string, error) {
 }
 
 func (te TraceEvaluator) evalCondition(c model.Condition, dataSetNames []string, resultSetName string) error {
-
+	var err error = nil
 	if c == model.CONDITION_AND {
-		return te.traceStore.NewIntersectionSet(resultSetName, dataSetNames...)
+		err = te.traceStore.NewIntersectionSet(resultSetName, dataSetNames...)
 	} else if c == model.CONDITION_OR {
-		return te.traceStore.NewUnionSet(resultSetName, dataSetNames...)
+		err = te.traceStore.NewUnionSet(resultSetName, dataSetNames...)
 	}
-	return fmt.Errorf("unknown condition: %s", c)
+
+	return err
 }
 
 func matchPrefixesButNotEquals(prefixes, keys []string) map[string][]string {

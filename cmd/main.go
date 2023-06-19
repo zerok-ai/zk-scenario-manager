@@ -10,11 +10,7 @@ func start(cfg config.AppConfigs) {
 
 	//start business logic
 	done := make(chan bool)
-	filterProcessor, err := filters.NewScenarioManager(cfg)
-	if err != nil {
-		panic(err)
-	}
-	filterProcessor.Init()
+	filters.NewScenarioManager(cfg).Init()
 
 	// Block the main goroutine until termination signal is received
 	<-done

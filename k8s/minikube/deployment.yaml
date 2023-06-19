@@ -1,18 +1,18 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: order
+  name: zk-scenario-manager
   labels:
-    app: order
+    app: zk-scenario-manager
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: order
+      app: zk-scenario-manager
   template:
     metadata:
       labels:
-        app: order
+        app: zk-scenario-manager
     spec:
       volumes:
         - name: config
@@ -41,8 +41,8 @@ data:
       host: redis.zk-client.svc.cluster.local
       port: 6379
       readTimeout: 20
-      db:     
-        scenario: 6
+      dbs:     
+        scenarios: 6
         traces: 1
 kind: ConfigMap
 metadata:

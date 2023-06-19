@@ -5,7 +5,9 @@ IMAGE_VERSION = 1.0
 LOCATION ?= us-west1
 PROJECT_ID ?= zerok-dev
 REPOSITORY ?= zk-client
+
 export GO111MODULE=on
+export GOPRIVATE=github.com/zerok-ai/zk-utils-go,github.com/zerok-ai/zk-rawdata-reader
 
 sync:
 	go get -v ./...
