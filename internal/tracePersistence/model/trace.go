@@ -8,20 +8,23 @@ import (
 
 var LogTag = "zk_trace_model"
 
-type Trace struct { // all the non pointer fields are mandatory
-	ScenarioId      string   `json:"scenario_id"`
-	ScenarioVersion string   `json:"scenario_version"`
-	ScenarioType    string   `json:"scenario_type"`
-	TraceId         string   `json:"trace_id"`
-	Title           string   `json:"title"`
-	CreatedAt       string   `json:"created_at"`
+type Scenario struct { // all the non pointer fields are mandatory
+	ScenarioId      string            `json:"scenario_id"`
+	ScenarioVersion string            `json:"scenario_version"`
+	ScenarioType    string            `json:"scenario_type"`
+	ScenarioTitle   string            `json:"scenario_title"`
+	CreatedAt       string            `json:"created_at"`
+	TraceToSpansMap map[string][]Span `json:"trace_to_spans_map"`
+}
+
+type Span struct {
 	SpanId          string   `json:"span_id"`
 	ParentSpanId    string   `json:"parent_span_id"`
 	Source          string   `json:"source"`
 	Destination     string   `json:"destination"`
-	Error           *bool    `json:"error"`      // marked pointer as they should not be nil, if nil return error
-	Metadata        Metadata `json:"metadata"`   // could be empty, so not check here
-	LatencyMs       *float32 `json:"latency_ms"` // marked pointer as they should not be nil, if nil return error
+	Error           bool     `json:"error"`
+	Metadata        Metadata `json:"metadata"`
+	LatencyMs       *float32 `json:"latency_ms"`
 	Protocol        string   `json:"protocol"`
 	RequestPayload  string   `json:"request_payload"`
 	ResponsePayload string   `json:"response_payload"`
@@ -44,8 +47,4 @@ func (a *Metadata) Scan(value interface{}) error {
 	}
 
 	return json.Unmarshal(b, &a)
-}
-
-func (t Trace) GetAllColumns() []any {
-	return []any{t.ScenarioId, t.ScenarioVersion, t.TraceId}
 }

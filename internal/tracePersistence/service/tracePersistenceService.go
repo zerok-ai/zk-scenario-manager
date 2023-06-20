@@ -19,8 +19,7 @@ type TracePersistenceService interface {
 	GetTraces(scenarioId string, offset, limit int) (traceresponse.TraceResponse, *zkErrors.ZkError)
 	GetTracesMetadata(traceId, spanId string, offset, limit int) (traceresponse.TraceMetadataResponse, *zkErrors.ZkError)
 	GetTracesRawData(traceId, spanId string, offset, limit int) (traceresponse.TraceRawDataResponse, *zkErrors.ZkError)
-	SaveTraceList([]model.Trace) *zkErrors.ZkError
-	SaveTrace(model.Trace) *zkErrors.ZkError
+	SaveTraceList([]model.Scenario) *zkErrors.ZkError
 }
 
 func NewScenarioPersistenceService(repo repository.TracePersistenceRepo) TracePersistenceService {
@@ -112,29 +111,36 @@ func (s tracePersistenceService) GetTracesRawData(traceId, spanId string, offset
 	return *x, nil
 }
 
-func (s tracePersistenceService) SaveTraceList(traces []model.Trace) *zkErrors.ZkError {
-	if len(traces) == 0 {
-		return zkCommon.ToPtr(zkErrors.ZkErrorBuilder{}.Build(zkErrors.ZkErrorBadRequest, "length of traces is 0"))
+func (s tracePersistenceService) SaveTraceList(scenarios []model.Scenario) *zkErrors.ZkError {
+	if len(scenarios) == 0 {
+		return zkCommon.ToPtr(zkErrors.ZkErrorBuilder{}.Build(zkErrors.ZkErrorBadRequest, "length of scenarios is 0"))
 	}
 
 	// TODO: discuss if the below condition of length > 100 is fine. or it should be read from some config
 	threshold := 100
-	if len(traces) > threshold {
-		return zkCommon.ToPtr(zkErrors.ZkErrorBuilder{}.Build(zkErrors.ZkErrorBadRequest, fmt.Sprintf("length of traces is > %d", threshold)))
+	if len(scenarios) > threshold {
+		return zkCommon.ToPtr(zkErrors.ZkErrorBuilder{}.Build(zkErrors.ZkErrorBadRequest, fmt.Sprintf("length of scenarios is > %d", threshold)))
 	}
 
-	traceDtoList := make([]*dto.TraceTableDto, 0)
-	traceMetadataDtoList := make([]*dto.TraceMetadataTableDto, 0)
-	traceRawDataDtoList := make([]*dto.TraceRawDataTableDto, 0)
-	for _, t := range traces {
-		t, tmd, trd, err := dto.ConvertTraceToTraceDto(t)
+	traceDtoList := make([]dto.ScenarioTableDto, 0)
+	traceMetadataDtoList := make([]dto.TraceMetadataTableDto, 0)
+	traceRawDataDtoList := make([]dto.TraceRawDataTableDto, 0)
+	for _, scenario := range scenarios {
+		if b, zkErr := dto.ValidateScenario(scenario); !b || zkErr != nil {
+			zkLogger.Error("Invalid scenario", zkErr)
+			continue
+		}
+
+		t, tmd, trd, err := dto.ConvertScenarioToTraceDto(scenario)
 		if err != nil {
 			zkLogger.Error(LogTag, err)
 			continue
 		}
-		traceDtoList = append(traceDtoList, t)
-		traceMetadataDtoList = append(traceMetadataDtoList, tmd)
-		traceRawDataDtoList = append(traceRawDataDtoList, trd)
+
+		traceDtoList = append(traceDtoList, t...)
+		traceMetadataDtoList = append(traceMetadataDtoList, tmd...)
+		traceRawDataDtoList = append(traceRawDataDtoList, trd...)
+
 	}
 
 	err := s.repo.SaveTraceList(traceDtoList, traceMetadataDtoList, traceRawDataDtoList)
@@ -144,78 +150,4 @@ func (s tracePersistenceService) SaveTraceList(traces []model.Trace) *zkErrors.Z
 	}
 
 	return nil
-}
-
-func (s tracePersistenceService) SaveTrace(trace model.Trace) *zkErrors.ZkError {
-
-	if b, zkErr := validateTrace(trace); !b || zkErr != nil {
-		return zkErr
-	}
-
-	repoErr := s.repo.SaveTrace(&trace)
-	if repoErr != nil {
-		zkErr := zkErrors.ZkErrorBuilder{}.Build(zkErrors.ZkErrorDbError, nil)
-		return &zkErr
-	}
-
-	return nil
-}
-
-func validateTrace(trace model.Trace) (bool, *zkErrors.ZkError) {
-	if trace.ScenarioId == "" {
-		zkLogger.Error(LogTag, "scenario_id empty")
-		return false, zkCommon.ToPtr(zkErrors.ZkErrorBuilder{}.Build(zkErrors.ZkErrorBadRequest, "invalid data"))
-	}
-
-	if trace.ScenarioVersion == "" {
-		zkLogger.Error(LogTag, "scenario_id empty")
-		return false, zkCommon.ToPtr(zkErrors.ZkErrorBuilder{}.Build(zkErrors.ZkErrorBadRequest, "invalid data"))
-	}
-
-	if trace.TraceId == "" {
-		zkLogger.Error(LogTag, "trace Id empty")
-		return false, zkCommon.ToPtr(zkErrors.ZkErrorBuilder{}.Build(zkErrors.ZkErrorBadRequest, "invalid data"))
-	}
-
-	if trace.SpanId == "" {
-		zkLogger.Error(LogTag, "span_id empty")
-		return false, zkCommon.ToPtr(zkErrors.ZkErrorBuilder{}.Build(zkErrors.ZkErrorBadRequest, "invalid data"))
-	}
-
-	if trace.Protocol == "" {
-		zkLogger.Error(LogTag, "protocol empty")
-		return false, zkCommon.ToPtr(zkErrors.ZkErrorBuilder{}.Build(zkErrors.ZkErrorBadRequest, "invalid data"))
-	}
-
-	if trace.Source == "" {
-		zkLogger.Error(LogTag, "source empty")
-		return false, zkCommon.ToPtr(zkErrors.ZkErrorBuilder{}.Build(zkErrors.ZkErrorBadRequest, "invalid data"))
-	}
-
-	if trace.Destination == "" {
-		zkLogger.Error(LogTag, "destination empty")
-		return false, zkCommon.ToPtr(zkErrors.ZkErrorBuilder{}.Build(zkErrors.ZkErrorBadRequest, "invalid data"))
-	}
-
-	if trace.Error == nil {
-		zkLogger.Error(LogTag, "error empty")
-		return false, zkCommon.ToPtr(zkErrors.ZkErrorBuilder{}.Build(zkErrors.ZkErrorBadRequest, "invalid data"))
-	}
-
-	if trace.LatencyMs == nil {
-		zkLogger.Error(LogTag, "latency_ms empty")
-		return false, zkCommon.ToPtr(zkErrors.ZkErrorBuilder{}.Build(zkErrors.ZkErrorBadRequest, "invalid data"))
-	}
-
-	if trace.RequestPayload == "" {
-		zkLogger.Error(LogTag, "request payload empty")
-		return false, zkCommon.ToPtr(zkErrors.ZkErrorBuilder{}.Build(zkErrors.ZkErrorBadRequest, "invalid data"))
-	}
-
-	if trace.ResponsePayload == "" {
-		zkLogger.Error(LogTag, "response payload empty")
-		return false, zkCommon.ToPtr(zkErrors.ZkErrorBuilder{}.Build(zkErrors.ZkErrorBadRequest, "invalid data"))
-	}
-
-	return true, nil
 }
