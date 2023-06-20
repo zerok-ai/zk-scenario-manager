@@ -9,7 +9,7 @@ import (
 	"os"
 )
 
-func PopulateScenarios(redisConfig *config.RedisConfig) {
+func PopulateScenarios(redisConfig config.RedisConfig) {
 
 	scenarioString := GetBytesFromFile("test/populatedata/files/Scenario-1.json")
 	var scenario model.Scenario

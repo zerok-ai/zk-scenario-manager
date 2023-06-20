@@ -10,11 +10,8 @@ type ScenarioPopulator struct {
 	versionedStore *redis.VersionedStore[model.Scenario]
 }
 
-func GetScenarioPopulator(dbname string, redisConfig *redisConfig.RedisConfig) *ScenarioPopulator {
-	vs, err := redis.GetVersionedStore(redisConfig, dbname, false, model.Scenario{})
-	if err != nil {
-		return nil
-	}
+func GetScenarioPopulator(dbname string, redisConfig redisConfig.RedisConfig) *ScenarioPopulator {
+	vs := redis.GetVersionedStore(redisConfig, dbname, false, model.Scenario{})
 	sp := ScenarioPopulator{
 		versionedStore: vs,
 	}

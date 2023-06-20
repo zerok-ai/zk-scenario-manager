@@ -106,7 +106,7 @@ func (f ScenarioManager) processFilters() {
 				continue
 			}
 
-			//TODO: save the data to the scenario store
+			// TODO: save the data to the scenario store
 		}
 	}
 }
