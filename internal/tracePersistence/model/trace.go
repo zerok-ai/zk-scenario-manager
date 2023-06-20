@@ -11,8 +11,12 @@ var LogTag = "zk_trace_model"
 type Trace struct { // all the non pointer fields are mandatory
 	ScenarioId      string   `json:"scenario_id"`
 	ScenarioVersion string   `json:"scenario_version"`
+	ScenarioType    string   `json:"scenario_type"`
 	TraceId         string   `json:"trace_id"`
+	Title           string   `json:"title"`
+	CreatedAt       string   `json:"created_at"`
 	SpanId          string   `json:"span_id"`
+	ParentSpanId    string   `json:"parent_span_id"`
 	Source          string   `json:"source"`
 	Destination     string   `json:"destination"`
 	Error           *bool    `json:"error"`      // marked pointer as they should not be nil, if nil return error

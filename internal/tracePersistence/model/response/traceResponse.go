@@ -20,3 +20,18 @@ func ConvertTraceToTraceResponse(t []dto.TraceTableDto) (*TraceResponse, *error)
 
 	return &resp, nil
 }
+
+type IncidentResponse struct {
+	IncidentList []dto.IncidentDto `json:"trace_id_list"`
+}
+
+func ConvertIncidentToIncidentResponse(t []dto.IncidentDto) (*IncidentResponse, *error) {
+	incidents := make([]dto.IncidentDto, 0)
+	for _, v := range t {
+		incidents = append(incidents, v)
+	}
+
+	resp := IncidentResponse{IncidentList: incidents}
+
+	return &resp, nil
+}

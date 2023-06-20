@@ -31,6 +31,7 @@ const (
 	RequestPayload  = "request_payload"
 	ResponsePayload = "response_payload"
 
+	GetIncidentData                            = "SELECT count(*) as incident_count, destination, min(created_at) as first_seen, max(created_at) as last_seen  FROM trace_metadata where error_type=$1 AND source=$2 GROUP BY trace_id LIMIT $3 OFFSET $4"
 	GetTraceQuery                              = "SELECT scenario_version, trace_id FROM trace WHERE scenario_id=$1 LIMIT $2 OFFSET $3"
 	GetTraceRawDataQuery                       = "SELECT request_payload, response_payload FROM trace_raw_data WHERE trace_id=$1 AND span_id=$2 LIMIT $3 OFFSET $4"
 	GetTraceMetadataQueryUsingTraceIdAndSpanId = "SELECT span_id, source, destination, error, metadata, latency_ms, protocol FROM trace_metadata WHERE trace_id=$1 AND span_id=$2 LIMIT $3 OFFSET $4"
@@ -48,6 +49,7 @@ const (
 var LogTag = "zk_trace_persistence_repo"
 
 type TracePersistenceRepo interface {
+	GetIncidentData(source, errorType string, offset, limit int) ([]dto.IncidentDto, error)
 	GetTraces(scenarioId string, offset, limit int) ([]dto.TraceTableDto, error)
 	GetTracesMetadata(traceId, spanId string, offset, limit int) ([]dto.TraceMetadataTableDto, error)
 	GetTracesRawData(traceId, spanId string, offset, limit int) ([]dto.TraceRawDataTableDto, error)
@@ -61,6 +63,31 @@ type tracePersistenceRepo struct {
 
 func NewTracePersistenceRepo(dbRepo sqlDB.DatabaseRepo) TracePersistenceRepo {
 	return &tracePersistenceRepo{dbRepo: dbRepo}
+}
+
+func (z tracePersistenceRepo) GetIncidentData(source, errorType string, offset, limit int) ([]dto.IncidentDto, error) {
+	rows, err, closeRow := z.dbRepo.GetAll(GetIncidentData, []any{errorType, source, offset, limit})
+	defer closeRow()
+	if err != nil || rows == nil {
+		zkLogger.Error(LogTag, err)
+		return nil, err
+	}
+
+	var responseArr []dto.IncidentDto
+	for rows.Next() {
+		var rawData dto.IncidentDto
+		err := rows.Scan(&rawData.ScenarioId, &rawData.ScenarioVersion, &rawData.TraceId, &rawData.Title,
+			&rawData.Source, &rawData.Destination, &rawData.ScenarioType, &rawData.FirstSeen,
+			&rawData.LastSeen, &rawData.Velocity, &rawData.TotalCount)
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		responseArr = append(responseArr, rawData)
+	}
+
+	return responseArr, nil
+
 }
 
 func (z tracePersistenceRepo) GetTraces(scenarioId string, offset, limit int) ([]dto.TraceTableDto, error) {

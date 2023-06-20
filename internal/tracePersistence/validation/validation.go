@@ -10,6 +10,36 @@ import (
 
 var LogTag = "trace_persistence_validation"
 
+func ValidateGetIncidentsDataApi(source, errorType, offset, limit string) *zkerrors.ZkError {
+	if zkCommon.IsEmpty(source) {
+		zkErr := zkerrors.ZkErrorBuilder{}.Build(zkErrorsScenarioManager.ZkErrorBadRequestSourceEmpty, nil)
+		return &zkErr
+	}
+
+	if zkCommon.IsEmpty(errorType) {
+		zkErr := zkerrors.ZkErrorBuilder{}.Build(zkErrorsScenarioManager.ZkErrorBadRequestErrorTypeEmpty, nil)
+		return &zkErr
+	}
+
+	if !zkCommon.IsEmpty(limit) {
+		_, err := strconv.Atoi(limit)
+		if err != nil {
+			zkErr := zkerrors.ZkErrorBuilder{}.Build(zkerrors.ZkErrorBadRequestLimitIsNotInteger, nil)
+			return &zkErr
+		}
+	}
+
+	if !zkCommon.IsEmpty(offset) {
+		_, err := strconv.Atoi(offset)
+		if err != nil {
+			zkErr := zkerrors.ZkErrorBuilder{}.Build(zkerrors.ZkErrorBadRequestOffsetIsNotInteger, nil)
+			return &zkErr
+		}
+	}
+
+	return nil
+}
+
 func ValidateGetTracesApi(scenarioId, offset, limit string) *zkerrors.ZkError {
 	if zkCommon.IsEmpty(scenarioId) {
 		zkErr := zkerrors.ZkErrorBuilder{}.Build(zkErrorsScenarioManager.ZkErrorBadRequestScenarioIdEmpty, nil)

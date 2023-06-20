@@ -4,10 +4,11 @@ import (
 	"scenario-manager/internal/config"
 	"scenario-manager/internal/filters"
 	"scenario-manager/internal/tracePersistence"
+	"scenario-manager/internal/tracePersistence/handler"
+	"scenario-manager/internal/tracePersistence/repository"
+	"scenario-manager/internal/tracePersistence/service"
 
 	"github.com/kataras/iris/v12"
-	"github.com/zerok-ai/zk-utils-go/storage/sqlDB"
-
 	zkConfig "github.com/zerok-ai/zk-utils-go/config"
 	zkHttpConfig "github.com/zerok-ai/zk-utils-go/http/config"
 	zkLogger "github.com/zerok-ai/zk-utils-go/logs"
@@ -35,13 +36,13 @@ func main() {
 
 	zkLogger.Debug(LogTag, "Parsed Configuration", cfg)
 
-	scenarioManager := filters.NewScenarioManager(cfg)
-	if err != nil {
-		panic(err)
-	}
-	scenarioManager.Init()
+	tpr := repository.NewTracePersistenceRepo(zkPostgresRepo)
+	tps := service.NewScenarioPersistenceService(tpr)
+	tph := handler.NewTracePersistenceHandler(tps)
 
-	app := newApp(zkPostgresRepo)
+	filters.NewScenarioManager(cfg, tps).Init()
+
+	app := newApp(tph)
 
 	configurator := iris.WithConfiguration(iris.Configuration{
 		DisablePathCorrection: true,
@@ -50,7 +51,7 @@ func main() {
 	app.Listen(":"+cfg.Server.Port, configurator)
 }
 
-func newApp(db sqlDB.DatabaseRepo) *iris.Application {
+func newApp(persistenceHandler handler.TracePersistenceHandler) *iris.Application {
 	app := iris.Default()
 
 	crs := func(ctx iris.Context) {
@@ -81,7 +82,7 @@ func newApp(db sqlDB.DatabaseRepo) *iris.Application {
 	}).Describe("healthcheck")
 
 	v1 := app.Party("/v1")
-	tracePersistence.Initialize(v1, db)
+	tracePersistence.Initialize(v1, persistenceHandler)
 
 	return app
 }

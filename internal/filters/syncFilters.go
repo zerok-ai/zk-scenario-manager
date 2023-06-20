@@ -9,6 +9,7 @@ import (
 	ticker "github.com/zerok-ai/zk-utils-go/ticker"
 	"log"
 	"scenario-manager/internal/config"
+	"scenario-manager/internal/tracePersistence/service"
 	"time"
 
 	"github.com/zerok-ai/zk-rawdata-reader/vzReader"
@@ -48,7 +49,7 @@ func getNewVZReader() (*vzReader.VzReader, error) {
 	return &reader, nil
 }
 
-func NewScenarioManager(cfg config.AppConfigs) *ScenarioManager {
+func NewScenarioManager(cfg config.AppConfigs, tps service.TracePersistenceService) *ScenarioManager {
 	reader, err := getNewVZReader()
 	if err != nil {
 		return nil

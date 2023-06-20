@@ -6,21 +6,39 @@ import (
 	"scenario-manager/internal/tracePersistence/model"
 )
 
+type IncidentDto struct {
+	ScenarioId      string  `json:"scenario_id"`
+	ScenarioVersion string  `json:"scenario_version"`
+	TraceId         string  `json:"trace_id"`
+	Title           string  `json:"title"`
+	ScenarioType    string  `json:"scenario_type"`
+	Velocity        float32 `json:"velocity"`
+	TotalCount      int     `json:"total_count"`
+	Source          string  `json:"source"`
+	Destination     string  `json:"destination"`
+	FirstSeen       string  `json:"first_seen"`
+	LastSeen        string  `json:"last_seen"`
+}
+
 type TraceTableDto struct {
 	ScenarioId      string `json:"scenario_id"`
 	ScenarioVersion string `json:"scenario_version"`
 	TraceId         string `json:"trace_id"`
+	Title           string `json:"title"`
+	ScenarioType    string `json:"scenario_type"`
+	CreatedAt       string `json:"created_at"`
 }
 
 type TraceMetadataTableDto struct {
-	TraceId     string  `json:"trace_id"`
-	SpanId      string  `json:"span_id"`
-	Source      string  `json:"source"`
-	Destination string  `json:"destination"`
-	Error       bool    `json:"error"`
-	Metadata    string  `json:"metadata"`
-	LatencyMs   float32 `json:"latency_ms"`
-	Protocol    string  `json:"protocol"`
+	TraceId      string  `json:"trace_id"`
+	SpanId       string  `json:"span_id"`
+	ParentSpanId string  `json:"parent_span_id"`
+	Source       string  `json:"source"`
+	Destination  string  `json:"destination"`
+	Error        bool    `json:"error"`
+	Metadata     string  `json:"metadata"`
+	LatencyMs    float32 `json:"latency_ms"`
+	Protocol     string  `json:"protocol"`
 }
 
 type TraceRawDataTableDto struct {
@@ -35,7 +53,7 @@ func (t TraceTableDto) GetAllColumns() []any {
 }
 
 func (t TraceMetadataTableDto) GetAllColumns() []any {
-	return []any{t.TraceId, t.SpanId, t.Source, t.Destination, t.Error, t.Metadata, t.LatencyMs, t.Protocol}
+	return []any{t.TraceId, t.SpanId, t.ParentSpanId, t.Source, t.Destination, t.Error, t.Metadata, t.LatencyMs, t.Protocol}
 }
 
 func (t TraceRawDataTableDto) GetAllColumns() []any {
