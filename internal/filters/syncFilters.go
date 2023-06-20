@@ -55,7 +55,7 @@ func NewScenarioManager(cfg config.AppConfigs) *ScenarioManager {
 	}
 	fp := ScenarioManager{
 		scenarioStore:         store.GetVersionedStore(*cfg.Redis, "scenarios", true, model.Scenario{}),
-		traceStore:            GetTraceStore(*cfg.Redis, TTLForTransientSets),
+		traceStore:            GetTraceStore(cfg.Redis, TTLForTransientSets),
 		traceRawDataCollector: reader,
 	}
 	return &fp

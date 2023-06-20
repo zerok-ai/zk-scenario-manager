@@ -3,7 +3,9 @@ module scenario-manager
 go 1.20
 
 require (
-	github.com/ilyakaznacheev/cleanenv v1.4.2
+	github.com/google/uuid v1.3.0
+	github.com/kataras/iris/v12 v12.2.0
+	github.com/lib/pq v1.10.9
 	github.com/redis/go-redis/v9 v9.0.5
 	github.com/zerok-ai/zk-rawdata-reader v0.0.0-20230619085239-4911e55dc08b
 	github.com/zerok-ai/zk-utils-go v0.4.7-0.20230616042931-9ac66b357905
@@ -32,14 +34,13 @@ require (
 	github.com/gogo/protobuf v1.3.2 // indirect
 	github.com/golang/protobuf v1.5.3 // indirect
 	github.com/golang/snappy v0.0.4 // indirect
-	github.com/google/uuid v1.3.0 // indirect
 	github.com/gorilla/css v1.0.0 // indirect
+	github.com/ilyakaznacheev/cleanenv v1.4.2 // indirect
 	github.com/iris-contrib/schema v0.0.6 // indirect
 	github.com/joho/godotenv v1.5.1 // indirect
 	github.com/josharian/intern v1.0.0 // indirect
 	github.com/kataras/blocks v0.0.7 // indirect
 	github.com/kataras/golog v0.1.8 // indirect
-	github.com/kataras/iris/v12 v12.2.0 // indirect
 	github.com/kataras/pio v0.0.11 // indirect
 	github.com/kataras/sitemap v0.0.6 // indirect
 	github.com/kataras/tunnel v0.0.4 // indirect

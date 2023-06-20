@@ -21,10 +21,9 @@ func (t TraceStore) initialize() *TraceStore {
 	return &t
 }
 
-func GetTraceStore(redisConfig config.RedisConfig, ttlForTransientSets time.Duration) *TraceStore {
-
+func GetTraceStore(redisConfig *config.RedisConfig, ttlForTransientSets time.Duration) *TraceStore {
 	dbName := "traces"
-	fmt.Println("GetTraceStore: redisConfig= ", redisConfig, "dbName= ", dbName, "dbID= ", redisConfig.DBs[dbName])
+	fmt.Println("GetTraceStore: config= ", redisConfig, "dbName= ", dbName, "dbID= ", redisConfig.DBs[dbName])
 	readTimeout := time.Duration(redisConfig.ReadTimeout) * time.Second
 	_redisClient := redis.NewClient(&redis.Options{
 		Addr:        fmt.Sprint(redisConfig.Host, ":", redisConfig.Port),
