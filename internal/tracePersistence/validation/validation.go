@@ -10,14 +10,14 @@ import (
 
 var LogTag = "trace_persistence_validation"
 
-func ValidateGetIncidentsDataApi(source, errorType, offset, limit string) *zkerrors.ZkError {
-	if zkCommon.IsEmpty(source) {
-		zkErr := zkerrors.ZkErrorBuilder{}.Build(zkErrorsScenarioManager.ZkErrorBadRequestSourceEmpty, nil)
+func ValidateGetIncidentsDataApi(scenarioType, source, offset, limit string) *zkerrors.ZkError {
+	if zkCommon.IsEmpty(scenarioType) {
+		zkErr := zkerrors.ZkErrorBuilder{}.Build(zkErrorsScenarioManager.ZkErrorBadRequestScenarioTypeEmpty, nil)
 		return &zkErr
 	}
 
-	if zkCommon.IsEmpty(errorType) {
-		zkErr := zkerrors.ZkErrorBuilder{}.Build(zkErrorsScenarioManager.ZkErrorBadRequestErrorTypeEmpty, nil)
+	if zkCommon.IsEmpty(source) {
+		zkErr := zkerrors.ZkErrorBuilder{}.Build(zkErrorsScenarioManager.ZkErrorBadRequestSourceEmpty, nil)
 		return &zkErr
 	}
 

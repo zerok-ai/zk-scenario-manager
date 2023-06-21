@@ -38,11 +38,11 @@ const (
 	GetIncidentData                            = "SELECT t.scenario_id, t.scenario_version, t.scenario_title, COUNT(*) AS incident_count, md.destination, min(t.created_at) as first_seen, max(t.created_at) as last_seen FROM (SELECT * FROM scenario_trace WHERE scenario_type=$1) AS t INNER JOIN (SELECT * FROM trace_metadata WHERE source=$2) AS md USING(trace_id) GROUP BY t.scenario_id, t.scenario_version, t.scenario_title, md.destination  LIMIT $3 OFFSET $4"
 	GetTraceQuery                              = "SELECT scenario_version, trace_id FROM scenario_trace WHERE scenario_id=$1 LIMIT $2 OFFSET $3"
 	GetTraceRawDataQuery                       = "SELECT request_payload, response_payload FROM trace_raw_data WHERE trace_id=$1 AND span_id=$2 LIMIT $3 OFFSET $4"
-	GetTraceMetadataQueryUsingTraceIdAndSpanId = "SELECT span_id, source, destination, error, metadata, latency_ms, protocol FROM trace_metadata WHERE trace_id=$1 AND span_id=$2 LIMIT $3 OFFSET $4"
-	GetTraceMetadataQueryUsingTraceId          = "SELECT span_id, source, destination, error, metadata, latency_ms, protocol FROM trace_metadata WHERE trace_id=$1 LIMIT $2 OFFSET $3"
+	GetTraceMetadataQueryUsingTraceIdAndSpanId = "SELECT span_id, parent_span_id, source, destination, error, metadata, latency_ms, protocol FROM trace_metadata WHERE trace_id=$1 AND span_id=$2 LIMIT $3 OFFSET $4"
+	GetTraceMetadataQueryUsingTraceId          = "SELECT span_id, parent_span_id, source, destination, error, metadata, latency_ms, protocol FROM trace_metadata WHERE trace_id=$1 LIMIT $2 OFFSET $3"
 
 	InsertTraceQuery         = "INSERT INTO scenario_trace (scenario_id, scenario_version, trace_id, scenario_title, scenario_type) VALUES ($1, $2, $3, $4, $5)"
-	InsertTraceMetadataQuery = "INSERT INTO trace_metadata (trace_id, span_id, source, destination, error, metadata, latency_ms, protocol) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)"
+	InsertTraceMetadataQuery = "INSERT INTO trace_metadata (trace_id, span_id, parent_span_id, source, destination, error, metadata, latency_ms, protocol) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)"
 	InsertTraceRawDataQuery  = "INSERT INTO trace_raw_data (trace_id, span_id, request_payload, response_payload) VALUES ($1, $2, $3, $4)"
 
 	UpsertTraceQuery         = "INSERT INTO scenario_trace (scenario_id, scenario_version, trace_id, scenario_title, scenario_type) VALUES ($1, $2, $3, $4, $5) ON CONFLICT (scenario_id) DO NOTHING"
@@ -53,7 +53,7 @@ const (
 var LogTag = "zk_trace_persistence_repo"
 
 type TracePersistenceRepo interface {
-	GetIncidentData(source, errorType string, offset, limit int) ([]dto.IncidentDto, error)
+	GetIncidentData(errorType, source string, offset, limit int) ([]dto.IncidentDto, error)
 	GetTraces(scenarioId string, offset, limit int) ([]dto.ScenarioTableDto, error)
 	GetTracesMetadata(traceId, spanId string, offset, limit int) ([]dto.TraceMetadataTableDto, error)
 	GetTracesRawData(traceId, spanId string, offset, limit int) ([]dto.TraceRawDataTableDto, error)
@@ -68,8 +68,8 @@ func NewTracePersistenceRepo(dbRepo sqlDB.DatabaseRepo) TracePersistenceRepo {
 	return &tracePersistenceRepo{dbRepo: dbRepo}
 }
 
-func (z tracePersistenceRepo) GetIncidentData(source, errorType string, offset, limit int) ([]dto.IncidentDto, error) {
-	rows, err, closeRow := z.dbRepo.GetAll(GetIncidentData, []any{errorType, source, limit, offset})
+func (z tracePersistenceRepo) GetIncidentData(scenarioType, source string, offset, limit int) ([]dto.IncidentDto, error) {
+	rows, err, closeRow := z.dbRepo.GetAll(GetIncidentData, []any{scenarioType, source, limit, offset})
 	defer closeRow()
 	if err != nil || rows == nil {
 		zkLogger.Error(LogTag, err)
@@ -85,16 +85,25 @@ func (z tracePersistenceRepo) GetIncidentData(source, errorType string, offset, 
 			log.Fatal(err)
 		}
 
+		rawData.ScenarioType = scenarioType
 		rawData.Source = source
-		rawData.ScenarioType = errorType
 
-		last, _ := utils.ParseTimestamp(rawData.LastSeen)
-		first, _ := utils.ParseTimestamp(rawData.FirstSeen)
+		last, err := utils.ParseTimestamp(rawData.LastSeen)
+		if err != nil {
+			zkLogger.Error(LogTag, "unable to parse last seen:", rawData.LastSeen, ", err:", err)
+			rawData.Velocity = -1
+			continue
+		}
+
+		first, err := utils.ParseTimestamp(rawData.FirstSeen)
+		if err != nil {
+			zkLogger.Error(LogTag, "unable to parse first seen:", rawData.FirstSeen, ", err:", err)
+			rawData.Velocity = -1
+			continue
+		}
 
 		days := utils.CalendarDaysBetween(first, last) + 1
-
 		rawData.Velocity = float32(rawData.TotalCount / days)
-
 		responseArr = append(responseArr, rawData)
 	}
 

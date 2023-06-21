@@ -15,7 +15,7 @@ import (
 var LogTag = "zk_trace_persistence_service"
 
 type TracePersistenceService interface {
-	GetIncidentData(source, errorType string, offset, limit int) (traceresponse.IncidentResponse, *zkErrors.ZkError)
+	GetIncidentData(scenarioType, source string, offset, limit int) (traceresponse.IncidentResponse, *zkErrors.ZkError)
 	GetTraces(scenarioId string, offset, limit int) (traceresponse.TraceResponse, *zkErrors.ZkError)
 	GetTracesMetadata(traceId, spanId string, offset, limit int) (traceresponse.TraceMetadataResponse, *zkErrors.ZkError)
 	GetTracesRawData(traceId, spanId string, offset, limit int) (traceresponse.TraceRawDataResponse, *zkErrors.ZkError)
@@ -30,14 +30,14 @@ type tracePersistenceService struct {
 	repo repository.TracePersistenceRepo
 }
 
-func (s tracePersistenceService) GetIncidentData(source, errorType string, offset, limit int) (traceresponse.IncidentResponse, *zkErrors.ZkError) {
+func (s tracePersistenceService) GetIncidentData(scenarioType, source string, offset, limit int) (traceresponse.IncidentResponse, *zkErrors.ZkError) {
 	var response traceresponse.IncidentResponse
 	if offset < 0 || limit < 1 {
 		zkErr := zkErrors.ZkErrorBuilder{}.Build(zkErrors.ZkErrorBadRequest, nil)
 		return response, &zkErr
 	}
 
-	data, err := s.repo.GetIncidentData(source, errorType, offset, limit)
+	data, err := s.repo.GetIncidentData(scenarioType, source, offset, limit)
 	if err == nil {
 		response, respErr := traceresponse.ConvertIncidentToIncidentResponse(data)
 		if respErr != nil {
@@ -45,6 +45,7 @@ func (s tracePersistenceService) GetIncidentData(source, errorType string, offse
 		}
 		return *response, nil
 	}
+
 	zkErr := zkErrors.ZkErrorBuilder{}.Build(zkErrors.ZkErrorDbError, nil)
 	return response, &zkErr
 }
@@ -70,45 +71,45 @@ func (s tracePersistenceService) GetTraces(scenarioId string, offset, limit int)
 
 func (s tracePersistenceService) GetTracesMetadata(traceId, spanId string, offset, limit int) (traceresponse.TraceMetadataResponse, *zkErrors.ZkError) {
 	var response traceresponse.TraceMetadataResponse
-
-	if offset < 0 || limit < 0 {
+	if offset < 0 || limit < 1 {
 		zkErr := zkErrors.ZkErrorBuilder{}.Build(zkErrors.ZkErrorBadRequest, nil)
 		return response, &zkErr
 	}
 
 	data, err := s.repo.GetTracesMetadata(traceId, spanId, offset, limit)
 	if err != nil {
-		zkErr := zkErrors.ZkErrorBuilder{}.Build(zkErrors.ZkErrorDbError, nil)
-		return response, &zkErr
+		response, respErr := traceresponse.ConvertTraceMetadataToTraceMetadataResponse(data)
+		if respErr != nil {
+			zkLogger.Error(LogTag, err)
+		}
+		return *response, nil
 	}
 
-	x, respErr := traceresponse.ConvertTraceMetadataToTraceMetadataResponse(data)
-	if respErr != nil {
-		zkLogger.Error(LogTag, err)
-	}
-	return *x, nil
+	zkErr := zkErrors.ZkErrorBuilder{}.Build(zkErrors.ZkErrorDbError, nil)
+	return response, &zkErr
 }
 
 func (s tracePersistenceService) GetTracesRawData(traceId, spanId string, offset, limit int) (traceresponse.TraceRawDataResponse, *zkErrors.ZkError) {
 	var response traceresponse.TraceRawDataResponse
 	//TODO: discuss if the below condition of limit > 100 is fine. or it should be read from some config
 	threshold := 100
-	if offset < 0 || limit < 0 || limit > threshold {
+	if offset < 0 || limit < 1 || limit > threshold {
 		zkErr := zkErrors.ZkErrorBuilder{}.Build(zkErrors.ZkErrorBadRequest, fmt.Sprintf("either offset or limit < 0 or limit > %d", threshold))
 		return response, &zkErr
 	}
 
 	data, err := s.repo.GetTracesRawData(traceId, spanId, offset, limit)
 	if err != nil {
-		zkErr := zkErrors.ZkErrorBuilder{}.Build(zkErrors.ZkErrorDbError, nil)
-		return response, &zkErr
+		response, respErr := traceresponse.ConvertTraceRawDataToTraceRawDataResponse(data)
+		if respErr != nil {
+			zkLogger.Error(LogTag, err)
+		}
+		return *response, nil
+
 	}
 
-	x, respErr := traceresponse.ConvertTraceRawDataToTraceRawDataResponse(data)
-	if respErr != nil {
-		zkLogger.Error(LogTag, err)
-	}
-	return *x, nil
+	zkErr := zkErrors.ZkErrorBuilder{}.Build(zkErrors.ZkErrorDbError, nil)
+	return response, &zkErr
 }
 
 func (s tracePersistenceService) SaveTraceList(scenarios []model.Scenario) *zkErrors.ZkError {

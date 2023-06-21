@@ -30,12 +30,12 @@ func NewTracePersistenceHandler(persistenceService service.TracePersistenceServi
 }
 
 func (t tracePersistenceHandler) GetIncidents(ctx iris.Context) {
+	scenarioType := ctx.URLParam(utils.ScenarioType)
 	source := ctx.URLParam(utils.Source)
-	errorType := ctx.URLParam(utils.ScenarioType)
 
 	limit := ctx.URLParamDefault("limit", "50")
 	offset := ctx.URLParamDefault("offset", "0")
-	if err := validation.ValidateGetIncidentsDataApi(source, errorType, offset, limit); err != nil {
+	if err := validation.ValidateGetIncidentsDataApi(scenarioType, source, offset, limit); err != nil {
 		z := &zkHttp.ZkHttpResponseBuilder[any]{}
 		zkHttpResponse := z.WithZkErrorType(err.Error).Build()
 		ctx.StatusCode(zkHttpResponse.Status)
@@ -46,7 +46,7 @@ func (t tracePersistenceHandler) GetIncidents(ctx iris.Context) {
 	l, _ := strconv.Atoi(limit)
 	o, _ := strconv.Atoi(offset)
 
-	resp, err := t.service.GetIncidentData(source, errorType, o, l)
+	resp, err := t.service.GetIncidentData(scenarioType, source, o, l)
 
 	zkHttpResponse := zkHttp.ToZkResponse[traceResponse.IncidentResponse](200, resp, resp, err)
 	ctx.StatusCode(zkHttpResponse.Status)
