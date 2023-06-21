@@ -22,7 +22,7 @@ func ConvertTraceToTraceResponse(t []dto.ScenarioTableDto) (*TraceResponse, *err
 }
 
 type IncidentResponse struct {
-	IncidentList []dto.IncidentDto `json:"trace_id_list"`
+	IncidentList []dto.IncidentDto `json:"incidents"`
 }
 
 func ConvertIncidentToIncidentResponse(t []dto.IncidentDto) (*IncidentResponse, *error) {

@@ -14,7 +14,6 @@ var LogTag = "trace_dto"
 type IncidentDto struct {
 	ScenarioId      string  `json:"scenario_id"`
 	ScenarioVersion string  `json:"scenario_version"`
-	TraceId         string  `json:"trace_id"`
 	Title           string  `json:"title"`
 	ScenarioType    string  `json:"scenario_type"`
 	Velocity        float32 `json:"velocity"`

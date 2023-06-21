@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"log"
 	"scenario-manager/internal/tracePersistence/model/dto"
+	"scenario-manager/utils"
 
 	"github.com/lib/pq"
 	zkCommon "github.com/zerok-ai/zk-utils-go/common"
@@ -34,7 +35,7 @@ const (
 	RequestPayload  = "request_payload"
 	ResponsePayload = "response_payload"
 
-	GetIncidentData                            = "SELECT trace_id, count(*) as incident_count, destination, min(created_at) as first_seen, max(created_at) as last_seen  FROM trace_metadata where error_type=$1 AND source=$2 GROUP BY trace_id LIMIT $3 OFFSET $4"
+	GetIncidentData                            = "SELECT t.scenario_id, t.scenario_version, t.scenario_title, COUNT(*) AS incident_count, md.destination, min(t.created_at) as first_seen, max(t.created_at) as last_seen FROM (SELECT * FROM scenario_trace WHERE scenario_type=$1) AS t INNER JOIN (SELECT * FROM trace_metadata WHERE source=$2) AS md USING(trace_id) GROUP BY t.scenario_id, t.scenario_version, t.scenario_title, md.destination  LIMIT $3 OFFSET $4"
 	GetTraceQuery                              = "SELECT scenario_version, trace_id FROM scenario_trace WHERE scenario_id=$1 LIMIT $2 OFFSET $3"
 	GetTraceRawDataQuery                       = "SELECT request_payload, response_payload FROM trace_raw_data WHERE trace_id=$1 AND span_id=$2 LIMIT $3 OFFSET $4"
 	GetTraceMetadataQueryUsingTraceIdAndSpanId = "SELECT span_id, source, destination, error, metadata, latency_ms, protocol FROM trace_metadata WHERE trace_id=$1 AND span_id=$2 LIMIT $3 OFFSET $4"
@@ -68,7 +69,7 @@ func NewTracePersistenceRepo(dbRepo sqlDB.DatabaseRepo) TracePersistenceRepo {
 }
 
 func (z tracePersistenceRepo) GetIncidentData(source, errorType string, offset, limit int) ([]dto.IncidentDto, error) {
-	rows, err, closeRow := z.dbRepo.GetAll(GetIncidentData, []any{errorType, source, offset, limit})
+	rows, err, closeRow := z.dbRepo.GetAll(GetIncidentData, []any{errorType, source, limit, offset})
 	defer closeRow()
 	if err != nil || rows == nil {
 		zkLogger.Error(LogTag, err)
@@ -78,12 +79,21 @@ func (z tracePersistenceRepo) GetIncidentData(source, errorType string, offset, 
 	var responseArr []dto.IncidentDto
 	for rows.Next() {
 		var rawData dto.IncidentDto
-		err := rows.Scan(&rawData.ScenarioId, &rawData.ScenarioVersion, &rawData.TraceId, &rawData.Title,
-			&rawData.Source, &rawData.Destination, &rawData.ScenarioType, &rawData.FirstSeen,
-			&rawData.LastSeen, &rawData.Velocity, &rawData.TotalCount)
+		err := rows.Scan(&rawData.ScenarioId, &rawData.ScenarioVersion, &rawData.Title, &rawData.TotalCount,
+			&rawData.Destination, &rawData.FirstSeen, &rawData.LastSeen)
 		if err != nil {
 			log.Fatal(err)
 		}
+
+		rawData.Source = source
+		rawData.ScenarioType = errorType
+
+		last, _ := utils.ParseTimestamp(rawData.LastSeen)
+		first, _ := utils.ParseTimestamp(rawData.FirstSeen)
+
+		days := utils.CalendarDaysBetween(first, last) + 1
+
+		rawData.Velocity = float32(rawData.TotalCount / days)
 
 		responseArr = append(responseArr, rawData)
 	}
