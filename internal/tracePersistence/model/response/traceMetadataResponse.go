@@ -5,13 +5,13 @@ import (
 	"scenario-manager/internal/tracePersistence/model/dto"
 )
 
-type SpansMetadataDetailsMap map[string]SpanMetadataDetails
+type SpansMetadataDetailsMap map[string]SpanDetails
 
-type TraceMetadataResponse struct {
+type SpanResponse struct {
 	Spans SpansMetadataDetailsMap `json:"spans"`
 }
 
-type SpanMetadataDetails struct {
+type SpanDetails struct {
 	ParentSpanId   string         `json:"parent_span_id"`
 	Source         string         `json:"source"`
 	Destination    string         `json:"destination"`
@@ -21,11 +21,11 @@ type SpanMetadataDetails struct {
 	Protocol       string         `json:"protocol"`
 }
 
-func ConvertTraceMetadataToTraceMetadataResponse(t []dto.SpanTableDto) (*TraceMetadataResponse, *error) {
-	respMap := make(map[string]SpanMetadataDetails, 0)
+func ConvertSpanToSpanResponse(t []dto.SpanTableDto) (*SpanResponse, *error) {
+	respMap := make(map[string]SpanDetails, 0)
 	for _, v := range t {
 
-		s := SpanMetadataDetails{
+		s := SpanDetails{
 			ParentSpanId:   v.ParentSpanId,
 			Source:         v.Source,
 			Destination:    v.Destination,
@@ -38,7 +38,7 @@ func ConvertTraceMetadataToTraceMetadataResponse(t []dto.SpanTableDto) (*TraceMe
 		respMap[v.SpanId] = s
 	}
 
-	resp := TraceMetadataResponse{Spans: respMap}
+	resp := SpanResponse{Spans: respMap}
 
 	return &resp, nil
 }

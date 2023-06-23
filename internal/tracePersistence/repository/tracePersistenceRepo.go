@@ -266,7 +266,7 @@ func (z tracePersistenceRepo) GetMetadataMap(st string, offset, limit int) ([]dt
 	return responseArr, nil
 }
 
-func doBulkInsertForTraceList(tx *sql.Tx, dbRepo sqlDB.DatabaseRepo, traceData, traceMetadata, traceRawData []interfaces.DbArgs) error {
+func doBulkInsertForTraceList(tx *sql.Tx, dbRepo sqlDB.DatabaseRepo, traceData, span, spanRawData []interfaces.DbArgs) error {
 
 	err := bulkInsert(tx, dbRepo, ScenarioTraceTablePostgres, []string{ScenarioId, ScenarioVersion, TraceId, ScenarioTitle, ScenarioType}, traceData)
 	if err != nil {
@@ -274,15 +274,15 @@ func doBulkInsertForTraceList(tx *sql.Tx, dbRepo sqlDB.DatabaseRepo, traceData, 
 		return err
 	}
 
-	err = bulkInsert(tx, dbRepo, SpanTablePostgres, []string{TraceId, SpanId, ParentSpanId, Source, Destination, WorkloadIdList, Metadata, LatencyMs, Protocol}, traceMetadata)
+	err = bulkInsert(tx, dbRepo, SpanTablePostgres, []string{TraceId, SpanId, ParentSpanId, Source, Destination, WorkloadIdList, Metadata, LatencyMs, Protocol}, span)
 	if err != nil {
-		zkLogger.Info(LogTag, "Error in bulk insert traceMetadata table", err)
+		zkLogger.Info(LogTag, "Error in bulk insert span table", err)
 		return err
 	}
 
-	err = bulkInsert(tx, dbRepo, SpanRawDataTablePostgres, []string{TraceId, SpanId, RequestPayload, ResponsePayload}, traceRawData)
+	err = bulkInsert(tx, dbRepo, SpanRawDataTablePostgres, []string{TraceId, SpanId, RequestPayload, ResponsePayload}, spanRawData)
 	if err != nil {
-		zkLogger.Info(LogTag, "Error in bulk insert traceRawData table", err)
+		zkLogger.Info(LogTag, "Error in bulk insert spanRawData table", err)
 		return err
 	}
 
@@ -305,7 +305,7 @@ func bulkInsert(tx *sql.Tx, dbRepo sqlDB.DatabaseRepo, table string, columns []s
 	return nil
 }
 
-func doBulkUpsertForTraceList(tx *sql.Tx, dbRepo sqlDB.DatabaseRepo, traceData, traceMetadata, traceRawData []interfaces.DbArgs) error {
+func doBulkUpsertForTraceList(tx *sql.Tx, dbRepo sqlDB.DatabaseRepo, traceData, span, spanRawData []interfaces.DbArgs) error {
 
 	err := bulkUpsert(tx, dbRepo, UpsertTraceQuery, traceData)
 	if err != nil {
@@ -313,13 +313,13 @@ func doBulkUpsertForTraceList(tx *sql.Tx, dbRepo sqlDB.DatabaseRepo, traceData, 
 		return err
 	}
 
-	err = bulkUpsert(tx, dbRepo, UpsertSpanQuery, traceMetadata)
+	err = bulkUpsert(tx, dbRepo, UpsertSpanQuery, span)
 	if err != nil {
 		zkLogger.Error(LogTag, "Error in bulk upsert for trace table", err)
 		return err
 	}
 
-	err = bulkUpsert(tx, dbRepo, UpsertSpanRawDataQuery, traceRawData)
+	err = bulkUpsert(tx, dbRepo, UpsertSpanRawDataQuery, spanRawData)
 	if err != nil {
 		zkLogger.Error(LogTag, "Error in bulk upsert for trace table", err)
 		return err

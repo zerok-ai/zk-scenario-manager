@@ -94,7 +94,7 @@ func (t tracePersistenceHandler) GetTracesMetadata(ctx iris.Context) {
 
 	resp, err := t.service.GetTracesMetadata(traceId, spanId, o, l)
 
-	zkHttpResponse := zkHttp.ToZkResponse[traceResponse.TraceMetadataResponse](200, resp, resp, err)
+	zkHttpResponse := zkHttp.ToZkResponse[traceResponse.SpanResponse](200, resp, resp, err)
 	ctx.StatusCode(zkHttpResponse.Status)
 	ctx.JSON(zkHttpResponse)
 }

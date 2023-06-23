@@ -16,7 +16,7 @@ var LogTag = "zk_trace_persistence_service"
 type TracePersistenceService interface {
 	GetIncidentData(scenarioType, source string, offset, limit int) (traceresponse.IncidentResponse, *zkErrors.ZkError)
 	GetTraces(scenarioId string, offset, limit int) (traceresponse.TraceResponse, *zkErrors.ZkError)
-	GetTracesMetadata(traceId, spanId string, offset, limit int) (traceresponse.TraceMetadataResponse, *zkErrors.ZkError)
+	GetTracesMetadata(traceId, spanId string, offset, limit int) (traceresponse.SpanResponse, *zkErrors.ZkError)
 	GetTracesRawData(traceId, spanId string, offset, limit int) (traceresponse.TraceRawDataResponse, *zkErrors.ZkError)
 	SaveTraceList([]model.Scenario) *zkErrors.ZkError
 	GetMetadataMap(duration string, offset, limit int) (traceresponse.MetadataMapResponse, *zkErrors.ZkError)
@@ -69,8 +69,8 @@ func (s tracePersistenceService) GetTraces(scenarioId string, offset, limit int)
 	return response, &zkErr
 }
 
-func (s tracePersistenceService) GetTracesMetadata(traceId, spanId string, offset, limit int) (traceresponse.TraceMetadataResponse, *zkErrors.ZkError) {
-	var response traceresponse.TraceMetadataResponse
+func (s tracePersistenceService) GetTracesMetadata(traceId, spanId string, offset, limit int) (traceresponse.SpanResponse, *zkErrors.ZkError) {
+	var response traceresponse.SpanResponse
 	if offset < 0 || limit < 1 {
 		zkErr := zkErrors.ZkErrorBuilder{}.Build(zkErrors.ZkErrorBadRequest, nil)
 		return response, &zkErr
@@ -78,7 +78,7 @@ func (s tracePersistenceService) GetTracesMetadata(traceId, spanId string, offse
 
 	data, err := s.repo.GetSpan(traceId, spanId, offset, limit)
 	if err == nil {
-		response, respErr := traceresponse.ConvertTraceMetadataToTraceMetadataResponse(data)
+		response, respErr := traceresponse.ConvertSpanToSpanResponse(data)
 		if respErr != nil {
 			zkLogger.Error(LogTag, err)
 		}
@@ -124,8 +124,8 @@ func (s tracePersistenceService) SaveTraceList(scenarios []model.Scenario) *zkEr
 	}
 
 	traceDtoList := make([]dto.ScenarioTableDto, 0)
-	traceMetadataDtoList := make([]dto.SpanTableDto, 0)
-	traceRawDataDtoList := make([]dto.SpanRawDataTableDto, 0)
+	spanDtoList := make([]dto.SpanTableDto, 0)
+	spanRawDataDtoList := make([]dto.SpanRawDataTableDto, 0)
 	for _, scenario := range scenarios {
 		if b, zkErr := dto.ValidateScenario(scenario); !b || zkErr != nil {
 			zkLogger.Error("Invalid scenario", zkErr)
@@ -139,12 +139,12 @@ func (s tracePersistenceService) SaveTraceList(scenarios []model.Scenario) *zkEr
 		}
 
 		traceDtoList = append(traceDtoList, t...)
-		traceMetadataDtoList = append(traceMetadataDtoList, tmd...)
-		traceRawDataDtoList = append(traceRawDataDtoList, trd...)
+		spanDtoList = append(spanDtoList, tmd...)
+		spanRawDataDtoList = append(spanRawDataDtoList, trd...)
 
 	}
 
-	err := s.repo.SaveTraceList(traceDtoList, traceMetadataDtoList, traceRawDataDtoList)
+	err := s.repo.SaveTraceList(traceDtoList, spanDtoList, spanRawDataDtoList)
 	if err != nil {
 		zkErr := zkErrors.ZkErrorBuilder{}.Build(zkErrors.ZkErrorDbError, nil)
 		return &zkErr
