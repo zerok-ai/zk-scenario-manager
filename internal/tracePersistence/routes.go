@@ -13,5 +13,6 @@ func Initialize(app router.Party, tph handler.TracePersistenceHandler) {
 		ruleEngineAPI.Get("/", tph.GetTraces)
 		ruleEngineAPI.Get("/metadata", tph.GetTracesMetadata)
 		ruleEngineAPI.Get("/raw-data", tph.GetTracesRawData)
+		ruleEngineAPI.Get("/metadata/map", tph.GetMetadataMapData)
 	}
 }

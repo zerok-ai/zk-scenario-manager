@@ -2,11 +2,13 @@ package dto
 
 import (
 	"encoding/json"
+	"github.com/lib/pq"
 	"github.com/zerok-ai/zk-utils-go/common"
 	zkCrypto "github.com/zerok-ai/zk-utils-go/crypto"
 	"github.com/zerok-ai/zk-utils-go/logs"
 	"github.com/zerok-ai/zk-utils-go/zkerrors"
 	"scenario-manager/internal/tracePersistence/model"
+	"time"
 )
 
 var LogTag = "trace_dto"
@@ -25,27 +27,27 @@ type IncidentDto struct {
 }
 
 type ScenarioTableDto struct {
-	ScenarioId      string `json:"scenario_id"`
-	ScenarioVersion string `json:"scenario_version"`
-	TraceId         string `json:"trace_id"`
-	ScenarioTitle   string `json:"scenario_title"`
-	ScenarioType    string `json:"scenario_type"`
-	CreatedAt       string `json:"created_at"`
+	ScenarioId      string    `json:"scenario_id"`
+	ScenarioVersion string    `json:"scenario_version"`
+	TraceId         string    `json:"trace_id"`
+	ScenarioTitle   string    `json:"scenario_title"`
+	ScenarioType    string    `json:"scenario_type"`
+	CreatedAt       time.Time `json:"created_at"`
 }
 
-type TraceMetadataTableDto struct {
-	TraceId      string  `json:"trace_id"`
-	SpanId       string  `json:"span_id"`
-	ParentSpanId string  `json:"parent_span_id"`
-	Source       string  `json:"source"`
-	Destination  string  `json:"destination"`
-	Error        bool    `json:"error"`
-	Metadata     string  `json:"metadata"`
-	LatencyMs    float32 `json:"latency_ms"`
-	Protocol     string  `json:"protocol"`
+type SpanTableDto struct {
+	TraceId        string         `json:"trace_id"`
+	SpanId         string         `json:"span_id"`
+	ParentSpanId   string         `json:"parent_span_id"`
+	Source         string         `json:"source"`
+	Destination    string         `json:"destination"`
+	WorkloadIdList pq.StringArray `json:"workload_id_list"`
+	Metadata       string         `json:"metadata"`
+	LatencyMs      float32        `json:"latency_ms"`
+	Protocol       string         `json:"protocol"`
 }
 
-type TraceRawDataTableDto struct {
+type SpanRawDataTableDto struct {
 	TraceId         string `json:"trace_id"`
 	SpanId          string `json:"span_id"`
 	RequestPayload  []byte `json:"request_payload"`
@@ -56,23 +58,23 @@ func (t ScenarioTableDto) GetAllColumns() []any {
 	return []any{t.ScenarioId, t.ScenarioVersion, t.TraceId, t.ScenarioTitle, t.ScenarioType}
 }
 
-func (t TraceMetadataTableDto) GetAllColumns() []any {
-	return []any{t.TraceId, t.SpanId, t.ParentSpanId, t.Source, t.Destination, t.Error, t.Metadata, t.LatencyMs, t.Protocol}
+func (t SpanTableDto) GetAllColumns() []any {
+	return []any{t.TraceId, t.SpanId, t.ParentSpanId, t.Source, t.Destination, t.WorkloadIdList, t.Metadata, t.LatencyMs, t.Protocol}
 }
 
-func (t TraceRawDataTableDto) GetAllColumns() []any {
+func (t SpanRawDataTableDto) GetAllColumns() []any {
 	return []any{t.TraceId, t.SpanId, t.RequestPayload, t.ResponsePayload}
 }
 
-func ConvertScenarioToTraceDto(s model.Scenario) ([]ScenarioTableDto, []TraceMetadataTableDto, []TraceRawDataTableDto, *error) {
+func ConvertScenarioToTraceDto(s model.Scenario) ([]ScenarioTableDto, []SpanTableDto, []SpanRawDataTableDto, *error) {
 	var scenarioDtoList []ScenarioTableDto
-	var traceMetadataDtoList []TraceMetadataTableDto
-	var traceRawDataDtoList []TraceRawDataTableDto
+	var spanDtoList []SpanTableDto
+	var spanRawDataDtoList []SpanRawDataTableDto
 
 	for traceId, spans := range s.TraceToSpansMap {
 		var scenarioDto ScenarioTableDto
-		var traceMetadataDto TraceMetadataTableDto
-		var traceRawDataDto TraceRawDataTableDto
+		var spanMetadataDto SpanTableDto
+		var spanRawDataDto SpanRawDataTableDto
 
 		scenarioDto.ScenarioId = s.ScenarioId
 		scenarioDto.ScenarioVersion = s.ScenarioVersion
@@ -98,27 +100,27 @@ func ConvertScenarioToTraceDto(s model.Scenario) ([]ScenarioTableDto, []TraceMet
 				return nil, nil, nil, &err
 			}
 
-			traceMetadataDto.TraceId = traceId
-			traceMetadataDto.SpanId = span.SpanId
-			traceMetadataDto.Source = span.Source
-			traceMetadataDto.Destination = span.Destination
-			traceMetadataDto.Error = span.Error
-			traceMetadataDto.Metadata = string(m)
-			traceMetadataDto.LatencyMs = *span.LatencyMs
-			traceMetadataDto.Protocol = span.Protocol
-			traceMetadataDto.ParentSpanId = span.ParentSpanId
+			spanMetadataDto.TraceId = traceId
+			spanMetadataDto.SpanId = span.SpanId
+			spanMetadataDto.Source = span.Source
+			spanMetadataDto.Destination = span.Destination
+			spanMetadataDto.WorkloadIdList = span.WorkloadIdList
+			spanMetadataDto.Metadata = string(m)
+			spanMetadataDto.LatencyMs = *span.LatencyMs
+			spanMetadataDto.Protocol = span.Protocol
+			spanMetadataDto.ParentSpanId = span.ParentSpanId
 
-			traceRawDataDto.TraceId = traceId
-			traceRawDataDto.SpanId = span.SpanId
-			traceRawDataDto.RequestPayload = requestCompressedStr
-			traceRawDataDto.ResponsePayload = responseCompressedStr
+			spanRawDataDto.TraceId = traceId
+			spanRawDataDto.SpanId = span.SpanId
+			spanRawDataDto.RequestPayload = requestCompressedStr
+			spanRawDataDto.ResponsePayload = responseCompressedStr
 
-			traceMetadataDtoList = append(traceMetadataDtoList, traceMetadataDto)
-			traceRawDataDtoList = append(traceRawDataDtoList, traceRawDataDto)
+			spanDtoList = append(spanDtoList, spanMetadataDto)
+			spanRawDataDtoList = append(spanRawDataDtoList, spanRawDataDto)
 		}
 	}
 
-	return scenarioDtoList, traceMetadataDtoList, traceRawDataDtoList, nil
+	return scenarioDtoList, spanDtoList, spanRawDataDtoList, nil
 }
 
 func ValidateScenario(s model.Scenario) (bool, *zkerrors.ZkError) {

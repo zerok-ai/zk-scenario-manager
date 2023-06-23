@@ -17,6 +17,7 @@ type TracePersistenceHandler interface {
 	GetTracesRawData(ctx iris.Context)
 	SaveTraceList(ctx iris.Context)
 	SaveTrace(ctx iris.Context)
+	GetMetadataMapData(ctx iris.Context)
 }
 
 type tracePersistenceHandler struct {
@@ -129,4 +130,26 @@ func (t tracePersistenceHandler) SaveTraceList(ctx iris.Context) {
 func (t tracePersistenceHandler) SaveTrace(ctx iris.Context) {
 	//TODO implement me
 	panic("implement me")
+}
+
+func (t tracePersistenceHandler) GetMetadataMapData(ctx iris.Context) {
+	d := ctx.URLParam(utils.Duration)
+	limit := ctx.URLParamDefault(utils.Limit, "50")
+	offset := ctx.URLParamDefault(utils.Offset, "0")
+	if err := validation.ValidateGetMetadataMapApi(d, offset, limit); err != nil {
+		z := &zkHttp.ZkHttpResponseBuilder[any]{}
+		zkHttpResponse := z.WithZkErrorType(err.Error).Build()
+		ctx.StatusCode(zkHttpResponse.Status)
+		ctx.JSON(zkHttpResponse)
+		return
+	}
+
+	l, _ := strconv.Atoi(limit)
+	o, _ := strconv.Atoi(offset)
+
+	resp, err := t.service.GetMetadataMap(d, o, l)
+
+	zkHttpResponse := zkHttp.ToZkResponse[traceResponse.MetadataMapResponse](200, resp, resp, err)
+	ctx.StatusCode(zkHttpResponse.Status)
+	ctx.JSON(zkHttpResponse)
 }

@@ -130,3 +130,28 @@ func ValidateGetTracesMetadataApi(traceId, offset, limit string) *zkerrors.ZkErr
 
 	return nil
 }
+
+func ValidateGetMetadataMapApi(duration, offset, limit string) *zkerrors.ZkError {
+	if zkCommon.IsEmpty(duration) {
+		zkErr := zkerrors.ZkErrorBuilder{}.Build(zkErrorsScenarioManager.ZkErrorBadRequestDurationEmpty, nil)
+		return &zkErr
+	}
+
+	if !zkCommon.IsEmpty(limit) {
+		_, err := strconv.Atoi(limit)
+		if err != nil {
+			zkErr := zkerrors.ZkErrorBuilder{}.Build(zkerrors.ZkErrorBadRequestLimitIsNotInteger, nil)
+			return &zkErr
+		}
+	}
+
+	if !zkCommon.IsEmpty(offset) {
+		_, err := strconv.Atoi(offset)
+		if err != nil {
+			zkErr := zkerrors.ZkErrorBuilder{}.Build(zkerrors.ZkErrorBadRequestOffsetIsNotInteger, nil)
+			return &zkErr
+		}
+	}
+
+	return nil
+}

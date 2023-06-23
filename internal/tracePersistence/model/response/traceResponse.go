@@ -26,12 +26,6 @@ type IncidentResponse struct {
 }
 
 func ConvertIncidentToIncidentResponse(t []dto.IncidentDto) (*IncidentResponse, *error) {
-	incidents := make([]dto.IncidentDto, 0)
-	for _, v := range t {
-		incidents = append(incidents, v)
-	}
-
-	resp := IncidentResponse{IncidentList: incidents}
-
+	resp := IncidentResponse{IncidentList: t}
 	return &resp, nil
 }

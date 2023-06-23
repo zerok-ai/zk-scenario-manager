@@ -17,7 +17,7 @@ type SpanRawDataDetails struct {
 	ResponsePayload string `json:"response_payload"`
 }
 
-func ConvertTraceRawDataToTraceRawDataResponse(t []dto.TraceRawDataTableDto) (*TraceRawDataResponse, *error) {
+func ConvertTraceRawDataToTraceRawDataResponse(t []dto.SpanRawDataTableDto) (*TraceRawDataResponse, *error) {
 	respMap := make(map[string]SpanRawDataDetails, 0)
 	for _, v := range t {
 		reqDecompressedStr, err := crypto.DecompressStringGzip(v.RequestPayload)

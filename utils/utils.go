@@ -11,6 +11,7 @@ const (
 	Destination  = "destination"
 	Limit        = "limit"
 	Offset       = "offset"
+	Duration     = "duration"
 )
 
 func ParseTimestamp(timestamp string) (time.Time, error) {
