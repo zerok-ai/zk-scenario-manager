@@ -47,8 +47,9 @@ data:
       port: 6379
       readTimeout: 20
       dbs:     
-        scenarios: 6
         traces: 1
+        otel: 3
+        scenarios: 6
 kind: ConfigMap
 metadata:
   name: zk-scenario-manager

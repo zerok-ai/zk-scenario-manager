@@ -7,9 +7,10 @@ require (
 	github.com/ilyakaznacheev/cleanenv v1.4.2
 	github.com/kataras/iris/v12 v12.2.0
 	github.com/lib/pq v1.10.9
+	github.com/pkg/errors v0.9.1
 	github.com/redis/go-redis/v9 v9.0.5
-	github.com/zerok-ai/zk-rawdata-reader v0.0.0-20230619085239-4911e55dc08b
-	github.com/zerok-ai/zk-utils-go v0.4.7-0.20230616042931-9ac66b357905
+	github.com/zerok-ai/zk-rawdata-reader v0.0.0-20230626052406-277105da3691
+	github.com/zerok-ai/zk-utils-go v0.4.7-0.20230626092822-e41dec7d73a0
 )
 
 require (
@@ -55,7 +56,6 @@ require (
 	github.com/mailgun/raymond/v2 v2.0.48 // indirect
 	github.com/mailru/easyjson v0.7.7 // indirect
 	github.com/microcosm-cc/bluemonday v1.0.23 // indirect
-	github.com/pkg/errors v0.9.1 // indirect
 	github.com/russross/blackfriday/v2 v2.1.0 // indirect
 	github.com/schollz/closestmatch v2.1.0+incompatible // indirect
 	github.com/sirupsen/logrus v1.9.0 // indirect

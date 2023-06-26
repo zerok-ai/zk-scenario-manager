@@ -30,15 +30,18 @@ type StringPopulator struct {
 	keyPrefix      string
 }
 
-func GetStringPopulator(taskName string, dbname string, redisConfig redisConfig.RedisConfig, keyPrefix string, increment int) *StringPopulator {
-	vs := storage.GetVersionedStore(redisConfig, dbname, false, RedisVal(""))
+func GetStringPopulator(taskName string, dbname string, redisConfig *redisConfig.RedisConfig, keyPrefix string, increment int) (*StringPopulator, error) {
+	vs, err := storage.GetVersionedStore[RedisVal](redisConfig, dbname, time.Minute*2)
+	if err != nil {
+		return nil, err
+	}
 	sp := StringPopulator{
 		versionedStore: vs,
 		taskName:       taskName,
 		increment:      increment,
 		keyPrefix:      keyPrefix,
 	}
-	return &sp
+	return &sp, nil
 }
 
 func (sp StringPopulator) Start(timeInterval time.Duration) error {

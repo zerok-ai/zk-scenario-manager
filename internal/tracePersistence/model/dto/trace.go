@@ -71,7 +71,7 @@ func ConvertScenarioToTraceDto(s model.Scenario) ([]ScenarioTableDto, []SpanTabl
 	var spanDtoList []SpanTableDto
 	var spanRawDataDtoList []SpanRawDataTableDto
 
-	for traceId, spans := range s.TraceToSpansMap {
+	for traceId, spans := range s.TraceIdToSpansMap {
 		var scenarioDto ScenarioTableDto
 		var spanMetadataDto SpanTableDto
 		var spanRawDataDto SpanRawDataTableDto
@@ -144,7 +144,7 @@ func ValidateScenario(s model.Scenario) (bool, *zkerrors.ZkError) {
 		return false, common.ToPtr(zkerrors.ZkErrorBuilder{}.Build(zkerrors.ZkErrorBadRequest, "invalid data"))
 	}
 
-	for traceId, spans := range s.TraceToSpansMap {
+	for traceId, spans := range s.TraceIdToSpansMap {
 		if traceId == "" {
 			logger.Error(LogTag, "trace Id empty")
 			return false, common.ToPtr(zkerrors.ZkErrorBuilder{}.Build(zkerrors.ZkErrorBadRequest, "invalid data"))

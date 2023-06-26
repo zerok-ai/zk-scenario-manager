@@ -3,5 +3,13 @@ redis:
   port: 6379
   dbs:
     traces: 1
+    otel: 3
     scenarios: 6
   readTimeout: 20
+postgres:
+  host: "localhost"
+  port: 5432
+  user: "pl"
+  password: "pl"
+  dbname: "pl"
+  

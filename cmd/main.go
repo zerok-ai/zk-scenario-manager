@@ -31,7 +31,7 @@ func main() {
 	zkLogger.Init(cfg.LogsConfig)
 	zkPostgresRepo, err := zkPostgres.NewZkPostgresRepo(cfg.Postgres)
 	if err != nil {
-		return
+		panic(err)
 	}
 
 	zkLogger.Debug(LogTag, "Parsed Configuration", cfg)
@@ -40,15 +40,21 @@ func main() {
 	tps := service.NewScenarioPersistenceService(tpr)
 	tph := handler.NewTracePersistenceHandler(tps)
 
-	filters.NewScenarioManager(cfg, tps).Init()
+	scenarioManager, err := filters.NewScenarioManager(cfg, tps)
+	if err != nil {
+		panic(err)
+	}
 
-	app := newApp(tph)
+	scenarioManager.Init().ProcessScenarios()
 
 	configurator := iris.WithConfiguration(iris.Configuration{
 		DisablePathCorrection: true,
 		LogLevel:              "debug",
 	})
-	app.Listen(":"+cfg.Server.Port, configurator)
+
+	if err = newApp(tph).Listen(":"+cfg.Server.Port, configurator); err != nil {
+		panic(err)
+	}
 }
 
 func newApp(persistenceHandler handler.TracePersistenceHandler) *iris.Application {
