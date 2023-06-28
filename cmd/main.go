@@ -45,6 +45,7 @@ func main() {
 		panic(err)
 	}
 
+	defer scenarioManager.Close()
 	scenarioManager.Init().ProcessScenarios()
 
 	configurator := iris.WithConfiguration(iris.Configuration{

@@ -7,6 +7,7 @@ import (
 	"github.com/redis/go-redis/v9"
 	"github.com/zerok-ai/zk-rawdata-reader/vzReader/models"
 	"github.com/zerok-ai/zk-utils-go/common"
+	zkLogger "github.com/zerok-ai/zk-utils-go/logs"
 	scenarioGeneratorModel "github.com/zerok-ai/zk-utils-go/scenario/model"
 	store "github.com/zerok-ai/zk-utils-go/storage/redis"
 	ticker "github.com/zerok-ai/zk-utils-go/ticker"
@@ -26,7 +27,11 @@ const (
 	TTLForTransientSets          = 30 * time.Second
 	TTLForScenarioSets           = 5 * time.Minute
 
-	SCENARIO_SET_PREFIX = "scenario:"
+	ScenarioSetPrefix = "scenario:"
+
+	LoggerTagScenarioManager = "scenario_manager"
+
+	batchSizeForRawDataCollector = 20
 )
 
 type ScenarioManager struct {
@@ -85,6 +90,25 @@ func (scenarioManager ScenarioManager) Init() ScenarioManager {
 	return scenarioManager
 }
 
+func (scenarioManager ScenarioManager) Close() {
+
+	scenarioManager.scenarioStore.Close()
+	scenarioManager.traceStore.Close()
+	scenarioManager.oTelStore.Close()
+	err := scenarioManager.redisClient.Close()
+	if err != nil {
+		zkLogger.Error(LoggerTagScenarioManager, "Error closing redis client")
+	}
+
+	scenarioManager.traceRawDataCollector.Close()
+	err = scenarioManager.tracePersistenceService.Close()
+	if err != nil {
+		zkLogger.Error(LoggerTagScenarioManager, "Error closing tracePersistenceService")
+		return
+	}
+
+}
+
 func (scenarioManager ScenarioManager) ProcessScenarios() {
 
 	// 1. get all scenarios
@@ -92,8 +116,8 @@ func (scenarioManager ScenarioManager) ProcessScenarios() {
 
 	// 2. get all traceId sets from traceStore
 	namesOfAllSets, err := scenarioManager.traceStore.GetAllKeys()
-	log.Println("All scenarios: ", scenarios)
-	log.Println("All keys in traceStore: ", namesOfAllSets)
+	log.Printf("Number of available scenarios: %d", len(scenarios))
+	log.Printf("Number of keys in traceStore: %d", len(namesOfAllSets))
 	if err != nil {
 		log.Println("Error getting all keys from traceStore ", err)
 		return
@@ -121,9 +145,9 @@ func (scenarioManager ScenarioManager) processScenario(scenario *scenarioGenerat
 
 	// a. evaluate the scenario
 	te := TraceEvaluator{scenario, scenarioManager.traceStore, namesOfAllSets, TTLForScenarioSets}
-	resultSetName, err := te.EvalScenario(SCENARIO_SET_PREFIX)
+	resultSetName, err := te.EvalScenario(ScenarioSetPrefix)
 	if err != nil {
-		log.Println("Error evaluating scenario", scenario, resultSetName, err)
+		zkLogger.Error(LoggerTagScenarioManager, "Error evaluating scenario", err)
 		return nil
 	}
 
@@ -139,11 +163,10 @@ func (scenarioManager ScenarioManager) processScenario(scenario *scenarioGenerat
 		traceId := value.TraceId
 		traceIds = append(traceIds, traceId)
 	}
-
 	//get trace data from the otel store
 	traceTree, err := scenarioManager.oTelStore.GetTracesFromDBWithNonInternalSpans(traceIds)
 	if err != nil {
-		log.Println("Error getting trace tree", err)
+		zkLogger.Error(LoggerTagScenarioManager, "error getting trace tree", err)
 		return nil
 	}
 
@@ -204,20 +227,30 @@ func (scenarioManager ScenarioManager) collectFullTraces(name string) *[]models.
 	// get all the traceIds from the traceStore
 	traceIds, err := scenarioManager.traceStore.GetAllValuesFromSet(name)
 	if err != nil {
-		log.Println("Error getting all values from set ", name, err)
+		zkLogger.Error(LoggerTagScenarioManager, "Error getting all values from set ", name, err)
 		return nil
 	}
 
 	// get the raw data for traces from vazir
 	startTime := "-20m" // -5m, -10m, -1h etc
-	rawData, err := scenarioManager.traceRawDataCollector.GetHTTPRawData(traceIds[:20], startTime)
-	if err != nil {
-		log.Println("Error getting raw data for traces ", traceIds, err)
-		return nil
+
+	results := make([]models.HttpRawDataModel, 0)
+	for index := 0; index < len(traceIds); index = index + batchSizeForRawDataCollector {
+
+		length := batchSizeForRawDataCollector
+		if index+batchSizeForRawDataCollector > len(traceIds) {
+			length = len(traceIds) - index
+		}
+		rawData, err := scenarioManager.traceRawDataCollector.GetHTTPRawData(traceIds[index:length], startTime)
+		if err != nil {
+			zkLogger.Error(LoggerTagScenarioManager, "Error getting raw data for traces ", traceIds, err)
+			return nil
+		}
+		results = append(results, rawData.Results...)
 	}
 
-	log.Printf("Number of raw values from traceRawDataCollector %d.  rawdata.ResultStats = %v", len(rawData.Results), rawData.ResultStats)
-	return &rawData.Results
+	zkLogger.Debug(LoggerTagScenarioManager, "Number of raw values from traceRawDataCollector = %v", len(results))
+	return &results
 }
 
 type HttpRequest struct {

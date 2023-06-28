@@ -2,10 +2,15 @@ package filters
 
 import (
 	"fmt"
+	zkLogger "github.com/zerok-ai/zk-utils-go/logs"
 	"github.com/zerok-ai/zk-utils-go/scenario/model"
 	"sort"
 	"strings"
 	"time"
+)
+
+const (
+	LoggerTagEvaluation = "evaluation"
 )
 
 type TraceEvaluator struct {
@@ -16,15 +21,17 @@ type TraceEvaluator struct {
 }
 
 func (te TraceEvaluator) EvalScenario(resultSetNamePrefix string) (*string, error) {
-	fmt.Println("Evaluating scenario", te.scenario)
+	zkLogger.Debug(LoggerTagEvaluation, "Evaluating scenario ", te.scenario.Id)
 	resultKey, err := te.evalFilter(te.scenario.Filter)
 
-	if err == nil && te.traceStore.SetExists(*resultKey) {
+	if err == nil {
+		if !te.traceStore.SetExists(*resultKey) {
+			return nil, fmt.Errorf("resultset: %s for scenario %v doesn't exist", *resultKey, te.scenario.Id)
+		}
 		if err = te.traceStore.SetExpiryForSet(*resultKey, te.ttlForTransientScenarioSet); err != nil {
 			return nil, err
 		}
 		resultSetName := resultSetNamePrefix + *resultKey
-		fmt.Println("Evaluating scenario resultSetNamePrefix = ", resultSetNamePrefix, " *resultKey = ", *resultKey, "resultSetName = ", resultSetName)
 		if err = te.traceStore.RenameSet(*resultKey, resultSetName); err != nil {
 			return nil, err
 		}
@@ -128,8 +135,6 @@ func uniqueStringFromStringSet(condition model.Condition, set []string) string {
 	/*/
 	hashString := combined
 	/**/
-
-	fmt.Println("Unique string:", hashString)
 
 	return hashString
 }

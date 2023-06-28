@@ -62,6 +62,7 @@ type TracePersistenceRepo interface {
 	GetSpanRawData(traceId, spanId string, offset, limit int) ([]dto.SpanRawDataTableDto, error)
 	SaveTraceList([]dto.ScenarioTableDto, []dto.SpanTableDto, []dto.SpanRawDataTableDto) error
 	GetMetadataMap(st string, offset, limit int) ([]dto.MetadataMap, error)
+	Close() error
 }
 
 type tracePersistenceRepo struct {
@@ -70,6 +71,10 @@ type tracePersistenceRepo struct {
 
 func NewTracePersistenceRepo(dbRepo sqlDB.DatabaseRepo) TracePersistenceRepo {
 	return &tracePersistenceRepo{dbRepo: dbRepo}
+}
+
+func (z tracePersistenceRepo) Close() error {
+	return z.dbRepo.Close()
 }
 
 func (z tracePersistenceRepo) GetIncidentData(scenarioType, source string, offset, limit int) ([]dto.IncidentDto, error) {

@@ -50,6 +50,12 @@ data:
         traces: 1
         otel: 3
         scenarios: 6
+    postgres:
+      host: postgres-postgresql.zk-client.svc.cluster.local
+      port: 5432
+      user: "postgres"
+      password: "eo1Mgtm6HI"
+      dbname: "pl"
 kind: ConfigMap
 metadata:
   name: zk-scenario-manager

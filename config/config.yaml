@@ -7,9 +7,11 @@ redis:
     scenarios: 6
   readTimeout: 20
 postgres:
-  host: "localhost"
+  host: 127.0.0.1
   port: 5432
-  user: "pl"
-  password: "pl"
+  user: "postgres"
+  password: "eo1Mgtm6HI"
   dbname: "pl"
-  
+logs:
+  color: true
+  level: DEBUG

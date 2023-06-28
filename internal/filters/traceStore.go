@@ -4,9 +4,12 @@ import (
 	"context"
 	"fmt"
 	"github.com/redis/go-redis/v9"
+	zkLogger "github.com/zerok-ai/zk-utils-go/logs"
 	"github.com/zerok-ai/zk-utils-go/storage/redis/config"
 	"time"
 )
+
+const LoggerTagTraceStore = "traceStore"
 
 var (
 	ctx = context.Background()
@@ -21,9 +24,13 @@ func (t TraceStore) initialize() *TraceStore {
 	return &t
 }
 
+func (t TraceStore) Close() {
+	t.redisClient.Close()
+}
+
 func GetTraceStore(redisConfig *config.RedisConfig, ttlForTransientSets time.Duration) *TraceStore {
 	dbName := "traces"
-	fmt.Println("GetTraceStore: config= ", redisConfig, "dbName= ", dbName, "dbID= ", redisConfig.DBs[dbName])
+	zkLogger.Debug(LoggerTagTraceStore, "GetTraceStore: config=", redisConfig, "dbName=", dbName, "dbID=", redisConfig.DBs[dbName])
 	readTimeout := time.Duration(redisConfig.ReadTimeout) * time.Second
 	_redisClient := redis.NewClient(&redis.Options{
 		Addr:        fmt.Sprint(redisConfig.Host, ":", redisConfig.Port),
@@ -132,10 +139,10 @@ func (t TraceStore) SetExpiryForSet(resultKey string, expiration time.Duration) 
 }
 
 func (t TraceStore) RenameSet(key, newKey string) error {
-	fmt.Println("Renaming set:", key, "to", newKey)
 	_, err := t.redisClient.Rename(ctx, key, newKey).Result()
 	if err != nil {
-		fmt.Println("Error renaming set:", err)
+		fmt.Println("Renaming set:", key, "to", newKey)
+		zkLogger.Error(LoggerTagTraceStore, "Error renaming set:", err, key)
 	}
 	return err
 }
@@ -143,7 +150,7 @@ func (t TraceStore) RenameSet(key, newKey string) error {
 func (t TraceStore) SetExists(key string) bool {
 	exists, err := t.redisClient.Exists(ctx, key).Result()
 	if err != nil {
-		fmt.Println("Error checking if set exists:", err)
+		zkLogger.Error(LoggerTagTraceStore, "Error checking if set exists:", err)
 	}
 	return exists == 1
 }

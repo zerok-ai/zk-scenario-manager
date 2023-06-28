@@ -13,7 +13,6 @@ sync:
 	go get -v ./...
 
 build: sync
-	echo "GOARCH=${GOARCH}"
 	go build -v -o $(NAME) cmd/main.go
 
 docker-build: sync

@@ -20,6 +20,7 @@ type TracePersistenceService interface {
 	GetTracesRawData(traceId, spanId string, offset, limit int) (traceresponse.TraceRawDataResponse, *zkErrors.ZkError)
 	SaveTraceList([]model.Scenario) *zkErrors.ZkError
 	GetMetadataMap(duration string, offset, limit int) (traceresponse.MetadataMapResponse, *zkErrors.ZkError)
+	Close() error
 }
 
 func NewScenarioPersistenceService(repo repository.TracePersistenceRepo) TracePersistenceService {
@@ -28,6 +29,10 @@ func NewScenarioPersistenceService(repo repository.TracePersistenceRepo) TracePe
 
 type tracePersistenceService struct {
 	repo repository.TracePersistenceRepo
+}
+
+func (s tracePersistenceService) Close() error {
+	return s.repo.Close()
 }
 
 func (s tracePersistenceService) GetIncidentData(scenarioType, source string, offset, limit int) (traceresponse.IncidentResponse, *zkErrors.ZkError) {

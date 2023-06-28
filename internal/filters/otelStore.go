@@ -4,9 +4,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/redis/go-redis/v9"
+	zkLogger "github.com/zerok-ai/zk-utils-go/logs"
 	"github.com/zerok-ai/zk-utils-go/storage/redis/config"
+	"reflect"
 	"time"
 )
+
+const LoggerTagOtelStore = "otelStore"
 
 type OtelStore struct {
 	redisClient *redis.Client
@@ -16,9 +20,13 @@ func (t OtelStore) initialize() *OtelStore {
 	return &t
 }
 
+func (t OtelStore) Close() {
+	t.redisClient.Close()
+}
+
 func GetOtelStore(redisConfig *config.RedisConfig) *OtelStore {
 	dbName := "otel"
-	fmt.Println("GetOtelStore: config= ", redisConfig, "dbName= ", dbName, "dbID= ", redisConfig.DBs[dbName])
+	zkLogger.Debug(LoggerTagOtelStore, "GetOtelStore: config=", redisConfig, "dbName=", dbName, "dbID=", redisConfig.DBs[dbName])
 	readTimeout := time.Duration(redisConfig.ReadTimeout) * time.Second
 	_redisClient := redis.NewClient(&redis.Options{
 		Addr:        fmt.Sprint(redisConfig.Host, ":", redisConfig.Port),
@@ -46,7 +54,7 @@ func (t OtelStore) GetTracesFromDBWithNonInternalSpans(keys []string) (map[strin
 	// Use the MGet command to retrieve the values
 	result, err := client.MGet(ctx, keys...).Result()
 	if err != nil {
-		fmt.Println("Error retrieving values from Redis:", err)
+		zkLogger.Error(LoggerTagOtelStore, "Error retrieving values from Redis:", err)
 		return nil, err
 	}
 
@@ -61,6 +69,11 @@ func (t OtelStore) GetTracesFromDBWithNonInternalSpans(keys []string) (map[strin
 			traceMap[traceId] = traceFromOTel
 		}
 
+		if trace == nil {
+			zkLogger.Debug(LoggerTagOtelStore, "Unable to get trace for traceId ", traceId)
+			continue
+		}
+		zkLogger.Debug(LoggerTagOtelStore, "data type of trace ", reflect.TypeOf(trace))
 		mapOfSpansFromDB := trace.(map[string]string)
 		for spanId, spanData := range mapOfSpansFromDB {
 			var sp SpanFromOTel

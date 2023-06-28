@@ -4,6 +4,7 @@ import (
 	"github.com/zerok-ai/zk-utils-go/scenario/model"
 	"github.com/zerok-ai/zk-utils-go/storage/redis"
 	redisConfig "github.com/zerok-ai/zk-utils-go/storage/redis/config"
+	"time"
 )
 
 type ScenarioPopulator struct {
@@ -11,7 +12,7 @@ type ScenarioPopulator struct {
 }
 
 func GetScenarioPopulator(dbname string, redisConfig redisConfig.RedisConfig) *ScenarioPopulator {
-	vs := redis.GetVersionedStore(redisConfig, dbname, false, model.Scenario{})
+	vs, _ := redis.GetVersionedStore[model.Scenario](&redisConfig, dbname, 1*time.Minute)
 	sp := ScenarioPopulator{
 		versionedStore: vs,
 	}
@@ -19,6 +20,6 @@ func GetScenarioPopulator(dbname string, redisConfig redisConfig.RedisConfig) *S
 }
 
 func (sp ScenarioPopulator) AddScenario(scenario model.Scenario) error {
-	err := sp.versionedStore.SetValue(scenario.ScenarioId, scenario)
+	err := sp.versionedStore.SetValue(scenario.Id, scenario)
 	return err
 }
