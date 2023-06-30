@@ -6,7 +6,6 @@ import (
 	"github.com/redis/go-redis/v9"
 	zkLogger "github.com/zerok-ai/zk-utils-go/logs"
 	"github.com/zerok-ai/zk-utils-go/storage/redis/config"
-	"reflect"
 	"time"
 )
 
@@ -48,34 +47,74 @@ type TraceFromOTel struct {
 	spans map[string]*SpanFromOTel
 }
 
-func (t OtelStore) GetTracesFromDBWithNonInternalSpans(keys []string) (map[string]*TraceFromOTel, error) {
-	client := t.redisClient
+func (t OtelStore) getDataFromDB(keys []string) ([]*redis.MapStringStringCmd, error) {
 
-	// Use the MGet command to retrieve the values
-	result, err := client.MGet(ctx, keys...).Result()
+	redisClient := t.redisClient
+
+	// 1. Begin a transaction
+	pipe := redisClient.TxPipeline()
+	// 2. Retrieve the hashes within the transaction
+	var hashResults []*redis.MapStringStringCmd
+	for _, hashKey := range keys {
+		hashResult := pipe.HGetAll(ctx, hashKey)
+		hashResults = append(hashResults, hashResult)
+	}
+	// 3. Execute the transaction
+	_, err := pipe.Exec(ctx)
 	if err != nil {
-		zkLogger.Error(LoggerTagOtelStore, "Error retrieving values from Redis:", err)
+		fmt.Println("Error executing transaction:", err)
+		return nil, err
+	}
+	return hashResults, nil
+}
+
+func (t OtelStore) GetTracesFromDBWithNonInternalSpans(keys []string) (map[string]*TraceFromOTel, error) {
+
+	keys = []string{"aaaaaaaa6f1df46b570bf18198000220", "aaaaaaaa92dc2395219c584980000233", "aaaaaaaa6d666cb02f4f51b681000226"}
+	zkLogger.Debug(LoggerTagOtelStore, "GetTracesFromDBWithNonInternalSpans: key count =", len(keys))
+	//hashResults, err := t.getDataFromDB(keys)
+
+	redisClient := t.redisClient
+
+	// 1. Begin a transaction
+	pipe := redisClient.TxPipeline()
+	// 2. Retrieve the hashes within the transaction
+	var hashResults []*redis.MapStringStringCmd
+	for _, hashKey := range keys {
+		hashResult := pipe.HGetAll(ctx, hashKey)
+		hashResults = append(hashResults, hashResult)
+	}
+	// 3. Execute the transaction
+	hashTransactionResults, err := pipe.Exec(ctx)
+	if err != nil {
+		fmt.Println("Error executing transaction:", err)
 		return nil, err
 	}
 
+	zkLogger.DebugF(LoggerTagOtelStore, "hashTransactionResults=%d", len(hashTransactionResults))
+
+	if err != nil {
+		return nil, err
+	}
+
+	// Process the results
 	traceMap := make(map[string]*TraceFromOTel)
-	// Process the result
-	for i, trace := range result {
+	for i, hashResult := range hashResults {
 
 		traceId := keys[i]
+		trace, err := hashResult.Result()
+		if err != nil {
+			zkLogger.Error(LoggerTagOtelStore, "Error retrieving values for traceId %s: %v\n", traceId, err)
+			continue
+		}
+
+		// create a container for spans
 		traceFromOTel := traceMap[traceId]
 		if traceFromOTel == nil {
 			traceFromOTel = &TraceFromOTel{spans: map[string]*SpanFromOTel{}}
 			traceMap[traceId] = traceFromOTel
 		}
-
-		if trace == nil {
-			zkLogger.Debug(LoggerTagOtelStore, "Unable to get trace for traceId ", traceId)
-			continue
-		}
-		zkLogger.Debug(LoggerTagOtelStore, "data type of trace ", reflect.TypeOf(trace))
-		mapOfSpansFromDB := trace.(map[string]string)
-		for spanId, spanData := range mapOfSpansFromDB {
+		for spanId, spanData := range trace {
 			var sp SpanFromOTel
 			err = json.Unmarshal([]byte(spanData), &sp)
 			traceFromOTel.spans[spanId] = &sp
@@ -94,8 +133,8 @@ func (t OtelStore) GetTracesFromDBWithNonInternalSpans(keys []string) (map[strin
 			}
 		}
 		traceFromOTel.spans = newSpans
-
 	}
+	zkLogger.DebugF(LoggerTagOtelStore, "Expected traces: %d  Spans from otel=%d", len(keys), len(traceMap))
 	return traceMap, err
 }
 

@@ -30,4 +30,4 @@ docker-push-gke:
 docker-build-push-gke: docker-build-gke docker-push-gke
 
 run: build
-	go run cmd/main.go -c ./config/config.yaml
+	go run cmd/main.go -c ./config/config.yaml 2>&1 | grep -v '^(0x'

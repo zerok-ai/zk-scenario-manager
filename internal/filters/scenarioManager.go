@@ -85,7 +85,7 @@ func NewScenarioManager(cfg config.AppConfigs, tps tracePersistence.TracePersist
 
 func (scenarioManager ScenarioManager) Init() ScenarioManager {
 	// trigger recurring processing of trace data against filters
-	tickerTask := ticker.GetNewTickerTask("filter-processor", FilterProcessingTickInterval, scenarioManager.ProcessScenarios)
+	tickerTask := ticker.GetNewTickerTask("filter-processor", FilterProcessingTickInterval, scenarioManager.ProcessAllScenarios)
 	tickerTask.Start()
 	return scenarioManager
 }
@@ -109,15 +109,15 @@ func (scenarioManager ScenarioManager) Close() {
 
 }
 
-func (scenarioManager ScenarioManager) ProcessScenarios() {
+func (scenarioManager ScenarioManager) ProcessAllScenarios() {
 
 	// 1. get all scenarios
 	scenarios := scenarioManager.scenarioStore.GetAllValues()
 
 	// 2. get all traceId sets from traceStore
 	namesOfAllSets, err := scenarioManager.traceStore.GetAllKeys()
-	log.Printf("Number of available scenarios: %d", len(scenarios))
-	log.Printf("Number of keys in traceStore: %d", len(namesOfAllSets))
+	zkLogger.DebugF(LoggerTagScenarioManager, "Number of available scenarios: %d", len(scenarios))
+	zkLogger.DebugF(LoggerTagScenarioManager, "Number of keys in traceStore: %d", len(namesOfAllSets))
 	if err != nil {
 		log.Println("Error getting all keys from traceStore ", err)
 		return
@@ -152,18 +152,18 @@ func (scenarioManager ScenarioManager) processScenario(scenario *scenarioGenerat
 	}
 
 	// b. collect full traces
-	traceRawData := scenarioManager.collectFullTraces(*resultSetName)
-	if traceRawData == nil {
+	rawSpans := scenarioManager.collectFullTraces(*resultSetName)
+	if rawSpans == nil {
 		return nil
 	}
 
-	// c. get parent spanIds for the spanIds
+	// c. co-relate the spans through OTel data
 	traceIds := make([]string, 0)
-	for _, value := range *traceRawData {
+	for _, value := range *rawSpans {
 		traceId := value.TraceId
 		traceIds = append(traceIds, traceId)
 	}
-	//get trace data from the otel store
+	//get trace data from the OTel store
 	traceTree, err := scenarioManager.oTelStore.GetTracesFromDBWithNonInternalSpans(traceIds)
 	if err != nil {
 		zkLogger.Error(LoggerTagScenarioManager, "error getting trace tree", err)
@@ -171,7 +171,7 @@ func (scenarioManager ScenarioManager) processScenario(scenario *scenarioGenerat
 	}
 
 	// d. build the scenario for persistence
-	return buildScenarioForPersistence(*scenario, *traceRawData, traceTree)
+	return buildScenarioForPersistence(*scenario, *rawSpans, traceTree)
 }
 
 func buildScenarioForPersistence(scenario scenarioGeneratorModel.Scenario, httpRawData []models.HttpRawDataModel, traceTree map[string]*TraceFromOTel) *tracePersistenceModel.Scenario {
@@ -216,14 +216,16 @@ func buildScenarioForPersistence(scenario scenarioGeneratorModel.Scenario, httpR
 
 	scenarioForPersistence := tracePersistenceModel.Scenario{
 		ScenarioId:        scenario.Id,
-		ScenarioType:      scenario.Type,
-		ScenarioTitle:     scenario.Title,
+		ScenarioVersion:   scenario.Version,
 		TraceIdToSpansMap: traceIdToSpansMap,
 	}
 	return &scenarioForPersistence
 }
 
 func (scenarioManager ScenarioManager) collectFullTraces(name string) *[]models.HttpRawDataModel {
+
+	zkLogger.Debug(LoggerTagScenarioManager, "collectFullTraces from set", name)
+
 	// get all the traceIds from the traceStore
 	traceIds, err := scenarioManager.traceStore.GetAllValuesFromSet(name)
 	if err != nil {
@@ -235,21 +237,23 @@ func (scenarioManager ScenarioManager) collectFullTraces(name string) *[]models.
 	startTime := "-20m" // -5m, -10m, -1h etc
 
 	results := make([]models.HttpRawDataModel, 0)
-	for index := 0; index < len(traceIds); index = index + batchSizeForRawDataCollector {
+	traceIdCount := len(traceIds)
 
-		length := batchSizeForRawDataCollector
-		if index+batchSizeForRawDataCollector > len(traceIds) {
-			length = len(traceIds) - index
+	for startIndex := 0; startIndex < traceIdCount; {
+		endIndex := startIndex + batchSizeForRawDataCollector
+		if endIndex > traceIdCount {
+			endIndex = traceIdCount
 		}
-		rawData, err := scenarioManager.traceRawDataCollector.GetHTTPRawData(traceIds[index:length], startTime)
+		rawData, err := scenarioManager.traceRawDataCollector.GetHTTPRawData(traceIds[startIndex:endIndex], startTime)
 		if err != nil {
 			zkLogger.Error(LoggerTagScenarioManager, "Error getting raw data for traces ", traceIds, err)
 			return nil
 		}
 		results = append(results, rawData.Results...)
+		startIndex = endIndex
 	}
 
-	zkLogger.Debug(LoggerTagScenarioManager, "Number of raw values from traceRawDataCollector = %v", len(results))
+	zkLogger.Debug(LoggerTagScenarioManager, "Number of raw values from traceRawDataCollector = ", len(results))
 	return &results
 }
 
