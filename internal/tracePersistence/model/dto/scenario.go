@@ -16,13 +16,11 @@ type ScenarioTableDto struct {
 	ScenarioId      string    `json:"scenario_id"`
 	ScenarioVersion string    `json:"scenario_version"`
 	TraceId         string    `json:"trace_id"`
-	ScenarioTitle   string    `json:"scenario_title"`
-	ScenarioType    string    `json:"scenario_type"`
 	CreatedAt       time.Time `json:"created_at"`
 }
 
 func (t ScenarioTableDto) GetAllColumns() []any {
-	return []any{t.ScenarioId, t.ScenarioVersion, t.TraceId, t.ScenarioTitle, t.ScenarioType}
+	return []any{t.ScenarioId, t.ScenarioVersion, t.TraceId}
 }
 
 func ConvertScenarioToTraceDto(s model.Scenario) ([]ScenarioTableDto, []SpanTableDto, []SpanRawDataTableDto, *error) {
@@ -37,9 +35,7 @@ func ConvertScenarioToTraceDto(s model.Scenario) ([]ScenarioTableDto, []SpanTabl
 
 		scenarioDto.ScenarioId = s.ScenarioId
 		scenarioDto.ScenarioVersion = s.ScenarioVersion
-		scenarioDto.ScenarioType = s.ScenarioType
 		scenarioDto.TraceId = traceId
-		scenarioDto.ScenarioTitle = s.ScenarioTitle
 
 		scenarioDtoList = append(scenarioDtoList, scenarioDto)
 
@@ -90,16 +86,6 @@ func ValidateScenario(s model.Scenario) (bool, *zkerrors.ZkError) {
 
 	if s.ScenarioVersion == "" {
 		logger.Error(LogTag, "scenario_id empty")
-		return false, common.ToPtr(zkerrors.ZkErrorBuilder{}.Build(zkerrors.ZkErrorBadRequest, "invalid data"))
-	}
-
-	if s.ScenarioType == "" {
-		logger.Error(LogTag, "scenario_type empty")
-		return false, common.ToPtr(zkerrors.ZkErrorBuilder{}.Build(zkerrors.ZkErrorBadRequest, "invalid data"))
-	}
-
-	if s.ScenarioTitle == "" {
-		logger.Error(LogTag, "scenario_title empty")
 		return false, common.ToPtr(zkerrors.ZkErrorBuilder{}.Build(zkerrors.ZkErrorBadRequest, "invalid data"))
 	}
 

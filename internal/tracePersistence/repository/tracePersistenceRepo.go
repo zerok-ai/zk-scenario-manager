@@ -17,8 +17,6 @@ const (
 	ScenarioId      = "scenario_id"
 	ScenarioVersion = "scenario_version"
 	TraceId         = "trace_id"
-	ScenarioTitle   = "scenario_title"
-	ScenarioType    = "scenario_type"
 
 	SpanId          = "span_id"
 	ParentSpanId    = "parent_span_id"
@@ -97,7 +95,7 @@ func (z tracePersistenceRepo) SaveTraceList(t []dto.ScenarioTableDto, tmd []dto.
 
 func doBulkInsertForTraceList(tx *sql.Tx, dbRepo sqlDB.DatabaseRepo, traceData, span, spanRawData []interfaces.DbArgs) error {
 
-	err := bulkInsert(tx, dbRepo, ScenarioTraceTablePostgres, []string{ScenarioId, ScenarioVersion, TraceId, ScenarioTitle, ScenarioType}, traceData)
+	err := bulkInsert(tx, dbRepo, ScenarioTraceTablePostgres, []string{ScenarioId, ScenarioVersion, TraceId}, traceData)
 	if err != nil {
 		zkLogger.Info(LogTag, "Error in bulk insert trace table", err)
 		return err
