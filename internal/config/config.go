@@ -45,8 +45,3 @@ type AppConfigs struct {
 	Greeting   string                          `env:"GREETING" env-description:"Greeting phrase" env-default:"Hello!"`
 	SuprSend   SuprSendConfig                  `yaml:"suprsend"`
 }
-
-// Args command-line parameters
-type Args struct {
-	ConfigPath string
-}

@@ -2,10 +2,9 @@ package dto
 
 import (
 	"encoding/json"
-	"github.com/lib/pq"
 	"github.com/zerok-ai/zk-utils-go/common"
 	zkCrypto "github.com/zerok-ai/zk-utils-go/crypto"
-	"github.com/zerok-ai/zk-utils-go/logs"
+	logger "github.com/zerok-ai/zk-utils-go/logs"
 	"github.com/zerok-ai/zk-utils-go/zkerrors"
 	"scenario-manager/internal/tracePersistence/model"
 	"time"
@@ -13,57 +12,15 @@ import (
 
 var LogTag = "trace_dto"
 
-type IncidentDto struct {
-	ScenarioId      string  `json:"scenario_id"`
-	ScenarioVersion string  `json:"scenario_version"`
-	Title           string  `json:"title"`
-	ScenarioType    string  `json:"scenario_type"`
-	Velocity        float32 `json:"velocity"`
-	TotalCount      int     `json:"total_count"`
-	Source          string  `json:"source"`
-	Destination     string  `json:"destination"`
-	FirstSeen       string  `json:"first_seen"`
-	LastSeen        string  `json:"last_seen"`
-}
-
 type ScenarioTableDto struct {
 	ScenarioId      string    `json:"scenario_id"`
 	ScenarioVersion string    `json:"scenario_version"`
 	TraceId         string    `json:"trace_id"`
-	ScenarioTitle   string    `json:"scenario_title"`
-	ScenarioType    string    `json:"scenario_type"`
 	CreatedAt       time.Time `json:"created_at"`
 }
 
-type SpanTableDto struct {
-	TraceId        string         `json:"trace_id"`
-	SpanId         string         `json:"span_id"`
-	ParentSpanId   string         `json:"parent_span_id"`
-	Source         string         `json:"source"`
-	Destination    string         `json:"destination"`
-	WorkloadIdList pq.StringArray `json:"workload_id_list"`
-	Metadata       string         `json:"metadata"`
-	LatencyMs      float32        `json:"latency_ms"`
-	Protocol       string         `json:"protocol"`
-}
-
-type SpanRawDataTableDto struct {
-	TraceId         string `json:"trace_id"`
-	SpanId          string `json:"span_id"`
-	RequestPayload  []byte `json:"request_payload"`
-	ResponsePayload []byte `json:"response_payload"`
-}
-
 func (t ScenarioTableDto) GetAllColumns() []any {
-	return []any{t.ScenarioId, t.ScenarioVersion, t.TraceId, t.ScenarioTitle, t.ScenarioType}
-}
-
-func (t SpanTableDto) GetAllColumns() []any {
-	return []any{t.TraceId, t.SpanId, t.ParentSpanId, t.Source, t.Destination, t.WorkloadIdList, t.Metadata, t.LatencyMs, t.Protocol}
-}
-
-func (t SpanRawDataTableDto) GetAllColumns() []any {
-	return []any{t.TraceId, t.SpanId, t.RequestPayload, t.ResponsePayload}
+	return []any{t.ScenarioId, t.ScenarioVersion, t.TraceId}
 }
 
 func ConvertScenarioToTraceDto(s model.Scenario) ([]ScenarioTableDto, []SpanTableDto, []SpanRawDataTableDto, *error) {
@@ -71,16 +28,14 @@ func ConvertScenarioToTraceDto(s model.Scenario) ([]ScenarioTableDto, []SpanTabl
 	var spanDtoList []SpanTableDto
 	var spanRawDataDtoList []SpanRawDataTableDto
 
-	for traceId, spans := range s.TraceIdToSpansMap {
+	for traceId, spans := range s.TraceToSpansMap {
 		var scenarioDto ScenarioTableDto
 		var spanMetadataDto SpanTableDto
 		var spanRawDataDto SpanRawDataTableDto
 
 		scenarioDto.ScenarioId = s.ScenarioId
 		scenarioDto.ScenarioVersion = s.ScenarioVersion
-		scenarioDto.ScenarioType = s.ScenarioType
 		scenarioDto.TraceId = traceId
-		scenarioDto.ScenarioTitle = s.ScenarioTitle
 
 		scenarioDtoList = append(scenarioDtoList, scenarioDto)
 
@@ -130,21 +85,11 @@ func ValidateScenario(s model.Scenario) (bool, *zkerrors.ZkError) {
 	}
 
 	if s.ScenarioVersion == "" {
-		logger.Error(LogTag, "scenario_version empty")
+		logger.Error(LogTag, "scenario_id empty")
 		return false, common.ToPtr(zkerrors.ZkErrorBuilder{}.Build(zkerrors.ZkErrorBadRequest, "invalid data"))
 	}
 
-	//if s.ScenarioType == "" {
-	//	logger.Error(LogTag, "scenario_type empty")
-	//	return false, common.ToPtr(zkerrors.ZkErrorBuilder{}.Build(zkerrors.ZkErrorBadRequest, "invalid data"))
-	//}
-	//
-	//if s.ScenarioTitle == "" {
-	//	logger.Error(LogTag, "scenario_title empty")
-	//	return false, common.ToPtr(zkerrors.ZkErrorBuilder{}.Build(zkerrors.ZkErrorBadRequest, "invalid data"))
-	//}
-
-	for traceId, spans := range s.TraceIdToSpansMap {
+	for traceId, spans := range s.TraceToSpansMap {
 		if traceId == "" {
 			logger.Error(LogTag, "trace Id empty")
 			return false, common.ToPtr(zkerrors.ZkErrorBuilder{}.Build(zkerrors.ZkErrorBadRequest, "invalid data"))

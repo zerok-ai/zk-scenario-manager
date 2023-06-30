@@ -215,9 +215,9 @@ func buildScenarioForPersistence(scenario scenarioGeneratorModel.Scenario, httpR
 	}
 
 	scenarioForPersistence := tracePersistenceModel.Scenario{
-		ScenarioId:        scenario.Id,
-		ScenarioVersion:   scenario.Version,
-		TraceIdToSpansMap: traceIdToSpansMap,
+		ScenarioId:      scenario.Id,
+		ScenarioVersion: scenario.Version,
+		TraceToSpansMap: traceIdToSpansMap,
 	}
 	return &scenarioForPersistence
 }

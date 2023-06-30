@@ -11,12 +11,12 @@ import (
 var LogTag = "zk_trace_model"
 
 type Scenario struct { // all the non pointer fields are mandatory
-	ScenarioId        string            `json:"scenario_id"`
-	ScenarioVersion   string            `json:"scenario_version"`
-	ScenarioType      string            `json:"scenario_type"`
-	ScenarioTitle     string            `json:"scenario_title"`
-	CreatedAt         time.Time         `json:"created_at"`
-	TraceIdToSpansMap map[string][]Span `json:"trace_to_spans_map"`
+	ScenarioId      string            `json:"scenario_id"`
+	ScenarioVersion string            `json:"scenario_version"`
+	ScenarioType    string            `json:"scenario_type"`
+	ScenarioTitle   string            `json:"scenario_title"`
+	CreatedAt       time.Time         `json:"created_at"`
+	TraceToSpansMap map[string][]Span `json:"trace_to_spans_map"`
 }
 
 type Span struct {

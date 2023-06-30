@@ -3,8 +3,6 @@ package main
 import (
 	"scenario-manager/internal/config"
 	"scenario-manager/internal/filters"
-	"scenario-manager/internal/tracePersistence"
-	"scenario-manager/internal/tracePersistence/handler"
 	"scenario-manager/internal/tracePersistence/repository"
 	"scenario-manager/internal/tracePersistence/service"
 
@@ -38,7 +36,6 @@ func main() {
 
 	tpr := repository.NewTracePersistenceRepo(zkPostgresRepo)
 	tps := service.NewScenarioPersistenceService(tpr)
-	tph := handler.NewTracePersistenceHandler(tps)
 
 	scenarioManager, err := filters.NewScenarioManager(cfg, tps)
 	if err != nil {
@@ -53,12 +50,12 @@ func main() {
 		LogLevel:              "debug",
 	})
 
-	if err = newApp(tph).Listen(":"+cfg.Server.Port, configurator); err != nil {
+	if err = newApp().Listen(":"+cfg.Server.Port, configurator); err != nil {
 		panic(err)
 	}
 }
 
-func newApp(persistenceHandler handler.TracePersistenceHandler) *iris.Application {
+func newApp() *iris.Application {
 	app := iris.Default()
 
 	crs := func(ctx iris.Context) {
@@ -87,9 +84,6 @@ func newApp(persistenceHandler handler.TracePersistenceHandler) *iris.Applicatio
 	app.Get("/healthz", func(ctx iris.Context) {
 		ctx.WriteString("pong")
 	}).Describe("healthcheck")
-
-	v1 := app.Party("/v1")
-	tracePersistence.Initialize(v1, persistenceHandler)
 
 	return app
 }
