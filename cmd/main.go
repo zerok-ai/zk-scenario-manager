@@ -43,7 +43,7 @@ func main() {
 	}
 
 	defer scenarioManager.Close()
-	scenarioManager.Init().ProcessAllScenarios()
+	scenarioManager.Init()
 
 	configurator := iris.WithConfiguration(iris.Configuration{
 		DisablePathCorrection: true,

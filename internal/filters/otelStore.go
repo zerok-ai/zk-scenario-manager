@@ -15,6 +15,13 @@ type OtelStore struct {
 	redisClient *redis.Client
 }
 
+const (
+	INTERNAL = "INTERNAL"
+	DELETE   = "DELETE"
+	CLIENT   = "CLIENT"
+	SERVER   = "SERVER"
+)
+
 func (t OtelStore) initialize() *OtelStore {
 	return &t
 }
@@ -38,8 +45,10 @@ func GetOtelStore(redisConfig *config.RedisConfig) *OtelStore {
 }
 
 type SpanFromOTel struct {
+	SpanID       string
 	Kind         string `json:"spanKind"`
 	ParentSpanID string `json:"parentSpanID"`
+	Children     []SpanFromOTel
 }
 
 type TraceFromOTel struct {
@@ -47,7 +56,7 @@ type TraceFromOTel struct {
 	spans map[string]*SpanFromOTel
 }
 
-func (t OtelStore) getDataFromDB(keys []string) ([]*redis.MapStringStringCmd, error) {
+func (t OtelStore) GetSpansForTracesFromDB(keys []string) (map[string]*TraceFromOTel, error) {
 
 	redisClient := t.redisClient
 
@@ -65,86 +74,90 @@ func (t OtelStore) getDataFromDB(keys []string) ([]*redis.MapStringStringCmd, er
 		fmt.Println("Error executing transaction:", err)
 		return nil, err
 	}
-	return hashResults, nil
-}
 
-func (t OtelStore) GetTracesFromDBWithNonInternalSpans(keys []string) (map[string]*TraceFromOTel, error) {
-
-	keys = []string{"aaaaaaaa6f1df46b570bf18198000220", "aaaaaaaa92dc2395219c584980000233", "aaaaaaaa6d666cb02f4f51b681000226"}
-	zkLogger.Debug(LoggerTagOtelStore, "GetTracesFromDBWithNonInternalSpans: key count =", len(keys))
-	//hashResults, err := t.getDataFromDB(keys)
-
-	redisClient := t.redisClient
-
-	// 1. Begin a transaction
-	pipe := redisClient.TxPipeline()
-	// 2. Retrieve the hashes within the transaction
-	var hashResults []*redis.MapStringStringCmd
-	for _, hashKey := range keys {
-		hashResult := pipe.HGetAll(ctx, hashKey)
-		hashResults = append(hashResults, hashResult)
-	}
-	// 3. Execute the transaction
-	hashTransactionResults, err := pipe.Exec(ctx)
-	if err != nil {
-		fmt.Println("Error executing transaction:", err)
-		return nil, err
-	}
-
-	zkLogger.DebugF(LoggerTagOtelStore, "hashTransactionResults=%d", len(hashTransactionResults))
-
-	if err != nil {
-		return nil, err
-	}
-
-	// Process the results
-	traceMap := make(map[string]*TraceFromOTel)
+	// 4. Process the results
+	result := map[string]*TraceFromOTel{}
 	for i, hashResult := range hashResults {
-
 		traceId := keys[i]
 		trace, err := hashResult.Result()
+
 		if err != nil {
-			zkLogger.Error(LoggerTagOtelStore, "Error retrieving values for traceId %s: %v\n", traceId, err)
+			fmt.Println("Error retrieving trace:", err)
 			continue
 		}
 
-		// create a container for spans
-		traceFromOTel := traceMap[traceId]
-		if traceFromOTel == nil {
-			traceFromOTel = &TraceFromOTel{spans: map[string]*SpanFromOTel{}}
-			traceMap[traceId] = traceFromOTel
-		}
+		traceFromOTel := &TraceFromOTel{spans: map[string]*SpanFromOTel{}}
+
+		// 4.1 Unmarshal the spans
 		for spanId, spanData := range trace {
 			var sp SpanFromOTel
 			err = json.Unmarshal([]byte(spanData), &sp)
+			if err != nil {
+				zkLogger.ErrorF(LoggerTagOtelStore, "Error retrieving span:", err)
+				continue
+			}
+			sp.SpanID = spanId
 			traceFromOTel.spans[spanId] = &sp
 		}
 
-		// sanitize the parent span id
+		// 4.2 set the parent-child relationships and find root span
+		var rootSpan *SpanFromOTel
 		for _, spanFromOTel := range traceFromOTel.spans {
-			spanFromOTel.ParentSpanID = findParentSpan(traceFromOTel.spans, spanFromOTel)
+			parentSpan, ok := traceFromOTel.spans[spanFromOTel.ParentSpanID]
+			if ok {
+				parentSpan.Children = append(parentSpan.Children, *spanFromOTel)
+			} else {
+				rootSpan = spanFromOTel
+			}
+			//zkLogger.DebugF(LoggerTagOtelStore, "SpanId: %s , ParentSpanId: %s, child count %d", spanFromOTel.SpanID, spanFromOTel.ParentSpanID, len(spanFromOTel.Children))
+			zkLogger.DebugF(LoggerTagOtelStore, "")
 		}
 
-		//	remove the spans where kind is INTERNAL
-		newSpans := map[string]*SpanFromOTel{}
-		for spanId, spanFromOTel := range traceFromOTel.spans {
-			if spanFromOTel.Kind != "INTERNAL" {
-				newSpans[spanId] = spanFromOTel
-			}
+		if rootSpan == nil {
+			zkLogger.Debug(LoggerTagOtelStore, "rootSpan not found")
+			continue
 		}
-		traceFromOTel.spans = newSpans
+
+		// 4.3 prune the unwanted spans
+		pr, _ := prune(traceFromOTel.spans, *rootSpan)
+		rootSpan = &pr[0]
+
+		zkLogger.DebugF(LoggerTagOtelStore, "rootSpan: %s", rootSpan)
+
+		//spansForResult := &TraceFromOTel{spans: map[string]*SpanFromOTel{}}
+
+		result[traceId] = traceFromOTel
 	}
-	zkLogger.DebugF(LoggerTagOtelStore, "Expected traces: %d  Spans from otel=%d", len(keys), len(traceMap))
-	return traceMap, err
+	return result, nil
 }
 
-func findParentSpan(spans map[string]*SpanFromOTel, currentSpan *SpanFromOTel) string {
-	parentSpanID := currentSpan.ParentSpanID
-	if currentSpan.Kind == "INTERNAL" {
-		newSpan, ok := spans[currentSpan.ParentSpanID]
-		if ok {
-			parentSpanID = findParentSpan(spans, newSpan)
+// prune removes the spans that are not required - internal spans and server spans that are not the root span
+func prune(spans map[string]*SpanFromOTel, currentSpan SpanFromOTel) ([]SpanFromOTel, bool) {
+	currentSpan = *spans[currentSpan.SpanID]
+
+	newChildArray := make([]SpanFromOTel, 0)
+	// call prune on the children
+	for _, child := range currentSpan.Children {
+		newChildren, pruned := prune(spans, child)
+		if pruned {
+			delete(spans, child.SpanID)
+			for i, _ := range newChildren {
+				// Create a pointer to the current person
+				ptr := &newChildren[i]
+
+				// Set the parentSpanID of the child to the current span
+				ptr.ParentSpanID = currentSpan.SpanID
+				spans[ptr.SpanID].ParentSpanID = currentSpan.SpanID
+			}
 		}
+		newChildArray = append(newChildArray, newChildren...)
 	}
-	return parentSpanID
+	currentSpan.Children = newChildArray
+
+	parentSpan, isParentSpanPresent := spans[currentSpan.ParentSpanID]
+	if currentSpan.Kind == INTERNAL || (currentSpan.Kind == SERVER && isParentSpanPresent && parentSpan.Kind == CLIENT) {
+		return currentSpan.Children, true
+	}
+
+	return []SpanFromOTel{currentSpan}, false
 }

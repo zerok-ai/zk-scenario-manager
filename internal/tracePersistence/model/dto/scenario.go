@@ -85,7 +85,7 @@ func ValidateScenario(s model.Scenario) (bool, *zkerrors.ZkError) {
 	}
 
 	if s.ScenarioVersion == "" {
-		logger.Error(LogTag, "scenario_id empty")
+		logger.Error(LogTag, "scenario_version empty")
 		return false, common.ToPtr(zkerrors.ZkErrorBuilder{}.Build(zkerrors.ZkErrorBadRequest, "invalid data"))
 	}
 

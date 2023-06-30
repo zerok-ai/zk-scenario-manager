@@ -20,6 +20,24 @@ type TraceEvaluator struct {
 	ttlForTransientScenarioSet time.Duration
 }
 
+func NewTraceEvaluator(scenario *model.Scenario, traceStore *TraceStore, namesOfAllSets []string, ttlForTransientScenarioSet time.Duration) *TraceEvaluator {
+	if scenario == nil {
+		zkLogger.Error(LoggerTagEvaluation, "scenario is nil")
+		return nil
+	}
+	if traceStore == nil {
+		zkLogger.Error(LoggerTagEvaluation, "traceStore is nil")
+		return nil
+	}
+
+	return &TraceEvaluator{
+		scenario:                   scenario,
+		traceStore:                 traceStore,
+		namesOfAllSets:             namesOfAllSets,
+		ttlForTransientScenarioSet: ttlForTransientScenarioSet,
+	}
+}
+
 func (te TraceEvaluator) EvalScenario(resultSetNamePrefix string) (*string, error) {
 	zkLogger.Debug(LoggerTagEvaluation, "Evaluating scenario ", te.scenario.Id)
 	resultKey, err := te.evalFilter(te.scenario.Filter)

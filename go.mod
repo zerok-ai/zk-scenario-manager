@@ -8,11 +8,9 @@ require (
 	github.com/lib/pq v1.10.9
 	github.com/pkg/errors v0.9.1
 	github.com/redis/go-redis/v9 v9.0.5
-	github.com/zerok-ai/zk-rawdata-reader v0.0.0-20230627113330-5941226cbc38
-	github.com/zerok-ai/zk-utils-go v0.4.7-0.20230627112307-05bc7d4ff6d1
 	github.com/stretchr/testify v1.8.4
-	github.com/zerok-ai/zk-rawdata-reader v0.0.0-20230619085239-4911e55dc08b
-	github.com/zerok-ai/zk-utils-go v0.4.7-0.20230616042931-9ac66b357905
+	github.com/zerok-ai/zk-rawdata-reader v0.0.0-20230627113330-5941226cbc38
+	github.com/zerok-ai/zk-utils-go v0.4.7-0.20230630073845-5f05e204ed85
 )
 
 require (
@@ -39,7 +37,6 @@ require (
 	github.com/gogo/protobuf v1.3.2 // indirect
 	github.com/golang/protobuf v1.5.3 // indirect
 	github.com/golang/snappy v0.0.4 // indirect
-	github.com/google/uuid v1.3.0 // indirect
 	github.com/gorilla/css v1.0.0 // indirect
 	github.com/ilyakaznacheev/cleanenv v1.4.2 // indirect
 	github.com/iris-contrib/schema v0.0.6 // indirect
@@ -61,7 +58,6 @@ require (
 	github.com/mailgun/raymond/v2 v2.0.48 // indirect
 	github.com/mailru/easyjson v0.7.7 // indirect
 	github.com/microcosm-cc/bluemonday v1.0.23 // indirect
-	github.com/pkg/errors v0.9.1 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/russross/blackfriday/v2 v2.1.0 // indirect
 	github.com/schollz/closestmatch v2.1.0+incompatible // indirect
@@ -74,14 +70,14 @@ require (
 	github.com/yosssi/ace v0.0.5 // indirect
 	golang.org/x/crypto v0.10.0 // indirect
 	golang.org/x/net v0.11.0 // indirect
-	golang.org/x/sys v0.9.0 // indirect
-	golang.org/x/text v0.10.0 // indirect
+	golang.org/x/sys v0.10.0 // indirect
+	golang.org/x/text v0.11.0 // indirect
 	golang.org/x/time v0.3.0 // indirect
-	google.golang.org/genproto/googleapis/rpc v0.0.0-20230530153820-e85fd2cbaebc // indirect
-	google.golang.org/grpc v1.56.0 // indirect
-	google.golang.org/protobuf v1.30.0 // indirect
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20230629202037-9506855d4529 // indirect
+	google.golang.org/grpc v1.56.1 // indirect
+	google.golang.org/protobuf v1.31.0 // indirect
 	gopkg.in/ini.v1 v1.67.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 	olympos.io/encoding/edn v0.0.0-20201019073823-d3554ca0b0a3 // indirect
-	px.dev/pixie v0.0.0-20230618031823-6612f6307273 // indirect
+	px.dev/pixie v0.0.0-20230628021847-c092058a5172 // indirect
 )
