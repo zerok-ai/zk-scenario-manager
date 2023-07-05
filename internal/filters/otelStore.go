@@ -101,16 +101,14 @@ func (t OtelStore) GetSpansForTracesFromDB(keys []string) (map[string]*TraceFrom
 		}
 
 		// 4.2 set the parent-child relationships and find root span
-		var rootSpan *SpanFromOTel
+		var rootSpan *string
 		for _, spanFromOTel := range traceFromOTel.spans {
 			parentSpan, ok := traceFromOTel.spans[spanFromOTel.ParentSpanID]
 			if ok {
 				parentSpan.Children = append(parentSpan.Children, *spanFromOTel)
 			} else {
-				rootSpan = spanFromOTel
+				rootSpan = &spanFromOTel.SpanID
 			}
-			//zkLogger.DebugF(LoggerTagOtelStore, "SpanId: %s , ParentSpanId: %s, child count %d", spanFromOTel.SpanID, spanFromOTel.ParentSpanID, len(spanFromOTel.Children))
-			zkLogger.DebugF(LoggerTagOtelStore, "")
 		}
 
 		if rootSpan == nil {
@@ -119,45 +117,46 @@ func (t OtelStore) GetSpansForTracesFromDB(keys []string) (map[string]*TraceFrom
 		}
 
 		// 4.3 prune the unwanted spans
-		pr, _ := prune(traceFromOTel.spans, *rootSpan)
-		rootSpan = &pr[0]
+		prune(traceFromOTel.spans, *rootSpan)
 
 		zkLogger.DebugF(LoggerTagOtelStore, "rootSpan: %s", rootSpan)
-
-		//spansForResult := &TraceFromOTel{spans: map[string]*SpanFromOTel{}}
-
 		result[traceId] = traceFromOTel
 	}
 	return result, nil
 }
 
 // prune removes the spans that are not required - internal spans and server spans that are not the root span
-func prune(spans map[string]*SpanFromOTel, currentSpan SpanFromOTel) ([]SpanFromOTel, bool) {
-	currentSpan = *spans[currentSpan.SpanID]
+func prune(spans map[string]*SpanFromOTel, currentSpanID string) ([]string, bool) {
+	currentSpan := spans[currentSpanID]
 
-	newChildArray := make([]SpanFromOTel, 0)
 	// call prune on the children
+	newChildSpansArray := make([]SpanFromOTel, 0)
+	newChildIdsArray := make([]string, 0)
 	for _, child := range currentSpan.Children {
-		newChildren, pruned := prune(spans, child)
+		newChildIds, pruned := prune(spans, child.SpanID)
 		if pruned {
 			delete(spans, child.SpanID)
-			for i, _ := range newChildren {
-				// Create a pointer to the current person
-				ptr := &newChildren[i]
-
-				// Set the parentSpanID of the child to the current span
-				ptr.ParentSpanID = currentSpan.SpanID
-				spans[ptr.SpanID].ParentSpanID = currentSpan.SpanID
-			}
 		}
-		newChildArray = append(newChildArray, newChildren...)
+		for _, spId := range newChildIds {
+
+			span := spans[spId]
+			span.ParentSpanID = currentSpan.SpanID
+
+			// update the span in the map
+			spans[span.SpanID] = span
+
+			newChildSpansArray = append(newChildSpansArray, *span)
+		}
+
+		newChildIdsArray = append(newChildIdsArray, newChildIds...)
 	}
-	currentSpan.Children = newChildArray
+	currentSpan.Children = newChildSpansArray
+	spans[currentSpanID] = currentSpan
 
 	parentSpan, isParentSpanPresent := spans[currentSpan.ParentSpanID]
 	if currentSpan.Kind == INTERNAL || (currentSpan.Kind == SERVER && isParentSpanPresent && parentSpan.Kind == CLIENT) {
-		return currentSpan.Children, true
+		return newChildIdsArray, true
 	}
 
-	return []SpanFromOTel{currentSpan}, false
+	return []string{currentSpanID}, false
 }

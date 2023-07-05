@@ -38,24 +38,27 @@ func NewTraceEvaluator(scenario *model.Scenario, traceStore *TraceStore, namesOf
 	}
 }
 
-func (te TraceEvaluator) EvalScenario(resultSetNamePrefix string) (*string, error) {
+func (te TraceEvaluator) EvalScenario(resultSetNamePrefix string) ([]string, error) {
 	zkLogger.Debug(LoggerTagEvaluation, "Evaluating scenario ", te.scenario.Id)
 	resultKey, err := te.evalFilter(te.scenario.Filter)
-
-	if err == nil {
-		if !te.traceStore.SetExists(*resultKey) {
-			return nil, fmt.Errorf("resultset: %s for scenario %v doesn't exist", *resultKey, te.scenario.Id)
-		}
-		if err = te.traceStore.SetExpiryForSet(*resultKey, te.ttlForTransientScenarioSet); err != nil {
-			return nil, err
-		}
-		resultSetName := resultSetNamePrefix + *resultKey
-		if err = te.traceStore.RenameSet(*resultKey, resultSetName); err != nil {
-			return nil, err
-		}
-		return &resultSetName, err
+	if err != nil {
+		return nil, err
 	}
-	return nil, err
+
+	if !te.traceStore.SetExists(*resultKey) {
+		return nil, fmt.Errorf("resultset: %s for scenario %v doesn't exist", *resultKey, te.scenario.Id)
+	}
+	if err = te.traceStore.SetExpiryForSet(*resultKey, te.ttlForTransientScenarioSet); err != nil {
+		return nil, err
+	}
+	resultSetName := resultSetNamePrefix + *resultKey
+	if err = te.traceStore.RenameSet(*resultKey, resultSetName); err != nil {
+		return nil, err
+	}
+
+	// get all the traceIds from the traceStore
+	traceIds, err := te.traceStore.GetAllValuesFromSet(resultSetName)
+	return traceIds, err
 }
 
 func (te TraceEvaluator) evalFilter(f model.Filter) (*string, error) {

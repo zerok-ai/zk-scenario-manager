@@ -9,7 +9,7 @@ require (
 	github.com/pkg/errors v0.9.1
 	github.com/redis/go-redis/v9 v9.0.5
 	github.com/stretchr/testify v1.8.4
-	github.com/zerok-ai/zk-rawdata-reader v0.0.0-20230627113330-5941226cbc38
+	github.com/zerok-ai/zk-rawdata-reader v0.0.0-20230705140328-e137886dad68
 	github.com/zerok-ai/zk-utils-go v0.4.7-0.20230630073845-5f05e204ed85
 )
 
@@ -68,7 +68,7 @@ require (
 	github.com/vmihailenco/msgpack/v5 v5.3.5 // indirect
 	github.com/vmihailenco/tagparser/v2 v2.0.0 // indirect
 	github.com/yosssi/ace v0.0.5 // indirect
-	golang.org/x/crypto v0.10.0 // indirect
+	golang.org/x/crypto v0.11.0 // indirect
 	golang.org/x/net v0.11.0 // indirect
 	golang.org/x/sys v0.10.0 // indirect
 	golang.org/x/text v0.11.0 // indirect

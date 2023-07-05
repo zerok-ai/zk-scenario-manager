@@ -11,7 +11,6 @@
       <change beforePath="$PROJECT_DIR$/internal/filters/evaluation.go" beforeDir="false" afterPath="$PROJECT_DIR$/internal/filters/evaluation.go" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/internal/filters/otelStore.go" beforeDir="false" afterPath="$PROJECT_DIR$/internal/filters/otelStore.go" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/internal/filters/scenarioManager.go" beforeDir="false" afterPath="$PROJECT_DIR$/internal/filters/scenarioManager.go" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/internal/tracePersistence/model/dto/scenario.go" beforeDir="false" afterPath="$PROJECT_DIR$/internal/tracePersistence/model/dto/scenario.go" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -115,60 +114,20 @@
           <line>18</line>
           <option name="timeStamp" value="83" />
         </line-breakpoint>
-        <line-breakpoint enabled="true" type="DlvLineBreakpoint">
-          <url>file://$PROJECT_DIR$/internal/filters/scenarioManager.go</url>
-          <line>247</line>
-          <option name="timeStamp" value="212" />
-        </line-breakpoint>
-        <line-breakpoint enabled="true" type="DlvLineBreakpoint">
-          <url>file://$PROJECT_DIR$/internal/filters/scenarioManager.go</url>
-          <line>242</line>
-          <option name="timeStamp" value="213" />
-        </line-breakpoint>
-        <line-breakpoint enabled="true" type="DlvLineBreakpoint">
-          <url>file://$PROJECT_DIR$/internal/filters/scenarioManager.go</url>
-          <line>208</line>
-          <option name="timeStamp" value="214" />
-        </line-breakpoint>
         <line-breakpoint type="DlvLineBreakpoint">
           <url>file://$PROJECT_DIR$/internal/filters/otelStore.go</url>
-          <line>135</line>
+          <line>129</line>
           <option name="timeStamp" value="222" />
         </line-breakpoint>
         <line-breakpoint type="DlvLineBreakpoint">
           <url>file://$PROJECT_DIR$/internal/filters/otelStore.go</url>
-          <line>154</line>
+          <line>152</line>
           <option name="timeStamp" value="223" />
         </line-breakpoint>
         <line-breakpoint enabled="true" type="DlvLineBreakpoint">
           <url>file://$PROJECT_DIR$/internal/filters/scenarioManager.go</url>
-          <line>138</line>
-          <option name="timeStamp" value="230" />
-        </line-breakpoint>
-        <line-breakpoint enabled="true" type="DlvLineBreakpoint">
-          <url>file://$PROJECT_DIR$/internal/filters/scenarioManager.go</url>
-          <line>224</line>
-          <option name="timeStamp" value="239" />
-        </line-breakpoint>
-        <line-breakpoint enabled="true" type="DlvLineBreakpoint">
-          <url>file://$PROJECT_DIR$/internal/filters/scenarioManager.go</url>
-          <line>233</line>
-          <option name="timeStamp" value="240" />
-        </line-breakpoint>
-        <line-breakpoint enabled="true" type="DlvLineBreakpoint">
-          <url>file://$PROJECT_DIR$/internal/filters/scenarioManager.go</url>
-          <line>221</line>
-          <option name="timeStamp" value="241" />
-        </line-breakpoint>
-        <line-breakpoint enabled="true" type="DlvLineBreakpoint">
-          <url>file://$PROJECT_DIR$/internal/filters/scenarioManager.go</url>
-          <line>219</line>
-          <option name="timeStamp" value="242" />
-        </line-breakpoint>
-        <line-breakpoint enabled="true" type="DlvLineBreakpoint">
-          <url>file://$PROJECT_DIR$/internal/filters/scenarioManager.go</url>
-          <line>235</line>
-          <option name="timeStamp" value="243" />
+          <line>136</line>
+          <option name="timeStamp" value="248" />
         </line-breakpoint>
       </breakpoints>
       <default-breakpoints>
