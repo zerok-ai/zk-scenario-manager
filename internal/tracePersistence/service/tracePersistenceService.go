@@ -1,8 +1,6 @@
 package service
 
 import (
-	"fmt"
-	zkCommon "github.com/zerok-ai/zk-utils-go/common"
 	zkLogger "github.com/zerok-ai/zk-utils-go/logs"
 	zkErrors "github.com/zerok-ai/zk-utils-go/zkerrors"
 	"scenario-manager/internal/tracePersistence/model"
@@ -13,7 +11,7 @@ import (
 var LogTag = "zk_trace_persistence_service"
 
 type TracePersistenceService interface {
-	SaveTraceList([]model.Scenario) *zkErrors.ZkError
+	SaveIssues([]model.IssuesDetail) *zkErrors.ZkError
 	Close() error
 }
 
@@ -29,40 +27,45 @@ type tracePersistenceService struct {
 	repo repository.TracePersistenceRepo
 }
 
-func (s tracePersistenceService) SaveTraceList(scenarios []model.Scenario) *zkErrors.ZkError {
-	if len(scenarios) == 0 {
-		return zkCommon.ToPtr(zkErrors.ZkErrorBuilder{}.Build(zkErrors.ZkErrorBadRequest, "length of scenarios is 0"))
-	}
+func (s tracePersistenceService) SaveIssues(issuesDetail []model.IssuesDetail) *zkErrors.ZkError {
 
-	// TODO: discuss if the below condition of length > 100 is fine. or it should be read from some config
-	threshold := 100
-	if len(scenarios) > threshold {
-		return zkCommon.ToPtr(zkErrors.ZkErrorBuilder{}.Build(zkErrors.ZkErrorBadRequest, fmt.Sprintf("length of scenarios is > %d", threshold)))
-	}
+	issuesDetailsDtoList := make([]dto.IssuesDetailDto, 0)
 
-	traceDtoList := make([]dto.ScenarioTableDto, 0)
-	spanDtoList := make([]dto.SpanTableDto, 0)
-	spanRawDataDtoList := make([]dto.SpanRawDataTableDto, 0)
-	for _, scenario := range scenarios {
-		if b, zkErr := dto.ValidateScenario(scenario); !b || zkErr != nil {
-			zkLogger.Error("Invalid scenario", zkErr)
+	for _, issuesDetail := range issuesDetail {
+		issueDtoList := make([]dto.IssueTableDto, 0)
+		traceDtoList := make([]dto.IncidentTableDto, 0)
+		spanDtoList := make([]dto.SpanTableDto, 0)
+		spanRawDataDtoList := make([]dto.SpanRawDataTableDto, 0)
+
+		if b, zkErr := dto.ValidateIssue(issuesDetail); !b || zkErr != nil {
+			zkLogger.Error("Invalid issuesDetail", zkErr)
 			continue
 		}
 
-		t, tmd, trd, err := dto.ConvertScenarioToTraceDto(scenario)
+		i, t, tmd, trd, err := dto.ConvertScenarioToTraceDto(issuesDetail)
 		if err != nil {
 			zkLogger.Error(LogTag, err)
 			continue
 		}
 
+		issueDtoList = append(issueDtoList, i...)
 		traceDtoList = append(traceDtoList, t...)
 		spanDtoList = append(spanDtoList, tmd...)
 		spanRawDataDtoList = append(spanRawDataDtoList, trd...)
 
+		v := dto.IssuesDetailDto{
+			IssueTableDtoList:    issueDtoList,
+			ScenarioTableDtoList: traceDtoList,
+			SpanTableDtoList:     spanDtoList,
+			SpanRawDataTableList: spanRawDataDtoList,
+		}
+
+		issuesDetailsDtoList = append(issuesDetailsDtoList, v)
+
 	}
 
-	err := s.repo.SaveTraceList(traceDtoList, spanDtoList, spanRawDataDtoList)
-	if err != nil {
+	saveErr := s.repo.SaveTraceList(issuesDetailsDtoList)
+	if saveErr != nil {
 		zkErr := zkErrors.ZkErrorBuilder{}.Build(zkErrors.ZkErrorDbError, nil)
 		return &zkErr
 	}

@@ -2,7 +2,6 @@ package main
 
 import (
 	"scenario-manager/internal/config"
-	"scenario-manager/internal/filters"
 	"scenario-manager/internal/tracePersistence/repository"
 	"scenario-manager/internal/tracePersistence/service"
 
@@ -35,15 +34,15 @@ func main() {
 	zkLogger.Debug(LogTag, "Parsed Configuration", cfg)
 
 	tpr := repository.NewTracePersistenceRepo(zkPostgresRepo)
-	tps := service.NewScenarioPersistenceService(tpr)
+	_ = service.NewScenarioPersistenceService(tpr)
 
-	scenarioManager, err := filters.NewScenarioManager(cfg, tps)
+	//scenarioManager, err := filters.NewScenarioManager(cfg, tps)
 	if err != nil {
 		panic(err)
 	}
 
-	defer scenarioManager.Close()
-	scenarioManager.Init()
+	//defer scenarioManager.Close()
+	//scenarioManager.Init()
 
 	configurator := iris.WithConfiguration(iris.Configuration{
 		DisablePathCorrection: true,
