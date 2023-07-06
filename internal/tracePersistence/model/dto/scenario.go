@@ -92,6 +92,7 @@ func ConvertScenarioToTraceDto(s model.IncidentIssuesMapping) ([]IssueTableDto, 
 		spanMetadataDto.LatencyMs = *span.LatencyMs
 		spanMetadataDto.Protocol = span.Protocol
 		spanMetadataDto.ParentSpanId = span.ParentSpanId
+		spanMetadataDto.Time = span.Time
 
 		spanRawDataDto.TraceId = traceId
 		spanRawDataDto.SpanId = span.SpanId
