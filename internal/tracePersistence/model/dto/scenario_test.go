@@ -38,7 +38,7 @@ package dto
 //		ScenarioId:      "s1",
 //		ScenarioVersion: "v1",
 //		TraceId:         "t1",
-//		CreatedAt:       time.Time{},
+//		IncidentCollectionTime:       time.Time{},
 //	}
 //
 //	c := s.GetAllColumns()

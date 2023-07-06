@@ -15,23 +15,29 @@ const (
 	SpanTablePostgres        = "span"
 	SpanRawDataTablePostgres = "span_raw_data"
 
-	ScenarioId      = "scenario_id"
-	ScenarioVersion = "scenario_version"
-	TraceId         = "trace_id"
+	ScenarioId             = "scenario_id"
+	ScenarioVersion        = "scenario_version"
+	TraceId                = "trace_id"
+	IssueId                = "issue_id"
+	IssueTitle             = "issue_title"
+	IncidentCollectionTime = "incident_collection_time"
 
 	SpanId          = "span_id"
 	ParentSpanId    = "parent_span_id"
 	Source          = "source"
 	Destination     = "destination"
 	WorkloadIdList  = "workload_id_list"
+	Status          = "status"
 	Metadata        = "metadata"
 	LatencyMs       = "latency_ms"
 	Protocol        = "protocol"
+	Time            = "time"
 	RequestPayload  = "request_payload"
 	ResponsePayload = "response_payload"
 
-	UpsertTraceQuery       = "INSERT INTO scenario_trace (scenario_id, scenario_version, trace_id, scenario_title, scenario_type) VALUES ($1, $2, $3, $4, $5) ON CONFLICT (scenario_id) DO NOTHING"
-	UpsertSpanQuery        = "INSERT INTO span (trace_id, span_id, parent_span_id, source, destination, workload_id_list, metadata, latency_ms, protocol) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) ON CONFLICT (trace_id, span_id) DO NOTHING"
+	UpsertIssueQuery       = "INSERT INTO issue (issue_id, issue_title, scenario_id, scenario_version) VALUES ($1, $2, $3, $4) ON CONFLICT (issue_id) DO NOTHING"
+	UpsertIncidentQuery    = "INSERT INTO incident (trace_id, issue_id, incident_collection_time) VALUES ($1, $2, $3) ON CONFLICT (issue_id, trace_id) DO NOTHING"
+	UpsertSpanQuery        = "INSERT INTO span (trace_id, span_id, parent_span_id, source, destination, workload_id_list, status, metadata, latency_ms, protocol, time) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) ON CONFLICT (trace_id, span_id) DO NOTHING"
 	UpsertSpanRawDataQuery = "INSERT INTO span_raw_data (trace_id, span_id, request_payload, response_payload) VALUES ($1, $2, $3, $4) ON CONFLICT (trace_id, span_id) DO NOTHING"
 )
 
@@ -97,7 +103,7 @@ func (z tracePersistenceRepo) SaveTraceList(issuesDetailList []dto.IssuesDetailD
 		return err
 	}
 	zkLogger.Info(LogTag, "CopyIn failed, starting upsert")
-	err = doBulkUpsertForTraceList(tx, z.dbRepo, traceTableData, traceTableMetadata, traceTableRawData)
+	err = doBulkUpsertForTraceList(tx, z.dbRepo, issueTableData, traceTableData, traceTableMetadata, traceTableRawData)
 	if err == nil {
 		tx.Commit()
 		return nil
@@ -109,19 +115,19 @@ func (z tracePersistenceRepo) SaveTraceList(issuesDetailList []dto.IssuesDetailD
 
 func doBulkInsertForTraceList(tx *sql.Tx, dbRepo sqlDB.DatabaseRepo, issueData, traceData, span, spanRawData []interfaces.DbArgs) error {
 
-	err := bulkInsert(tx, dbRepo, IssueTablePostgres, []string{"issue_id", "issue_title", ScenarioId, ScenarioVersion}, issueData)
+	err := bulkInsert(tx, dbRepo, IssueTablePostgres, []string{IssueId, IssueTitle, ScenarioId, ScenarioVersion}, issueData)
 	if err != nil {
 		zkLogger.Info(LogTag, "Error in bulk insert trace table", err)
 		return err
 	}
 
-	err = bulkInsert(tx, dbRepo, IncidentTablePostgres, []string{TraceId, "issue_id", "created_at"}, traceData)
+	err = bulkInsert(tx, dbRepo, IncidentTablePostgres, []string{TraceId, IssueId, IncidentCollectionTime}, traceData)
 	if err != nil {
 		zkLogger.Info(LogTag, "Error in bulk insert trace table", err)
 		return err
 	}
 
-	cols := []string{TraceId, SpanId, ParentSpanId, Source, Destination, WorkloadIdList, "status", Metadata, LatencyMs, Protocol}
+	cols := []string{TraceId, SpanId, ParentSpanId, Source, Destination, WorkloadIdList, Status, Metadata, LatencyMs, Protocol, Time}
 
 	err = bulkInsert(tx, dbRepo, SpanTablePostgres, cols, span)
 	if err != nil {
@@ -154,11 +160,17 @@ func bulkInsert(tx *sql.Tx, dbRepo sqlDB.DatabaseRepo, table string, columns []s
 	return nil
 }
 
-func doBulkUpsertForTraceList(tx *sql.Tx, dbRepo sqlDB.DatabaseRepo, traceData, span, spanRawData []interfaces.DbArgs) error {
+func doBulkUpsertForTraceList(tx *sql.Tx, dbRepo sqlDB.DatabaseRepo, issue, incident, span, spanRawData []interfaces.DbArgs) error {
 
-	err := bulkUpsert(tx, dbRepo, UpsertTraceQuery, traceData)
+	err := bulkUpsert(tx, dbRepo, UpsertIssueQuery, issue)
 	if err != nil {
-		zkLogger.Error(LogTag, "Error in bulk upsert for trace table", err)
+		zkLogger.Error(LogTag, "Error in bulk upsert for issue table", err)
+		return err
+	}
+
+	err = bulkUpsert(tx, dbRepo, UpsertIncidentQuery, incident)
+	if err != nil {
+		zkLogger.Error(LogTag, "Error in bulk upsert for incident table", err)
 		return err
 	}
 

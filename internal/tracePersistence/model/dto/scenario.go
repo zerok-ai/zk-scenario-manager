@@ -31,13 +31,13 @@ func (t IssueTableDto) GetAllColumns() []any {
 }
 
 type IncidentTableDto struct {
-	TraceId   string    `json:"trace_id"`
-	IssueId   string    `json:"issue_id"`
-	CreatedAt time.Time `json:"created_at"`
+	TraceId                string    `json:"trace_id"`
+	IssueId                string    `json:"issue_id"`
+	IncidentCollectionTime time.Time `json:"incident_collection_time"`
 }
 
 func (t IncidentTableDto) GetAllColumns() []any {
-	return []any{t.TraceId, t.IssueId}
+	return []any{t.TraceId, t.IssueId, t.IncidentCollectionTime}
 }
 
 func ConvertScenarioToTraceDto(s model.IncidentIssuesMapping) ([]IssueTableDto, []IncidentTableDto, []SpanTableDto, []SpanRawDataTableDto, *error) {
@@ -56,9 +56,9 @@ func ConvertScenarioToTraceDto(s model.IncidentIssuesMapping) ([]IssueTableDto, 
 		issueDtoList = append(issueDtoList, issueDto)
 
 		scenarioDto := IncidentTableDto{
-			TraceId:   traceId,
-			IssueId:   issue.IssueId,
-			CreatedAt: s.Incident.IncidentCollectionTime,
+			TraceId:                traceId,
+			IssueId:                issue.IssueId,
+			IncidentCollectionTime: s.Incident.IncidentCollectionTime,
 		}
 		scenarioDtoList = append(scenarioDtoList, scenarioDto)
 	}
