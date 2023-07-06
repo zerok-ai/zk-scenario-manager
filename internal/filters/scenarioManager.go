@@ -1,7 +1,6 @@
 package filters
 
 import (
-	"encoding/json"
 	"fmt"
 	"github.com/pkg/errors"
 	"github.com/zerok-ai/zk-rawdata-reader/vzReader"
@@ -21,8 +20,7 @@ import (
 )
 
 const (
-	ScenarioSetPrefix        = "scenario:"
-	LoggerTagScenarioManager = "scenario_manager"
+	ScenarioSetPrefix = "scenario:"
 )
 
 type ScenarioManager struct {
@@ -89,7 +87,7 @@ func (scenarioManager ScenarioManager) Close() {
 	scenarioManager.traceRawDataCollector.Close()
 	err := scenarioManager.tracePersistenceService.Close()
 	if err != nil {
-		zkLogger.Error(LoggerTagScenarioManager, "Error closing tracePersistenceService")
+		zkLogger.Error(LoggerTag, "Error closing tracePersistenceService")
 		return
 	}
 
@@ -102,10 +100,10 @@ func (scenarioManager ScenarioManager) processAllScenarios() {
 
 	// 2. get all traceId sets from traceStore
 	namesOfAllSets, err := scenarioManager.traceStore.GetAllKeys()
-	zkLogger.DebugF(LoggerTagScenarioManager, "Number of available scenarios: %d", len(scenarios))
-	zkLogger.DebugF(LoggerTagScenarioManager, "Number of keys in traceStore: %d", len(namesOfAllSets))
+	zkLogger.DebugF(LoggerTag, "Number of available scenarios: %d", len(scenarios))
+	zkLogger.DebugF(LoggerTag, "Number of keys in traceStore: %d", len(namesOfAllSets))
 	if err != nil {
-		zkLogger.Error(LoggerTagScenarioManager, "Error getting all keys from traceStore ", err)
+		zkLogger.Error(LoggerTag, "Error getting all keys from traceStore ", err)
 		return
 	}
 
@@ -122,7 +120,7 @@ func (scenarioManager ScenarioManager) processAllScenarios() {
 	// 4. store the scenario in the persistence store along with its traces
 	saveError := scenarioManager.tracePersistenceService.SaveTraceList(pScenarioArr)
 	if saveError != nil {
-		zkLogger.Error(LoggerTagScenarioManager, "Error saving scenario", saveError)
+		zkLogger.Error(LoggerTag, "Error saving scenario", saveError)
 	}
 }
 
@@ -139,14 +137,14 @@ func (scenarioManager ScenarioManager) processScenario(scenario *scenarioGenerat
 	}
 	traceIds, err := traceEvaluator.EvalScenario(ScenarioSetPrefix)
 	if err != nil {
-		zkLogger.Error(LoggerTagScenarioManager, "Error evaluating scenario", err)
+		zkLogger.Error(LoggerTag, "Error evaluating scenario", err)
 		return nil
 	}
 
 	// b. collect trace and span raw data for the qualified traceIDs
 	rawSpans := scenarioManager.collectFullSpanDataForTraces(traceIds)
 	if rawSpans == nil || len(*rawSpans) == 0 {
-		zkLogger.Debug(LoggerTagScenarioManager, "no spans found")
+		zkLogger.Debug(LoggerTag, "no spans found")
 		return nil
 	}
 
@@ -158,7 +156,7 @@ func (scenarioManager ScenarioManager) processScenario(scenario *scenarioGenerat
 	}
 	traceFromOTelStore, err := scenarioManager.oTelStore.GetSpansForTracesFromDB(traceIdsOfRawSpans)
 	if err != nil {
-		zkLogger.Error(LoggerTagScenarioManager, "error processing trace from OTel", err)
+		zkLogger.Error(LoggerTag, "error processing trace from OTel", err)
 		return nil
 	}
 
@@ -170,7 +168,7 @@ func (scenarioManager ScenarioManager) processScenario(scenario *scenarioGenerat
 
 func buildScenarioForPersistence(scenario *scenarioGeneratorModel.Scenario, traceMapToSave map[string]*stores.TraceFromOTel, httpRawData *[]models.HttpRawDataModel) *tracePersistenceModel.Scenario {
 
-	zkLogger.DebugF(LoggerTagScenarioManager, "Building scenario for persistence, scenario: %v for %d number of traces", scenario.Id, len(traceMapToSave))
+	zkLogger.DebugF(LoggerTag, "Building scenario for persistence, scenario: %v for %d number of traces", scenario.Id, len(traceMapToSave))
 
 	// process all the spans in httpRawData and build the traceIdToSpansArrayMap
 	traceTreeForPersistence := make(map[string]map[string]*tracePersistenceModel.Span, 0)
@@ -222,7 +220,7 @@ func buildScenarioForPersistence(scenario *scenarioGeneratorModel.Scenario, trac
 		traceIdToSpansArrayMap[traceId] = spanArrOfPersistentSpans
 	}
 
-	zkLogger.DebugF(LoggerTagScenarioManager, "1. Building scenario for persistence, traceIdToSpansArrayMap count: %d", len(traceIdToSpansArrayMap))
+	zkLogger.DebugF(LoggerTag, "1. Building scenario for persistence, traceIdToSpansArrayMap count: %d", len(traceIdToSpansArrayMap))
 
 	scenarioForPersistence := tracePersistenceModel.Scenario{
 		ScenarioId:      scenario.Id,
@@ -245,52 +243,38 @@ func (scenarioManager ScenarioManager) collectFullSpanDataForTraces(traceIds []s
 		if endIndex > traceIdCount {
 			endIndex = traceIdCount
 		}
-		zkLogger.DebugF(LoggerTagScenarioManager, "calling traceRawDataCollector for %d traces", len(traceIds[startIndex:endIndex]))
+		zkLogger.DebugF(LoggerTag, "calling traceRawDataCollector for %d traces", len(traceIds[startIndex:endIndex]))
 		rawData, err := scenarioManager.traceRawDataCollector.GetHTTPRawData(traceIds[startIndex:endIndex], startTime)
 		if err != nil {
-			zkLogger.Error(LoggerTagScenarioManager, "Error getting raw data for traces ", traceIds, err)
+			zkLogger.Error(LoggerTag, "Error getting raw data for traces ", traceIds, err)
 			return nil
 		}
 		results = append(results, rawData.Results...)
 		startIndex = endIndex
 	}
 
-	zkLogger.Debug(LoggerTagScenarioManager, "Number of raw values from traceRawDataCollector = ", len(results))
+	zkLogger.Debug(LoggerTag, "Number of raw values from traceRawDataCollector = ", len(results))
 	return &results
 }
 
-type HttpRequest struct {
-	ReqPath    string `json:"req_path"`
-	ReqMethod  string `json:"req_method"`
-	ReqHeaders string `json:"req_headers"`
-	ReqBody    string `json:"req_body"`
-}
-
-func getHttpRequestData(value models.HttpRawDataModel) string {
-	req := HttpRequest{
+func getHttpRequestData(value models.HttpRawDataModel) tracePersistenceModel.HTTPRequestPayload {
+	req := tracePersistenceModel.HTTPRequestPayload{
 		ReqPath:    value.ReqPath,
 		ReqMethod:  value.ReqMethod,
 		ReqHeaders: value.ReqHeaders,
 		ReqBody:    value.ReqBody,
 	}
-	return jsonToString(req)
+	return req
 }
 
-type HttpResponse struct {
-	RespStatus  string `json:"resp_status"`
-	RespMessage string `json:"resp_message"`
-	RespHeaders string `json:"resp_headers"`
-	RespBody    string `json:"resp_body"`
-}
-
-func getHttpResponseData(value models.HttpRawDataModel) string {
-	res := HttpResponse{
+func getHttpResponseData(value models.HttpRawDataModel) tracePersistenceModel.HTTPResponsePayload {
+	res := tracePersistenceModel.HTTPResponsePayload{
 		RespStatus:  value.RespStatus,
 		RespMessage: value.RespMessage,
 		RespHeaders: value.RespHeaders,
 		RespBody:    value.RespBody,
 	}
-	return jsonToString(res)
+	return res
 }
 
 func createHttpSpan(value models.HttpRawDataModel, traceTree map[string]*stores.TraceFromOTel) (*tracePersistenceModel.Span, error) {
@@ -327,12 +311,4 @@ func getLatencyPtr(latencyStr string) *float32 {
 		return &latency32
 	}
 	return nil
-}
-
-func jsonToString(jsonObj interface{}) string {
-	jsonBytes, err := json.Marshal(jsonObj)
-	if err != nil {
-		return ""
-	}
-	return string(jsonBytes)
 }

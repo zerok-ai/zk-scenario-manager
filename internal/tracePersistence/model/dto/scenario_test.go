@@ -14,7 +14,7 @@ import (
 //	tests := []struct {
 //		name  string
 //		args  args
-//		want  []ScenarioTableDto
+//		want  []IncidentTableDto
 //		want1 []SpanTableDto
 //		want2 []SpanRawDataTableDto
 //		want3 *error
@@ -41,7 +41,7 @@ import (
 //}
 
 func TestScenarioTableDto_GetAllColumns(t1 *testing.T) {
-	s := ScenarioTableDto{
+	s := IncidentTableDto{
 		ScenarioId:      "s1",
 		ScenarioVersion: "v1",
 		TraceId:         "t1",
@@ -114,12 +114,12 @@ func TestSpanTableDto_GetAllColumns(t1 *testing.T) {
 //	}
 //	for _, tt := range tests {
 //		t.Run(tt.name, func(t *testing.T) {
-//			got, got1 := ValidateScenario(tt.args.s)
+//			got, got1 := ValidateIssue(tt.args.s)
 //			if got != tt.want {
-//				t.Errorf("ValidateScenario() got = %v, want %v", got, tt.want)
+//				t.Errorf("ValidateIssue() got = %v, want %v", got, tt.want)
 //			}
 //			if !reflect.DeepEqual(got1, tt.want1) {
-//				t.Errorf("ValidateScenario() got1 = %v, want %v", got1, tt.want1)
+//				t.Errorf("ValidateIssue() got1 = %v, want %v", got1, tt.want1)
 //			}
 //		})
 //	}

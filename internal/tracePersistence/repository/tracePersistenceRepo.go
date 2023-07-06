@@ -10,9 +10,10 @@ import (
 )
 
 const (
-	ScenarioTraceTablePostgres = "scenario_trace"
-	SpanTablePostgres          = "span"
-	SpanRawDataTablePostgres   = "span_raw_data"
+	IssueTablePostgres       = "issue"
+	IncidentTablePostgres    = "incident"
+	SpanTablePostgres        = "span"
+	SpanRawDataTablePostgres = "span_raw_data"
 
 	ScenarioId      = "scenario_id"
 	ScenarioVersion = "scenario_version"
@@ -37,7 +38,7 @@ const (
 var LogTag = "zk_trace_persistence_repo"
 
 type TracePersistenceRepo interface {
-	SaveTraceList([]dto.ScenarioTableDto, []dto.SpanTableDto, []dto.SpanRawDataTableDto) error
+	SaveTraceList([]dto.IssuesDetailDto) error
 	Close() error
 }
 
@@ -53,20 +54,28 @@ func (z tracePersistenceRepo) Close() error {
 	return z.dbRepo.Close()
 }
 
-func (z tracePersistenceRepo) SaveTraceList(t []dto.ScenarioTableDto, tmd []dto.SpanTableDto, trd []dto.SpanRawDataTableDto) error {
+func (z tracePersistenceRepo) SaveTraceList(issuesDetailList []dto.IssuesDetailDto) error {
+	issueTableData := make([]interfaces.DbArgs, 0)
 	traceTableData := make([]interfaces.DbArgs, 0)
 	traceTableMetadata := make([]interfaces.DbArgs, 0)
 	traceTableRawData := make([]interfaces.DbArgs, 0)
-	for i := range t {
-		traceTableData = append(traceTableData, t[i])
-	}
+	for _, issue := range issuesDetailList {
 
-	for i := range tmd {
-		traceTableMetadata = append(traceTableMetadata, tmd[i])
-	}
+		for _, v := range issue.IssueTableDtoList {
+			issueTableData = append(issueTableData, v)
+		}
 
-	for i := range trd {
-		traceTableRawData = append(traceTableRawData, trd[i])
+		for _, v := range issue.ScenarioTableDtoList {
+			traceTableData = append(traceTableData, v)
+		}
+
+		for _, v := range issue.SpanTableDtoList {
+			traceTableMetadata = append(traceTableMetadata, v)
+		}
+
+		for _, v := range issue.SpanRawDataTableList {
+			traceTableRawData = append(traceTableRawData, v)
+		}
 	}
 
 	tx, err := z.dbRepo.CreateTransaction()
@@ -75,7 +84,7 @@ func (z tracePersistenceRepo) SaveTraceList(t []dto.ScenarioTableDto, tmd []dto.
 		return err
 	}
 
-	err = doBulkInsertForTraceList(tx, z.dbRepo, traceTableData, traceTableMetadata, traceTableRawData)
+	err = doBulkInsertForTraceList(tx, z.dbRepo, issueTableData, traceTableData, traceTableMetadata, traceTableRawData)
 	if err == nil {
 		tx.Commit()
 		return nil
@@ -98,15 +107,23 @@ func (z tracePersistenceRepo) SaveTraceList(t []dto.ScenarioTableDto, tmd []dto.
 	return err
 }
 
-func doBulkInsertForTraceList(tx *sql.Tx, dbRepo sqlDB.DatabaseRepo, traceData, span, spanRawData []interfaces.DbArgs) error {
+func doBulkInsertForTraceList(tx *sql.Tx, dbRepo sqlDB.DatabaseRepo, issueData, traceData, span, spanRawData []interfaces.DbArgs) error {
 
-	err := bulkInsert(tx, dbRepo, ScenarioTraceTablePostgres, []string{ScenarioId, ScenarioVersion, TraceId}, traceData)
+	err := bulkInsert(tx, dbRepo, IssueTablePostgres, []string{"issue_id", "issue_title", ScenarioId, ScenarioVersion}, issueData)
 	if err != nil {
 		zkLogger.Info(LogTag, "Error in bulk insert trace table", err)
 		return err
 	}
 
-	err = bulkInsert(tx, dbRepo, SpanTablePostgres, []string{TraceId, SpanId, ParentSpanId, Source, Destination, WorkloadIdList, Metadata, LatencyMs, Protocol}, span)
+	err = bulkInsert(tx, dbRepo, IncidentTablePostgres, []string{TraceId, "issue_id", "created_at"}, traceData)
+	if err != nil {
+		zkLogger.Info(LogTag, "Error in bulk insert trace table", err)
+		return err
+	}
+
+	cols := []string{TraceId, SpanId, ParentSpanId, Source, Destination, WorkloadIdList, "status", Metadata, LatencyMs, Protocol}
+
+	err = bulkInsert(tx, dbRepo, SpanTablePostgres, cols, span)
 	if err != nil {
 		zkLogger.Info(LogTag, "Error in bulk insert span table", err)
 		return err

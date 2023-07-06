@@ -3,6 +3,8 @@ package filters
 import "time"
 
 const (
+	LoggerTag = "scenario-manager"
+
 	FilterProcessingTickInterval = 10 * time.Second
 	ScenarioRefreshInterval      = 20 * time.Minute
 	TTLForTransientSets          = 120 * time.Second
