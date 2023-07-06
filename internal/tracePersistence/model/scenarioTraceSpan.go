@@ -9,7 +9,7 @@ import (
 
 var LogTag = "zk_trace_model"
 
-type IssuesDetail struct {
+type IncidentIssuesMapping struct {
 	IssueList       []Issue  `json:"issue_list"`
 	ScenarioId      string   `json:"scenario_id"`
 	ScenarioVersion string   `json:"scenario_version"`
@@ -22,9 +22,9 @@ type Issue struct {
 }
 
 type Incident struct {
-	TraceId   string    `json:"trace_id"`
-	Spans     []Span    `json:"spans"`
-	CreatedAt time.Time `json:"created_at"`
+	TraceId                string    `json:"trace_id"`
+	Spans                  []Span    `json:"spans"`
+	IncidentCollectionTime time.Time `json:"incident_collection_time"`
 }
 
 type Span struct {
@@ -38,6 +38,7 @@ type Span struct {
 	Protocol        string          `json:"protocol"`
 	RequestPayload  RequestPayload  `json:"request_payload"`
 	ResponsePayload ResponsePayload `json:"response_payload"`
+	Time            time.Time       `json:"time"`
 }
 
 type ResponsePayload interface {
