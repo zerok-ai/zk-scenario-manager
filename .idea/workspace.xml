@@ -5,12 +5,13 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="709ca14d-56fa-4c20-a305-fb4e1a06689a" name="Changes" comment="">
+      <change afterPath="$PROJECT_DIR$/internal/filters/common.go" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/internal/stores/common.go" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/go.mod" beforeDir="false" afterPath="$PROJECT_DIR$/go.mod" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/go.sum" beforeDir="false" afterPath="$PROJECT_DIR$/go.sum" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/internal/filters/evaluation.go" beforeDir="false" afterPath="$PROJECT_DIR$/internal/filters/evaluation.go" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/internal/filters/otelStore.go" beforeDir="false" afterPath="$PROJECT_DIR$/internal/filters/otelStore.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/internal/filters/otelStore.go" beforeDir="false" afterPath="$PROJECT_DIR$/internal/stores/oTelStore.go" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/internal/filters/scenarioManager.go" beforeDir="false" afterPath="$PROJECT_DIR$/internal/filters/scenarioManager.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/internal/filters/traceStore.go" beforeDir="false" afterPath="$PROJECT_DIR$/internal/stores/traceStore.go" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -58,6 +59,11 @@
     &quot;settings.editor.selected.configurable&quot;: &quot;configurable.group.appearance&quot;
   }
 }</component>
+  <component name="RecentsManager">
+    <key name="MoveFile.RECENT_KEYS">
+      <recent name="$PROJECT_DIR$/internal/stores" />
+    </key>
+  </component>
   <component name="RunManager" selected="Go Build.run">
     <configuration name="run" type="GoApplicationRunConfiguration" factoryName="Go Application" temporary="true">
       <module name="zk-scenario-manager" />
@@ -115,19 +121,14 @@
           <option name="timeStamp" value="83" />
         </line-breakpoint>
         <line-breakpoint type="DlvLineBreakpoint">
-          <url>file://$PROJECT_DIR$/internal/filters/otelStore.go</url>
-          <line>129</line>
+          <url>file://$PROJECT_DIR$/internal/stores/oTelStore.go</url>
+          <line>128</line>
           <option name="timeStamp" value="222" />
         </line-breakpoint>
         <line-breakpoint type="DlvLineBreakpoint">
-          <url>file://$PROJECT_DIR$/internal/filters/otelStore.go</url>
-          <line>152</line>
+          <url>file://$PROJECT_DIR$/internal/stores/oTelStore.go</url>
+          <line>151</line>
           <option name="timeStamp" value="223" />
-        </line-breakpoint>
-        <line-breakpoint enabled="true" type="DlvLineBreakpoint">
-          <url>file://$PROJECT_DIR$/internal/filters/scenarioManager.go</url>
-          <line>136</line>
-          <option name="timeStamp" value="248" />
         </line-breakpoint>
       </breakpoints>
       <default-breakpoints>

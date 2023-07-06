@@ -1,4 +1,4 @@
-package filters
+package stores
 
 import (
 	"encoding/json"
@@ -9,30 +9,23 @@ import (
 	"time"
 )
 
-const LoggerTagOtelStore = "otelStore"
+const LoggerTagOTelStore = "oTelStore"
 
-type OtelStore struct {
+type OTelStore struct {
 	redisClient *redis.Client
 }
 
-const (
-	INTERNAL = "INTERNAL"
-	DELETE   = "DELETE"
-	CLIENT   = "CLIENT"
-	SERVER   = "SERVER"
-)
-
-func (t OtelStore) initialize() *OtelStore {
+func (t OTelStore) initialize() *OTelStore {
 	return &t
 }
 
-func (t OtelStore) Close() {
+func (t OTelStore) Close() {
 	t.redisClient.Close()
 }
 
-func GetOtelStore(redisConfig *config.RedisConfig) *OtelStore {
+func GetOTelStore(redisConfig *config.RedisConfig) *OTelStore {
 	dbName := "otel"
-	zkLogger.Debug(LoggerTagOtelStore, "GetOtelStore: config=", redisConfig, "dbName=", dbName, "dbID=", redisConfig.DBs[dbName])
+	zkLogger.Debug(LoggerTagOTelStore, "GetOTelStore: config=", redisConfig, "dbName=", dbName, "dbID=", redisConfig.DBs[dbName])
 	readTimeout := time.Duration(redisConfig.ReadTimeout) * time.Second
 	_redisClient := redis.NewClient(&redis.Options{
 		Addr:        fmt.Sprint(redisConfig.Host, ":", redisConfig.Port),
@@ -41,7 +34,7 @@ func GetOtelStore(redisConfig *config.RedisConfig) *OtelStore {
 		ReadTimeout: readTimeout,
 	})
 
-	return OtelStore{redisClient: _redisClient}.initialize()
+	return OTelStore{redisClient: _redisClient}.initialize()
 }
 
 type SpanFromOTel struct {
@@ -52,11 +45,11 @@ type SpanFromOTel struct {
 }
 
 type TraceFromOTel struct {
-	// spans is a map of spanID to span
-	spans map[string]*SpanFromOTel
+	// Spans is a map of spanID to span
+	Spans map[string]*SpanFromOTel
 }
 
-func (t OtelStore) GetSpansForTracesFromDB(keys []string) (map[string]*TraceFromOTel, error) {
+func (t OTelStore) GetSpansForTracesFromDB(keys []string) (map[string]*TraceFromOTel, error) {
 
 	redisClient := t.redisClient
 
@@ -86,24 +79,24 @@ func (t OtelStore) GetSpansForTracesFromDB(keys []string) (map[string]*TraceFrom
 			continue
 		}
 
-		traceFromOTel := &TraceFromOTel{spans: map[string]*SpanFromOTel{}}
+		traceFromOTel := &TraceFromOTel{Spans: map[string]*SpanFromOTel{}}
 
-		// 4.1 Unmarshal the spans
+		// 4.1 Unmarshal the Spans
 		for spanId, spanData := range trace {
 			var sp SpanFromOTel
 			err = json.Unmarshal([]byte(spanData), &sp)
 			if err != nil {
-				zkLogger.ErrorF(LoggerTagOtelStore, "Error retrieving span:", err)
+				zkLogger.ErrorF(LoggerTagOTelStore, "Error retrieving span:", err)
 				continue
 			}
 			sp.SpanID = spanId
-			traceFromOTel.spans[spanId] = &sp
+			traceFromOTel.Spans[spanId] = &sp
 		}
 
 		// 4.2 set the parent-child relationships and find root span
 		var rootSpan *string
-		for _, spanFromOTel := range traceFromOTel.spans {
-			parentSpan, ok := traceFromOTel.spans[spanFromOTel.ParentSpanID]
+		for _, spanFromOTel := range traceFromOTel.Spans {
+			parentSpan, ok := traceFromOTel.Spans[spanFromOTel.ParentSpanID]
 			if ok {
 				parentSpan.Children = append(parentSpan.Children, *spanFromOTel)
 			} else {
@@ -112,20 +105,20 @@ func (t OtelStore) GetSpansForTracesFromDB(keys []string) (map[string]*TraceFrom
 		}
 
 		if rootSpan == nil {
-			zkLogger.Debug(LoggerTagOtelStore, "rootSpan not found")
+			zkLogger.Debug(LoggerTagOTelStore, "rootSpan not found")
 			continue
 		}
 
-		// 4.3 prune the unwanted spans
-		prune(traceFromOTel.spans, *rootSpan)
+		// 4.3 prune the unwanted Spans
+		prune(traceFromOTel.Spans, *rootSpan)
 
-		zkLogger.DebugF(LoggerTagOtelStore, "rootSpan: %s", rootSpan)
+		zkLogger.DebugF(LoggerTagOTelStore, "rootSpan: %s", rootSpan)
 		result[traceId] = traceFromOTel
 	}
 	return result, nil
 }
 
-// prune removes the spans that are not required - internal spans and server spans that are not the root span
+// prune removes the Spans that are not required - internal Spans and server Spans that are not the root span
 func prune(spans map[string]*SpanFromOTel, currentSpanID string) ([]string, bool) {
 	currentSpan := spans[currentSpanID]
 

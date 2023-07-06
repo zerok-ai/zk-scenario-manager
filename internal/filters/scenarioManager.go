@@ -4,7 +4,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/pkg/errors"
+	"github.com/zerok-ai/zk-rawdata-reader/vzReader"
 	"github.com/zerok-ai/zk-rawdata-reader/vzReader/models"
+	_ "github.com/zerok-ai/zk-rawdata-reader/vzReader/pxl"
 	"github.com/zerok-ai/zk-utils-go/common"
 	zkLogger "github.com/zerok-ai/zk-utils-go/logs"
 	scenarioGeneratorModel "github.com/zerok-ai/zk-utils-go/scenario/model"
@@ -12,36 +14,22 @@ import (
 	ticker "github.com/zerok-ai/zk-utils-go/ticker"
 	"log"
 	"scenario-manager/internal/config"
+	"scenario-manager/internal/stores"
 	tracePersistenceModel "scenario-manager/internal/tracePersistence/model"
 	tracePersistence "scenario-manager/internal/tracePersistence/service"
 	"strings"
-	"time"
-
-	"github.com/zerok-ai/zk-rawdata-reader/vzReader"
-	_ "github.com/zerok-ai/zk-rawdata-reader/vzReader/pxl"
 )
 
 const (
-	FilterProcessingTickInterval = 10 * time.Second
-	ScenarioRefreshInterval      = 20 * time.Minute
-
-	TTLForTransientSets = 120 * time.Second
-	TTLForScenarioSets  = 5 * time.Minute
-
-	ScenarioSetPrefix = "scenario:"
-
+	ScenarioSetPrefix        = "scenario:"
 	LoggerTagScenarioManager = "scenario_manager"
-
-	batchSizeForRawDataCollector = 20
-
-	timeRangeForRawDataQuery = "-30m" // -5m, -10m, -1h etc
 )
 
 type ScenarioManager struct {
 	scenarioStore *store.VersionedStore[scenarioGeneratorModel.Scenario]
 
-	traceStore *TraceStore
-	oTelStore  *OtelStore
+	traceStore *stores.TraceStore
+	oTelStore  *stores.OTelStore
 
 	traceRawDataCollector *vzReader.VzReader
 
@@ -77,8 +65,8 @@ func NewScenarioManager(cfg config.AppConfigs, tps tracePersistence.TracePersist
 
 	fp := ScenarioManager{
 		scenarioStore:           vs,
-		traceStore:              GetTraceStore(cfg.Redis, TTLForTransientSets),
-		oTelStore:               GetOtelStore(cfg.Redis),
+		traceStore:              stores.GetTraceStore(cfg.Redis, TTLForTransientSets),
+		oTelStore:               stores.GetOTelStore(cfg.Redis),
 		traceRawDataCollector:   reader,
 		tracePersistenceService: tps,
 	}
@@ -117,7 +105,7 @@ func (scenarioManager ScenarioManager) processAllScenarios() {
 	zkLogger.DebugF(LoggerTagScenarioManager, "Number of available scenarios: %d", len(scenarios))
 	zkLogger.DebugF(LoggerTagScenarioManager, "Number of keys in traceStore: %d", len(namesOfAllSets))
 	if err != nil {
-		log.Println("Error getting all keys from traceStore ", err)
+		zkLogger.Error(LoggerTagScenarioManager, "Error getting all keys from traceStore ", err)
 		return
 	}
 
@@ -180,7 +168,7 @@ func (scenarioManager ScenarioManager) processScenario(scenario *scenarioGenerat
 	return dataForScenario
 }
 
-func buildScenarioForPersistence(scenario *scenarioGeneratorModel.Scenario, traceMapToSave map[string]*TraceFromOTel, httpRawData *[]models.HttpRawDataModel) *tracePersistenceModel.Scenario {
+func buildScenarioForPersistence(scenario *scenarioGeneratorModel.Scenario, traceMapToSave map[string]*stores.TraceFromOTel, httpRawData *[]models.HttpRawDataModel) *tracePersistenceModel.Scenario {
 
 	zkLogger.DebugF(LoggerTagScenarioManager, "Building scenario for persistence, scenario: %v for %d number of traces", scenario.Id, len(traceMapToSave))
 
@@ -219,7 +207,7 @@ func buildScenarioForPersistence(scenario *scenarioGeneratorModel.Scenario, trac
 			spanArrOfPersistentSpans = make([]tracePersistenceModel.Span, 0)
 		}
 
-		for _, spanFromOTel := range traceFromOTel.spans {
+		for _, spanFromOTel := range traceFromOTel.Spans {
 			spanForPersistence, ok := spanMapOfPersistentSpans[spanFromOTel.SpanID]
 			if !ok {
 				spanForPersistence = &tracePersistenceModel.Span{
@@ -305,14 +293,14 @@ func getHttpResponseData(value models.HttpRawDataModel) string {
 	return jsonToString(res)
 }
 
-func createHttpSpan(value models.HttpRawDataModel, traceTree map[string]*TraceFromOTel) (*tracePersistenceModel.Span, error) {
+func createHttpSpan(value models.HttpRawDataModel, traceTree map[string]*stores.TraceFromOTel) (*tracePersistenceModel.Span, error) {
 
 	trace, ok := traceTree[value.TraceId]
 	if !ok {
 		return nil, fmt.Errorf("trace not found in trace tree. traceId = %s", value.TraceId)
 	}
 
-	span, ok := trace.spans[value.SpanId]
+	span, ok := trace.Spans[value.SpanId]
 	if !ok {
 		return nil, fmt.Errorf("span not found in trace tree. traceId = %s, spanId = %s", value.TraceId, value.SpanId)
 	}

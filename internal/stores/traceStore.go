@@ -1,7 +1,6 @@
-package filters
+package stores
 
 import (
-	"context"
 	"fmt"
 	"github.com/redis/go-redis/v9"
 	zkLogger "github.com/zerok-ai/zk-utils-go/logs"
@@ -10,10 +9,6 @@ import (
 )
 
 const LoggerTagTraceStore = "traceStore"
-
-var (
-	ctx = context.Background()
-)
 
 type TraceStore struct {
 	redisClient         *redis.Client

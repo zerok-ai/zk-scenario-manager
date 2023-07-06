@@ -4,6 +4,7 @@ import (
 	"fmt"
 	zkLogger "github.com/zerok-ai/zk-utils-go/logs"
 	"github.com/zerok-ai/zk-utils-go/scenario/model"
+	"scenario-manager/internal/stores"
 	"sort"
 	"strings"
 	"time"
@@ -15,12 +16,12 @@ const (
 
 type TraceEvaluator struct {
 	scenario                   *model.Scenario
-	traceStore                 *TraceStore
+	traceStore                 *stores.TraceStore
 	namesOfAllSets             []string
 	ttlForTransientScenarioSet time.Duration
 }
 
-func NewTraceEvaluator(scenario *model.Scenario, traceStore *TraceStore, namesOfAllSets []string, ttlForTransientScenarioSet time.Duration) *TraceEvaluator {
+func NewTraceEvaluator(scenario *model.Scenario, traceStore *stores.TraceStore, namesOfAllSets []string, ttlForTransientScenarioSet time.Duration) *TraceEvaluator {
 	if scenario == nil {
 		zkLogger.Error(LoggerTagEvaluation, "scenario is nil")
 		return nil
