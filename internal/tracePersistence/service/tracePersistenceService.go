@@ -11,7 +11,7 @@ import (
 var LogTag = "zk_trace_persistence_service"
 
 type TracePersistenceService interface {
-	SaveIssues([]model.IssuesDetail) *zkErrors.ZkError
+	SaveIssues([]model.IncidentIssuesMapping) *zkErrors.ZkError
 	Close() error
 }
 
@@ -27,7 +27,7 @@ type tracePersistenceService struct {
 	repo repository.TracePersistenceRepo
 }
 
-func (s tracePersistenceService) SaveIssues(issuesDetail []model.IssuesDetail) *zkErrors.ZkError {
+func (s tracePersistenceService) SaveIssues(issuesDetail []model.IncidentIssuesMapping) *zkErrors.ZkError {
 
 	issuesDetailsDtoList := make([]dto.IssuesDetailDto, 0)
 
