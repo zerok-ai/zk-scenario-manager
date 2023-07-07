@@ -1,7 +1,10 @@
 package filters
 
 import (
+	"crypto/md5"
+	"encoding/hex"
 	"fmt"
+	"github.com/jmespath/go-jmespath"
 	"github.com/pkg/errors"
 	"github.com/zerok-ai/zk-rawdata-reader/vzReader"
 	"github.com/zerok-ai/zk-rawdata-reader/vzReader/models"
@@ -17,6 +20,7 @@ import (
 	tracePersistenceModel "scenario-manager/internal/tracePersistence/model"
 	tracePersistence "scenario-manager/internal/tracePersistence/service"
 	"strings"
+	"time"
 )
 
 const (
@@ -108,23 +112,23 @@ func (scenarioManager ScenarioManager) processAllScenarios() {
 	}
 
 	// 3. evaluate scenario filters on traceIdSets and attach the full traces against the scenarios
-	pScenarioArr := make([]tracePersistenceModel.Scenario, 0)
+	incidents := make([]tracePersistenceModel.IncidentWithIssues, 0)
 	for _, scenario := range scenarios {
-		// process each scenario
-		pScenario := scenarioManager.processScenario(scenario, namesOfAllSets)
-		if pScenario != nil {
-			pScenarioArr = append(pScenarioArr, *pScenario)
+		incidentsOfScenario := scenarioManager.processScenario(scenario, namesOfAllSets)
+		if incidentsOfScenario != nil {
+			incidents = append(incidents, *incidentsOfScenario...)
 		}
 	}
 
 	// 4. store the scenario in the persistence store along with its traces
-	saveError := scenarioManager.tracePersistenceService.SaveTraceList(pScenarioArr)
+	saveError := scenarioManager.tracePersistenceService.SaveIncidents(incidents)
 	if saveError != nil {
 		zkLogger.Error(LoggerTag, "Error saving scenario", saveError)
 	}
 }
 
-func (scenarioManager ScenarioManager) processScenario(scenario *scenarioGeneratorModel.Scenario, namesOfAllSets []string) *tracePersistenceModel.Scenario {
+func (scenarioManager ScenarioManager) processScenario(scenario *scenarioGeneratorModel.Scenario, namesOfAllSets []string) *[]tracePersistenceModel.IncidentWithIssues {
+
 	if scenario == nil {
 		log.Println("Found nil scenario")
 		return nil
@@ -161,73 +165,228 @@ func (scenarioManager ScenarioManager) processScenario(scenario *scenarioGenerat
 	}
 
 	// d. Feed the span co-relation to raw span]\ data and build the scenario model for storage
-	dataForScenario := buildScenarioForPersistence(scenario, traceFromOTelStore, rawSpans)
+	incidents := buildScenarioForPersistence(scenario, traceFromOTelStore, rawSpans)
 
-	return dataForScenario
+	return incidents
 }
 
-func buildScenarioForPersistence(scenario *scenarioGeneratorModel.Scenario, traceMapToSave map[string]*stores.TraceFromOTel, httpRawData *[]models.HttpRawDataModel) *tracePersistenceModel.Scenario {
+//func buildScenarioForPersistence(scenario *scenarioGeneratorModel.Scenario, tracesFromOTel map[string]*stores.TraceFromOTel, httpRawData *[]models.HttpRawDataModel) *[]tracePersistenceModel.IncidentWithIssues {
+//
+//	zkLogger.DebugF(LoggerTag, "Building scenario for persistence, scenario: %v for %d number of traces", scenario.Id, len(tracesFromOTel))
+//
+//	// process all the spans in httpRawData and build the traceIdToSpansArrayMap
+//	traceTreeForPersistence := make(map[string]map[string]*tracePersistenceModel.Span, 0)
+//	for _, value := range *httpRawData {
+//
+//		span, err := populateHttpSpan(value, tracesFromOTel)
+//		// if complete span data can't be generated using data from OTelStore, don't save the complete trace
+//		if err != nil {
+//			continue
+//		}
+//
+//		spanMapOfPersistentSpans, ok := traceTreeForPersistence[value.TraceId]
+//		if !ok {
+//			spanMapOfPersistentSpans = make(map[string]*tracePersistenceModel.Span, 0)
+//			traceTreeForPersistence[value.TraceId] = spanMapOfPersistentSpans
+//		}
+//
+//		spanMapOfPersistentSpans[span.SpanId] = span
+//	}
+//
+//	traceIdToSpansArrayMap := make(map[string][]tracePersistenceModel.Span, 0)
+//
+//	// process the remaining members of tracesFromOTel and build the traceIdToSpansArrayMap
+//	for traceId, traceFromOTel := range tracesFromOTel {
+//
+//		spanMapOfPersistentSpans, ok := traceTreeForPersistence[traceId]
+//		if !ok {
+//			spanMapOfPersistentSpans = make(map[string]*tracePersistenceModel.Span, 0)
+//			traceTreeForPersistence[traceId] = spanMapOfPersistentSpans
+//		}
+//
+//		spanArrOfPersistentSpans, ok := traceIdToSpansArrayMap[traceId]
+//		if !ok {
+//			spanArrOfPersistentSpans = make([]tracePersistenceModel.Span, 0)
+//		}
+//
+//		for _, spanFromOTel := range traceFromOTel.Spans {
+//			spanForPersistence, ok := spanMapOfPersistentSpans[spanFromOTel.SpanID]
+//			if !ok {
+//				spanForPersistence = &tracePersistenceModel.Span{
+//					SpanId:       spanFromOTel.SpanID,
+//					ParentSpanId: spanFromOTel.ParentSpanID,
+//					Protocol:     "unknown",
+//				}
+//				spanMapOfPersistentSpans[spanFromOTel.SpanID] = spanForPersistence
+//			}
+//			spanArrOfPersistentSpans = append(spanArrOfPersistentSpans, *spanForPersistence)
+//		}
+//		traceIdToSpansArrayMap[traceId] = spanArrOfPersistentSpans
+//	}
+//
+//	zkLogger.DebugF(LoggerTag, "1. Building scenario for persistence, traceIdToSpansArrayMap count: %d", len(traceIdToSpansArrayMap))
+//
+//	scenarioForPersistence := tracePersistenceModel.Scenario{
+//		ScenarioId:      scenario.Id,
+//		ScenarioVersion: scenario.Version,
+//		TraceToSpansMap: traceIdToSpansArrayMap,
+//	}
+//	return &incidents
+//}
 
-	zkLogger.DebugF(LoggerTag, "Building scenario for persistence, scenario: %v for %d number of traces", scenario.Id, len(traceMapToSave))
+func buildScenarioForPersistence(scenario *scenarioGeneratorModel.Scenario, tracesFromOTel map[string]*stores.TraceFromOTel, httpRawData *[]models.HttpRawDataModel) *[]tracePersistenceModel.IncidentWithIssues {
+
+	zkLogger.DebugF(LoggerTag, "Building scenario for persistence, scenario: %v for %d number of traces", scenario.Id, len(tracesFromOTel))
 
 	// process all the spans in httpRawData and build the traceIdToSpansArrayMap
-	traceTreeForPersistence := make(map[string]map[string]*tracePersistenceModel.Span, 0)
-	for _, value := range *httpRawData {
+	traceTreeForPersistence := make(map[string]*map[string]*tracePersistenceModel.Span, 0)
 
-		span, err := createHttpSpan(value, traceMapToSave)
-		// if complete span data can't be generated using data from OTelStore, don't save the complete trace
-		if err != nil {
+	// iterate through the trace data from OTelStore and build the traceIdToSpansMap
+	for traceId, traceFromOTel := range tracesFromOTel {
+		spanMapOfPersistentSpans := make(map[string]*tracePersistenceModel.Span, 0)
+		for _, spanFromOTel := range traceFromOTel.Spans {
+			spanForPersistence := &tracePersistenceModel.Span{
+				SpanId:       spanFromOTel.SpanID,
+				ParentSpanId: spanFromOTel.ParentSpanID,
+				Protocol:     "unknown",
+			}
+			spanMapOfPersistentSpans[spanFromOTel.SpanID] = spanForPersistence
+		}
+		traceTreeForPersistence[traceId] = &spanMapOfPersistentSpans
+	}
+
+	// process all the spans in httpRawData and set data in traceIdToSpansMap
+	for _, fullSpan := range *httpRawData {
+
+		trace, ok := traceTreeForPersistence[fullSpan.TraceId]
+		if !ok || trace == nil {
+			continue
+		}
+		spanForPersistence, ok := (*trace)[fullSpan.SpanId]
+		if !ok || spanForPersistence == nil {
 			continue
 		}
 
-		spanMapOfPersistentSpans, ok := traceTreeForPersistence[value.TraceId]
-		if !ok {
-			spanMapOfPersistentSpans = make(map[string]*tracePersistenceModel.Span, 0)
-			traceTreeForPersistence[value.TraceId] = spanMapOfPersistentSpans
-		}
-
-		spanMapOfPersistentSpans[span.SpanId] = span
+		(*trace)[fullSpan.SpanId] = populateHttpSpan(fullSpan, *spanForPersistence, "http")
 	}
 
 	traceIdToSpansArrayMap := make(map[string][]tracePersistenceModel.Span, 0)
 
-	// process the remaining members of traceMapToSave and build the traceIdToSpansArrayMap
-	for traceId, traceFromOTel := range traceMapToSave {
-
-		spanMapOfPersistentSpans, ok := traceTreeForPersistence[traceId]
-		if !ok {
-			spanMapOfPersistentSpans = make(map[string]*tracePersistenceModel.Span, 0)
-			traceTreeForPersistence[traceId] = spanMapOfPersistentSpans
-		}
-
-		spanArrOfPersistentSpans, ok := traceIdToSpansArrayMap[traceId]
-		if !ok {
-			spanArrOfPersistentSpans = make([]tracePersistenceModel.Span, 0)
-		}
-
-		for _, spanFromOTel := range traceFromOTel.Spans {
-			spanForPersistence, ok := spanMapOfPersistentSpans[spanFromOTel.SpanID]
-			if !ok {
-				spanForPersistence = &tracePersistenceModel.Span{
-					SpanId:       spanFromOTel.SpanID,
-					ParentSpanId: spanFromOTel.ParentSpanID,
-					Protocol:     "unknown",
-				}
-				spanMapOfPersistentSpans[spanFromOTel.SpanID] = spanForPersistence
-			}
-			spanArrOfPersistentSpans = append(spanArrOfPersistentSpans, *spanForPersistence)
-		}
-		traceIdToSpansArrayMap[traceId] = spanArrOfPersistentSpans
-	}
-
 	zkLogger.DebugF(LoggerTag, "1. Building scenario for persistence, traceIdToSpansArrayMap count: %d", len(traceIdToSpansArrayMap))
 
-	scenarioForPersistence := tracePersistenceModel.Scenario{
+	// iterate through the trace data and create IncidentWithIssues for each trace
+	incidentsWithIssues := make([]tracePersistenceModel.IncidentWithIssues, 0)
+	for traceId, spanMap := range traceTreeForPersistence {
+		incidentsWithIssues = append(incidentsWithIssues, evaluateIncidents(scenario, traceId, spanMap))
+	}
+	return &incidentsWithIssues
+}
+
+func evaluateIncidents(scenario *scenarioGeneratorModel.Scenario, traceId string, spanMap *map[string]*tracePersistenceModel.Span) tracePersistenceModel.IncidentWithIssues {
+
+	spans := make([]tracePersistenceModel.Span, 0)
+	for _, span := range *spanMap {
+		spans = append(spans, *span)
+	}
+
+	return tracePersistenceModel.IncidentWithIssues{
+		IssueList:       getListOfIssues(scenario, spanMap),
 		ScenarioId:      scenario.Id,
 		ScenarioVersion: scenario.Version,
-		TraceToSpansMap: traceIdToSpansArrayMap,
+		Incident: tracePersistenceModel.Incident{
+			TraceId:                traceId,
+			Spans:                  spans,
+			IncidentCollectionTime: time.Now(),
+		},
 	}
-	return &scenarioForPersistence
+}
+
+func getListOfIssues(scenario *scenarioGeneratorModel.Scenario, spanMap *map[string]*tracePersistenceModel.Span) []tracePersistenceModel.Issue {
+
+	// 1. create a set of workspaceIds vs spans
+	workloadIdToSpansMap := make(map[string][]tracePersistenceModel.Span, 0)
+	for _, span := range *spanMap {
+		workloadIdList := span.WorkloadIdList
+		for _, workloadId := range workloadIdList {
+			spans, ok := workloadIdToSpansMap[workloadId]
+			if !ok {
+				spans = make([]tracePersistenceModel.Span, 0)
+			}
+			workloadIdToSpansMap[workloadId] = append(spans, *span)
+		}
+	}
+
+	// 2. iterate through the `GroupBy` construct in scenario and evaluate each `groupBy` clause
+	issues := make([]tracePersistenceModel.Issue, 0)
+	for _, group := range scenario.GroupBy {
+		// 2.1 get the list of spans for each workloadId
+		spans, ok := workloadIdToSpansMap[group.WorkloadId]
+		if !ok {
+			continue
+		}
+
+		// 2.2 create title and hash by iterating through the spans
+		issuesForGroup := make([]tracePersistenceModel.Issue, 0)
+		for _, span := range spans {
+			issue := tracePersistenceModel.Issue{
+				IssueId:    getTextFromStructMembers(group.Hash, span),
+				IssueTitle: getTextFromStructMembers(group.Title, span),
+			}
+			issuesForGroup = append(issuesForGroup, issue)
+		}
+
+		// 3. do a cartesian product of all the groups
+		issues = getCartesianProductOfIssues(issues, issuesForGroup)
+	}
+
+	// 4. hash the id
+	for i, issue := range issues {
+		hash := md5.Sum([]byte(scenario.Id + scenario.Version + issue.IssueId))
+		issues[i].IssueId = hex.EncodeToString(hash[:])
+	}
+
+	return issues
+}
+
+func getTextFromStructMembers(path string, span interface{}) string {
+	result, err := jmespath.Search(path, span)
+	if err == nil {
+		str, ok := result.(string)
+		if ok {
+			return str
+		}
+	} else {
+		zkLogger.Error(LoggerTag, "Error evaluating jmespath for span ", span)
+	}
+	return ""
+}
+
+// function to get cartesian product of two string slices
+func getCartesianProductOfIssues(slice1 []tracePersistenceModel.Issue, slice2 []tracePersistenceModel.Issue) []tracePersistenceModel.Issue {
+
+	if len(slice1) == 0 && len(slice2) == 0 {
+		return slice1
+	}
+
+	if len(slice1) != 0 && len(slice2) == 0 {
+		return slice1
+	}
+
+	if len(slice1) == 0 && len(slice2) != 0 {
+		return slice2
+	}
+
+	result := make([]tracePersistenceModel.Issue, 0)
+	for _, s1 := range slice1 {
+		for _, s2 := range slice2 {
+			issue := tracePersistenceModel.Issue{
+				IssueId:    s1.IssueId + "¦" + s2.IssueId,
+				IssueTitle: s1.IssueTitle + "¦" + s2.IssueTitle,
+			}
+			result = append(result, issue)
+		}
+	}
+	return result
 }
 
 func (scenarioManager ScenarioManager) collectFullSpanDataForTraces(traceIds []string) *[]models.HttpRawDataModel {
@@ -277,32 +436,17 @@ func getHttpResponseData(value models.HttpRawDataModel) tracePersistenceModel.HT
 	return res
 }
 
-func createHttpSpan(value models.HttpRawDataModel, traceTree map[string]*stores.TraceFromOTel) (*tracePersistenceModel.Span, error) {
+func populateHttpSpan(fullSpan models.HttpRawDataModel, spanForStorage tracePersistenceModel.Span, protocol string) *tracePersistenceModel.Span {
+	spanForStorage.Source = fullSpan.Source
+	spanForStorage.Destination = fullSpan.Destination
+	spanForStorage.WorkloadIdList = strings.Split(fullSpan.WorkloadIds, ",")
+	spanForStorage.Metadata = map[string]interface{}{}
+	spanForStorage.LatencyMs = getLatencyPtr(fullSpan.Latency)
+	spanForStorage.Protocol = protocol
+	spanForStorage.RequestPayload = getHttpRequestData(fullSpan)
+	spanForStorage.ResponsePayload = getHttpResponseData(fullSpan)
 
-	trace, ok := traceTree[value.TraceId]
-	if !ok {
-		return nil, fmt.Errorf("trace not found in trace tree. traceId = %s", value.TraceId)
-	}
-
-	span, ok := trace.Spans[value.SpanId]
-	if !ok {
-		return nil, fmt.Errorf("span not found in trace tree. traceId = %s, spanId = %s", value.TraceId, value.SpanId)
-	}
-
-	// value.WorkloadIds is a comma separated string. Convert it to a list
-	return &tracePersistenceModel.Span{
-		SpanId:          value.SpanId,
-		ParentSpanId:    span.ParentSpanID,
-		Source:          value.Source,
-		Destination:     value.Destination,
-		WorkloadIdList:  strings.Split(value.WorkloadIds, ","),
-		Metadata:        map[string]interface{}{},
-		LatencyMs:       getLatencyPtr(value.Latency),
-		Protocol:        "http",
-		RequestPayload:  getHttpRequestData(value),
-		ResponsePayload: getHttpResponseData(value),
-		//Time:			 value.Time,
-	}, nil
+	return &spanForStorage
 }
 
 func getLatencyPtr(latencyStr string) *float32 {

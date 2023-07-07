@@ -40,7 +40,7 @@ func (t IncidentTableDto) GetAllColumns() []any {
 	return []any{t.TraceId, t.IssueId}
 }
 
-func ConvertScenarioToTraceDto(s model.IncidentIssuesMapping) ([]IssueTableDto, []IncidentTableDto, []SpanTableDto, []SpanRawDataTableDto, *error) {
+func ConvertScenarioToTraceDto(s model.IncidentWithIssues) ([]IssueTableDto, []IncidentTableDto, []SpanTableDto, []SpanRawDataTableDto, *error) {
 	var issueDtoList []IssueTableDto
 	var scenarioDtoList []IncidentTableDto
 	var spanDtoList []SpanTableDto
@@ -106,7 +106,7 @@ func ConvertScenarioToTraceDto(s model.IncidentIssuesMapping) ([]IssueTableDto, 
 	return issueDtoList, scenarioDtoList, spanDtoList, spanRawDataDtoList, nil
 }
 
-func ValidateIssue(s model.IncidentIssuesMapping) (bool, *zkerrors.ZkError) {
+func ValidateIssue(s model.IncidentWithIssues) (bool, *zkerrors.ZkError) {
 	if s.ScenarioId == "" {
 		logger.Error(LogTag, "scenario_id empty")
 		return false, common.ToPtr(zkerrors.ZkErrorBuilder{}.Build(zkerrors.ZkErrorBadRequest, "invalid data"))

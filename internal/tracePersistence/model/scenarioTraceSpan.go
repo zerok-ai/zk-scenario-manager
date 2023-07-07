@@ -9,7 +9,7 @@ import (
 
 var LogTag = "zk_trace_model"
 
-type IncidentIssuesMapping struct {
+type IncidentWithIssues struct {
 	IssueList       []Issue  `json:"issue_list"`
 	ScenarioId      string   `json:"scenario_id"`
 	ScenarioVersion string   `json:"scenario_version"`
