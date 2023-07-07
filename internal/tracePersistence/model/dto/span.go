@@ -2,6 +2,7 @@ package dto
 
 import (
 	"github.com/lib/pq"
+	"time"
 )
 
 type SpanTableDto struct {
@@ -15,8 +16,9 @@ type SpanTableDto struct {
 	Metadata       string         `json:"metadata"`
 	LatencyMs      float32        `json:"latency_ms"`
 	Protocol       string         `json:"protocol"`
+	Time           time.Time      `json:"time"`
 }
 
 func (t SpanTableDto) GetAllColumns() []any {
-	return []any{t.TraceId, t.SpanId, t.ParentSpanId, t.Source, t.Destination, t.WorkloadIdList, t.Status, t.Metadata, t.LatencyMs, t.Protocol}
+	return []any{t.TraceId, t.SpanId, t.ParentSpanId, t.Source, t.Destination, t.WorkloadIdList, t.Status, t.Metadata, t.LatencyMs, t.Protocol, t.Time}
 }
