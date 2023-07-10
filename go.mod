@@ -3,6 +3,7 @@ module scenario-manager
 go 1.20
 
 require (
+	github.com/jmespath/go-jmespath v0.4.0
 	github.com/kataras/iris/v12 v12.2.0
 	github.com/lib/pq v1.10.9
 	github.com/pkg/errors v0.9.1
@@ -40,7 +41,6 @@ require (
 	github.com/gorilla/css v1.0.0 // indirect
 	github.com/ilyakaznacheev/cleanenv v1.4.2 // indirect
 	github.com/iris-contrib/schema v0.0.6 // indirect
-	github.com/jmespath/go-jmespath v0.4.0 // indirect
 	github.com/joho/godotenv v1.5.1 // indirect
 	github.com/josharian/intern v1.0.0 // indirect
 	github.com/kataras/blocks v0.0.7 // indirect
