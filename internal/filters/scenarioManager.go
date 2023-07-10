@@ -8,7 +8,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/zerok-ai/zk-rawdata-reader/vzReader"
 	"github.com/zerok-ai/zk-rawdata-reader/vzReader/models"
-	_ "github.com/zerok-ai/zk-rawdata-reader/vzReader/pxl"
+
 	"github.com/zerok-ai/zk-utils-go/common"
 	zkLogger "github.com/zerok-ai/zk-utils-go/logs"
 	scenarioGeneratorModel "github.com/zerok-ai/zk-utils-go/scenario/model"
@@ -112,12 +112,23 @@ func (scenarioManager ScenarioManager) processAllScenarios() {
 	}
 
 	// 3. evaluate scenario filters on traceIdSets and attach the full traces against the scenarios
-	incidents := make([]tracePersistenceModel.IncidentWithIssues, 0)
+	traceIncidentsMap := make(map[string]tracePersistenceModel.IncidentWithIssues, 0)
 	for _, scenario := range scenarios {
 		incidentsOfScenario := scenarioManager.processScenario(scenario, namesOfAllSets)
-		if incidentsOfScenario != nil {
-			incidents = append(incidents, *incidentsOfScenario...)
+
+		for traceId, incident := range incidentsOfScenario {
+			oldIncidence, ok := traceIncidentsMap[traceId]
+			if ok {
+				// merge oldIncidence with incident
+				incident.IssueGroupList = append(incident.IssueGroupList, oldIncidence.IssueGroupList...)
+			}
+			traceIncidentsMap[traceId] = incident
 		}
+	}
+	// get the array of incidents from the map
+	incidents := make([]tracePersistenceModel.IncidentWithIssues, 0)
+	for _, incident := range traceIncidentsMap {
+		incidents = append(incidents, incident)
 	}
 
 	// 4. store the scenario in the persistence store along with its traces
@@ -127,7 +138,7 @@ func (scenarioManager ScenarioManager) processAllScenarios() {
 	}
 }
 
-func (scenarioManager ScenarioManager) processScenario(scenario *scenarioGeneratorModel.Scenario, namesOfAllSets []string) *[]tracePersistenceModel.IncidentWithIssues {
+func (scenarioManager ScenarioManager) processScenario(scenario *scenarioGeneratorModel.Scenario, namesOfAllSets []string) map[string]tracePersistenceModel.IncidentWithIssues {
 
 	if scenario == nil {
 		log.Println("Found nil scenario")
@@ -164,7 +175,7 @@ func (scenarioManager ScenarioManager) processScenario(scenario *scenarioGenerat
 		return nil
 	}
 
-	// d. Feed the span co-relation to raw span]\ data and build the scenario model for storage
+	// d. Feed the span co-relation to raw span data and build the scenario model for storage
 	incidents := buildScenarioForPersistence(scenario, traceFromOTelStore, rawSpans)
 
 	return incidents
@@ -234,7 +245,7 @@ func (scenarioManager ScenarioManager) processScenario(scenario *scenarioGenerat
 //	return &incidents
 //}
 
-func buildScenarioForPersistence(scenario *scenarioGeneratorModel.Scenario, tracesFromOTel map[string]*stores.TraceFromOTel, httpRawData *[]models.HttpRawDataModel) *[]tracePersistenceModel.IncidentWithIssues {
+func buildScenarioForPersistence(scenario *scenarioGeneratorModel.Scenario, tracesFromOTel map[string]*stores.TraceFromOTel, httpRawData *[]models.HttpRawDataModel) map[string]tracePersistenceModel.IncidentWithIssues {
 
 	zkLogger.DebugF(LoggerTag, "Building scenario for persistence, scenario: %v for %d number of traces", scenario.Id, len(tracesFromOTel))
 
@@ -275,11 +286,11 @@ func buildScenarioForPersistence(scenario *scenarioGeneratorModel.Scenario, trac
 	zkLogger.DebugF(LoggerTag, "1. Building scenario for persistence, traceIdToSpansArrayMap count: %d", len(traceIdToSpansArrayMap))
 
 	// iterate through the trace data and create IncidentWithIssues for each trace
-	incidentsWithIssues := make([]tracePersistenceModel.IncidentWithIssues, 0)
+	incidentsWithIssues := make(map[string]tracePersistenceModel.IncidentWithIssues, 0)
 	for traceId, spanMap := range traceTreeForPersistence {
-		incidentsWithIssues = append(incidentsWithIssues, evaluateIncidents(scenario, traceId, spanMap))
+		incidentsWithIssues[traceId] = evaluateIncidents(scenario, traceId, spanMap)
 	}
-	return &incidentsWithIssues
+	return incidentsWithIssues
 }
 
 func evaluateIncidents(scenario *scenarioGeneratorModel.Scenario, traceId string, spanMap *map[string]*tracePersistenceModel.Span) tracePersistenceModel.IncidentWithIssues {
@@ -289,10 +300,15 @@ func evaluateIncidents(scenario *scenarioGeneratorModel.Scenario, traceId string
 		spans = append(spans, *span)
 	}
 
+	issueGroupList := make([]tracePersistenceModel.IssueGroup, 0)
+	issueGroupList = append(issueGroupList, tracePersistenceModel.IssueGroup{
+		ScenarioId:      scenario.Id,
+		ScenarioVersion: scenario.Version,
+		Issues:          getListOfIssues(scenario, spanMap),
+	})
+
 	return tracePersistenceModel.IncidentWithIssues{
-		//IssueList:       getListOfIssues(scenario, spanMap),
-		//ScenarioId:      scenario.Id,
-		//ScenarioVersion: scenario.Version,
+		IssueGroupList: issueGroupList,
 		Incident: tracePersistenceModel.Incident{
 			TraceId:                traceId,
 			Spans:                  spans,
