@@ -329,7 +329,7 @@ func getListOfIssues(scenario *scenarioGeneratorModel.Scenario, spanMap *map[str
 		issuesForGroup := make([]tracePersistenceModel.Issue, 0)
 		for _, span := range spans {
 			issue := tracePersistenceModel.Issue{
-				IssueId:    getTextFromStructMembers(group.Hash, span),
+				IssueHash:  getTextFromStructMembers(group.Hash, span),
 				IssueTitle: getTextFromStructMembers(group.Title, span),
 			}
 			issuesForGroup = append(issuesForGroup, issue)
@@ -341,8 +341,8 @@ func getListOfIssues(scenario *scenarioGeneratorModel.Scenario, spanMap *map[str
 
 	// 4. hash the id
 	for i, issue := range issues {
-		hash := md5.Sum([]byte(scenario.Id + scenario.Version + issue.IssueId))
-		issues[i].IssueId = hex.EncodeToString(hash[:])
+		hash := md5.Sum([]byte(scenario.Id + scenario.Version + issue.IssueHash))
+		issues[i].IssueHash = hex.EncodeToString(hash[:])
 	}
 
 	return issues
@@ -380,7 +380,7 @@ func getCartesianProductOfIssues(slice1 []tracePersistenceModel.Issue, slice2 []
 	for _, s1 := range slice1 {
 		for _, s2 := range slice2 {
 			issue := tracePersistenceModel.Issue{
-				IssueId:    s1.IssueId + "¦" + s2.IssueId,
+				IssueHash:  s1.IssueHash + "¦" + s2.IssueHash,
 				IssueTitle: s1.IssueTitle + "¦" + s2.IssueTitle,
 			}
 			result = append(result, issue)

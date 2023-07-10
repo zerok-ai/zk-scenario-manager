@@ -21,7 +21,7 @@ type IssueGroup struct {
 }
 
 type Issue struct {
-	IssueId    string `json:"issue_id"`
+	IssueHash  string `json:"issue_hash"`
 	IssueTitle string `json:"issue_title"`
 }
 
@@ -42,6 +42,7 @@ type Span struct {
 	Protocol        string          `json:"protocol"`
 	RequestPayload  RequestPayload  `json:"request_payload"`
 	ResponsePayload ResponsePayload `json:"response_payload"`
+	IssueHashList   []string        `json:"issue_hash_list"`
 	Time            time.Time       `json:"time"`
 }
 

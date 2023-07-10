@@ -20,24 +20,24 @@ type IssuesDetailDto struct {
 }
 
 type IssueTableDto struct {
-	IssueId         string `json:"issue_id"`
+	IssueHash       string `json:"issue_hash"`
 	IssueTitle      string `json:"issue_title"`
 	ScenarioId      string `json:"scenario_id"`
 	ScenarioVersion string `json:"scenario_version"`
 }
 
 func (t IssueTableDto) GetAllColumns() []any {
-	return []any{t.IssueId, t.IssueTitle, t.ScenarioId, t.ScenarioVersion}
+	return []any{t.IssueHash, t.IssueTitle, t.ScenarioId, t.ScenarioVersion}
 }
 
 type IncidentTableDto struct {
 	TraceId                string    `json:"trace_id"`
-	IssueId                string    `json:"issue_id"`
+	IssueHash              string    `json:"issue_hash"`
 	IncidentCollectionTime time.Time `json:"incident_collection_time"`
 }
 
 func (t IncidentTableDto) GetAllColumns() []any {
-	return []any{t.TraceId, t.IssueId, t.IncidentCollectionTime}
+	return []any{t.TraceId, t.IssueHash, t.IncidentCollectionTime}
 }
 
 func ConvertScenarioToTraceDto(s model.IncidentWithIssues) ([]IssueTableDto, []IncidentTableDto, []SpanTableDto, []SpanRawDataTableDto, *error) {
@@ -49,7 +49,7 @@ func ConvertScenarioToTraceDto(s model.IncidentWithIssues) ([]IssueTableDto, []I
 	for _, issueGroup := range s.IssueGroupList {
 		for _, issue := range issueGroup.Issues {
 			issueDto := IssueTableDto{
-				IssueId:         issue.IssueId,
+				IssueHash:       issue.IssueHash,
 				IssueTitle:      issue.IssueTitle,
 				ScenarioId:      issueGroup.ScenarioId,
 				ScenarioVersion: issueGroup.ScenarioVersion,
@@ -58,7 +58,7 @@ func ConvertScenarioToTraceDto(s model.IncidentWithIssues) ([]IssueTableDto, []I
 
 			scenarioDto := IncidentTableDto{
 				TraceId:                traceId,
-				IssueId:                issue.IssueId,
+				IssueHash:              issue.IssueHash,
 				IncidentCollectionTime: s.Incident.IncidentCollectionTime,
 			}
 			scenarioDtoList = append(scenarioDtoList, scenarioDto)
@@ -94,6 +94,7 @@ func ConvertScenarioToTraceDto(s model.IncidentWithIssues) ([]IssueTableDto, []I
 		spanMetadataDto.LatencyMs = *span.LatencyMs
 		spanMetadataDto.Protocol = span.Protocol
 		spanMetadataDto.ParentSpanId = span.ParentSpanId
+		spanMetadataDto.IssueHashList = span.IssueHashList
 		spanMetadataDto.Time = span.Time
 
 		spanRawDataDto.TraceId = traceId
@@ -130,49 +131,42 @@ func ValidateIssue(s model.IncidentWithIssues) (bool, *zkerrors.ZkError) {
 	for _, span := range s.Incident.Spans {
 		if span.SpanId == "" {
 			logger.Error(LogTag, "span_id empty")
-			//return false, common.ToPtr(zkerrors.ZkErrorBuilder{}.Build(zkerrors.ZkErrorBadRequest, "invalid data"))
-			break
+			return false, common.ToPtr(zkerrors.ZkErrorBuilder{}.Build(zkerrors.ZkErrorBadRequest, "invalid data"))
 		}
 
 		if span.Protocol == "" {
 			logger.Error(LogTag, "protocol empty")
-			//return false, common.ToPtr(zkerrors.ZkErrorBuilder{}.Build(zkerrors.ZkErrorBadRequest, "invalid data"))
-			break
-
+			return false, common.ToPtr(zkerrors.ZkErrorBuilder{}.Build(zkerrors.ZkErrorBadRequest, "invalid data"))
 		}
 
 		if span.Source == "" {
 			logger.Error(LogTag, "source empty")
-			//return false, common.ToPtr(zkerrors.ZkErrorBuilder{}.Build(zkerrors.ZkErrorBadRequest, "invalid data"))
-			break
-
+			return false, common.ToPtr(zkerrors.ZkErrorBuilder{}.Build(zkerrors.ZkErrorBadRequest, "invalid data"))
 		}
 
 		if span.Destination == "" {
 			logger.Error(LogTag, "destination empty")
-			//return false, common.ToPtr(zkerrors.ZkErrorBuilder{}.Build(zkerrors.ZkErrorBadRequest, "invalid data"))
-			break
-
+			return false, common.ToPtr(zkerrors.ZkErrorBuilder{}.Build(zkerrors.ZkErrorBadRequest, "invalid data"))
 		}
 
 		if span.LatencyMs == nil {
 			logger.Error(LogTag, "latency_ms empty")
-			//return false, common.ToPtr(zkerrors.ZkErrorBuilder{}.Build(zkerrors.ZkErrorBadRequest, "invalid data"))
-			break
-
+			return false, common.ToPtr(zkerrors.ZkErrorBuilder{}.Build(zkerrors.ZkErrorBadRequest, "invalid data"))
 		}
 
 		if span.RequestPayload.GetString() == "" {
 			logger.Error(LogTag, "request payload empty")
-			//return false, common.ToPtr(zkerrors.ZkErrorBuilder{}.Build(zkerrors.ZkErrorBadRequest, "invalid data"))
-			break
-
+			return false, common.ToPtr(zkerrors.ZkErrorBuilder{}.Build(zkerrors.ZkErrorBadRequest, "invalid data"))
 		}
 
 		if span.ResponsePayload.GetString() == "" {
 			logger.Error(LogTag, "response payload empty")
-			//return false, common.ToPtr(zkerrors.ZkErrorBuilder{}.Build(zkerrors.ZkErrorBadRequest, "invalid data"))
-			break
+			return false, common.ToPtr(zkerrors.ZkErrorBuilder{}.Build(zkerrors.ZkErrorBadRequest, "invalid data"))
+		}
+
+		if span.IssueHashList == nil || len(span.IssueHashList) == 0 {
+			logger.Error(LogTag, "issue hash list empty")
+			return false, common.ToPtr(zkerrors.ZkErrorBuilder{}.Build(zkerrors.ZkErrorBadRequest, "invalid data"))
 		}
 	}
 

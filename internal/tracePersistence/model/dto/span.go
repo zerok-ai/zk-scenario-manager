@@ -16,9 +16,10 @@ type SpanTableDto struct {
 	Metadata       string         `json:"metadata"`
 	LatencyMs      float32        `json:"latency_ms"`
 	Protocol       string         `json:"protocol"`
+	IssueHashList  pq.StringArray `json:"issue_hash_list"`
 	Time           time.Time      `json:"time"`
 }
 
 func (t SpanTableDto) GetAllColumns() []any {
-	return []any{t.TraceId, t.SpanId, t.ParentSpanId, t.Source, t.Destination, t.WorkloadIdList, t.Status, t.Metadata, t.LatencyMs, t.Protocol, t.Time}
+	return []any{t.TraceId, t.SpanId, t.ParentSpanId, t.Source, t.Destination, t.WorkloadIdList, t.Status, t.Metadata, t.LatencyMs, t.Protocol, t.IssueHashList, t.Time}
 }
