@@ -290,9 +290,9 @@ func evaluateIncidents(scenario *scenarioGeneratorModel.Scenario, traceId string
 	}
 
 	return tracePersistenceModel.IncidentWithIssues{
-		IssueList:       getListOfIssues(scenario, spanMap),
-		ScenarioId:      scenario.Id,
-		ScenarioVersion: scenario.Version,
+		//IssueList:       getListOfIssues(scenario, spanMap),
+		//ScenarioId:      scenario.Id,
+		//ScenarioVersion: scenario.Version,
 		Incident: tracePersistenceModel.Incident{
 			TraceId:                traceId,
 			Spans:                  spans,

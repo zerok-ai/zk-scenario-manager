@@ -46,21 +46,23 @@ func ConvertScenarioToTraceDto(s model.IncidentWithIssues) ([]IssueTableDto, []I
 	var spanDtoList []SpanTableDto
 	var spanRawDataDtoList []SpanRawDataTableDto
 	traceId := s.Incident.TraceId
-	for _, issue := range s.IssueList {
-		issueDto := IssueTableDto{
-			IssueId:         issue.IssueId,
-			IssueTitle:      issue.IssueTitle,
-			ScenarioId:      s.ScenarioId,
-			ScenarioVersion: s.ScenarioVersion,
-		}
-		issueDtoList = append(issueDtoList, issueDto)
+	for _, issueGroup := range s.IssueGroupList {
+		for _, issue := range issueGroup.Issues {
+			issueDto := IssueTableDto{
+				IssueId:         issue.IssueId,
+				IssueTitle:      issue.IssueTitle,
+				ScenarioId:      issueGroup.ScenarioId,
+				ScenarioVersion: issueGroup.ScenarioVersion,
+			}
+			issueDtoList = append(issueDtoList, issueDto)
 
-		scenarioDto := IncidentTableDto{
-			TraceId:                traceId,
-			IssueId:                issue.IssueId,
-			IncidentCollectionTime: s.Incident.IncidentCollectionTime,
+			scenarioDto := IncidentTableDto{
+				TraceId:                traceId,
+				IssueId:                issue.IssueId,
+				IncidentCollectionTime: s.Incident.IncidentCollectionTime,
+			}
+			scenarioDtoList = append(scenarioDtoList, scenarioDto)
 		}
-		scenarioDtoList = append(scenarioDtoList, scenarioDto)
 	}
 
 	for _, span := range s.Incident.Spans {
@@ -108,14 +110,16 @@ func ConvertScenarioToTraceDto(s model.IncidentWithIssues) ([]IssueTableDto, []I
 }
 
 func ValidateIssue(s model.IncidentWithIssues) (bool, *zkerrors.ZkError) {
-	if s.ScenarioId == "" {
-		logger.Error(LogTag, "scenario_id empty")
-		return false, common.ToPtr(zkerrors.ZkErrorBuilder{}.Build(zkerrors.ZkErrorBadRequest, "invalid data"))
-	}
+	for _, issueGroup := range s.IssueGroupList {
+		if issueGroup.ScenarioId == "" {
+			logger.Error(LogTag, "scenario_id empty")
+			return false, common.ToPtr(zkerrors.ZkErrorBuilder{}.Build(zkerrors.ZkErrorBadRequest, "invalid data"))
+		}
 
-	if s.ScenarioVersion == "" {
-		logger.Error(LogTag, "scenario_version empty")
-		return false, common.ToPtr(zkerrors.ZkErrorBuilder{}.Build(zkerrors.ZkErrorBadRequest, "invalid data"))
+		if issueGroup.ScenarioVersion == "" {
+			logger.Error(LogTag, "scenario_version empty")
+			return false, common.ToPtr(zkerrors.ZkErrorBuilder{}.Build(zkerrors.ZkErrorBadRequest, "invalid data"))
+		}
 	}
 
 	if s.Incident.TraceId == "" {
