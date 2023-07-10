@@ -181,70 +181,6 @@ func (scenarioManager ScenarioManager) processScenario(scenario *scenarioGenerat
 	return incidents
 }
 
-//func buildScenarioForPersistence(scenario *scenarioGeneratorModel.Scenario, tracesFromOTel map[string]*stores.TraceFromOTel, httpRawData *[]models.HttpRawDataModel) *[]tracePersistenceModel.IncidentWithIssues {
-//
-//	zkLogger.DebugF(LoggerTag, "Building scenario for persistence, scenario: %v for %d number of traces", scenario.Id, len(tracesFromOTel))
-//
-//	// process all the spans in httpRawData and build the traceIdToSpansArrayMap
-//	traceTreeForPersistence := make(map[string]map[string]*tracePersistenceModel.Span, 0)
-//	for _, value := range *httpRawData {
-//
-//		span, err := populateHttpSpan(value, tracesFromOTel)
-//		// if complete span data can't be generated using data from OTelStore, don't save the complete trace
-//		if err != nil {
-//			continue
-//		}
-//
-//		spanMapOfPersistentSpans, ok := traceTreeForPersistence[value.TraceId]
-//		if !ok {
-//			spanMapOfPersistentSpans = make(map[string]*tracePersistenceModel.Span, 0)
-//			traceTreeForPersistence[value.TraceId] = spanMapOfPersistentSpans
-//		}
-//
-//		spanMapOfPersistentSpans[span.SpanId] = span
-//	}
-//
-//	traceIdToSpansArrayMap := make(map[string][]tracePersistenceModel.Span, 0)
-//
-//	// process the remaining members of tracesFromOTel and build the traceIdToSpansArrayMap
-//	for traceId, traceFromOTel := range tracesFromOTel {
-//
-//		spanMapOfPersistentSpans, ok := traceTreeForPersistence[traceId]
-//		if !ok {
-//			spanMapOfPersistentSpans = make(map[string]*tracePersistenceModel.Span, 0)
-//			traceTreeForPersistence[traceId] = spanMapOfPersistentSpans
-//		}
-//
-//		spanArrOfPersistentSpans, ok := traceIdToSpansArrayMap[traceId]
-//		if !ok {
-//			spanArrOfPersistentSpans = make([]tracePersistenceModel.Span, 0)
-//		}
-//
-//		for _, spanFromOTel := range traceFromOTel.Spans {
-//			spanForPersistence, ok := spanMapOfPersistentSpans[spanFromOTel.SpanID]
-//			if !ok {
-//				spanForPersistence = &tracePersistenceModel.Span{
-//					SpanId:       spanFromOTel.SpanID,
-//					ParentSpanId: spanFromOTel.ParentSpanID,
-//					Protocol:     "unknown",
-//				}
-//				spanMapOfPersistentSpans[spanFromOTel.SpanID] = spanForPersistence
-//			}
-//			spanArrOfPersistentSpans = append(spanArrOfPersistentSpans, *spanForPersistence)
-//		}
-//		traceIdToSpansArrayMap[traceId] = spanArrOfPersistentSpans
-//	}
-//
-//	zkLogger.DebugF(LoggerTag, "1. Building scenario for persistence, traceIdToSpansArrayMap count: %d", len(traceIdToSpansArrayMap))
-//
-//	scenarioForPersistence := tracePersistenceModel.Scenario{
-//		ScenarioId:      scenario.Id,
-//		ScenarioVersion: scenario.Version,
-//		TraceToSpansMap: traceIdToSpansArrayMap,
-//	}
-//	return &incidents
-//}
-
 func buildScenarioForPersistence(scenario *scenarioGeneratorModel.Scenario, tracesFromOTel map[string]*stores.TraceFromOTel, httpRawData *[]models.HttpRawDataModel) map[string]tracePersistenceModel.IncidentWithIssues {
 
 	zkLogger.DebugF(LoggerTag, "Building scenario for persistence, scenario: %v for %d number of traces", scenario.Id, len(tracesFromOTel))
@@ -335,6 +271,7 @@ func getListOfIssues(scenario *scenarioGeneratorModel.Scenario, spanMap *map[str
 	// 2. iterate through the `GroupBy` construct in scenario and evaluate each `groupBy` clause
 	issues := make([]tracePersistenceModel.Issue, 0)
 	for _, group := range scenario.GroupBy {
+
 		// 2.1 get the list of spans for each workloadId
 		spans, ok := workloadIdToSpansMap[group.WorkloadId]
 		if !ok {
@@ -344,21 +281,27 @@ func getListOfIssues(scenario *scenarioGeneratorModel.Scenario, spanMap *map[str
 		// 2.2 create title and hash by iterating through the spans
 		issuesForGroup := make([]tracePersistenceModel.Issue, 0)
 		for _, span := range spans {
-			issue := tracePersistenceModel.Issue{
-				IssueHash:  getTextFromStructMembers(group.Hash, span),
-				IssueTitle: getTextFromStructMembers(group.Title, span),
+
+			// get hash
+			hashBytes := md5.Sum([]byte(scenario.Id + scenario.Version + getTextFromStructMembers(group.Hash, span)))
+			hash := hex.EncodeToString(hashBytes[:])
+
+			// get title
+			title := getTextFromStructMembers(group.Title, span)
+			
+			issuesForGroup = append(issuesForGroup, tracePersistenceModel.Issue{
+				IssueHash:  hash,
+				IssueTitle: title,
+			})
+
+			if span.IssueHashList == nil {
+				span.IssueHashList = make([]string, 0)
 			}
-			issuesForGroup = append(issuesForGroup, issue)
+			span.IssueHashList = append(span.IssueHashList, hash)
 		}
 
 		// 3. do a cartesian product of all the groups
 		issues = getCartesianProductOfIssues(issues, issuesForGroup)
-	}
-
-	// 4. hash the id
-	for i, issue := range issues {
-		hash := md5.Sum([]byte(scenario.Id + scenario.Version + issue.IssueHash))
-		issues[i].IssueHash = hex.EncodeToString(hash[:])
 	}
 
 	return issues
