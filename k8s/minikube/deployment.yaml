@@ -37,6 +37,12 @@ spec:
               path: /healthz
               port: 80
             successThreshold: 3
+          env: # Setting Enviornmental Variables
+            - name: PL_POSTGRES_PASSWORD # Setting Database password from Secret
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-postgresql
+                  key: postgres-password
 
 ---
 apiVersion: v1
