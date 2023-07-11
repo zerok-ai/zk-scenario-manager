@@ -14,7 +14,7 @@ type SuprSendConfig struct {
 
 type ServerConfig struct {
 	Host string `yaml:"host" env:"SRV_HOST,HOST" env-description:"Server host" env-default:"localhost"`
-	Port string `yaml:"port" env:"SRV_PORT,PORT" env-description:"Server port" env-default:"8080"`
+	Port string `yaml:"port" env:"SRV_PORT,PORT" env-description:"Server port" env-default:"80"`
 }
 
 type AuthConfig struct {

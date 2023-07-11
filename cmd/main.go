@@ -1,16 +1,15 @@
 package main
 
 import (
-	"scenario-manager/internal/config"
-	"scenario-manager/internal/filters"
-	"scenario-manager/internal/tracePersistence/repository"
-	"scenario-manager/internal/tracePersistence/service"
-
 	"github.com/kataras/iris/v12"
 	zkConfig "github.com/zerok-ai/zk-utils-go/config"
 	zkHttpConfig "github.com/zerok-ai/zk-utils-go/http/config"
 	zkLogger "github.com/zerok-ai/zk-utils-go/logs"
 	zkPostgres "github.com/zerok-ai/zk-utils-go/storage/sqlDB/postgres"
+	"scenario-manager/internal/config"
+	"scenario-manager/internal/filters"
+	"scenario-manager/internal/tracePersistence/repository"
+	"scenario-manager/internal/tracePersistence/service"
 )
 
 var LogTag = "main"
@@ -82,6 +81,7 @@ func newApp() *iris.Application {
 	app.AllowMethods(iris.MethodOptions)
 
 	app.Get("/healthz", func(ctx iris.Context) {
+		ctx.StatusCode(iris.StatusOK)
 		ctx.WriteString("pong")
 	}).Describe("healthcheck")
 

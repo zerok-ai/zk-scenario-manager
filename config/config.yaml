@@ -17,3 +17,6 @@ logs:
   level: DEBUG
 scenarioConfig:
   redisRuleSetCount: 12
+server:
+  host: localhost
+  port: 80

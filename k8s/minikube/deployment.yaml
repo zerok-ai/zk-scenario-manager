@@ -22,6 +22,8 @@ spec:
         - name: zk-scenario-manager
           image: zk-scenario-manager:1.0
           imagePullPolicy: Never
+          ports:
+            - containerPort: 80
           resources:
             limits:
               cpu: 200m
@@ -37,6 +39,7 @@ spec:
               path: /healthz
               port: 80
             successThreshold: 3
+            initialDelaySeconds: 10
           env: # Setting Enviornmental Variables
             - name: PL_POSTGRES_PASSWORD # Setting Database password from Secret
               valueFrom:
@@ -62,6 +65,9 @@ data:
       user: "postgres"
       password: "eo1Mgtm6HI"
       dbname: "pl"
+    server:
+      host: 0.0.0.0
+      port: 80
     scenarioConfig:
       redisRuleSetCount: 12
 kind: ConfigMap
