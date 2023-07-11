@@ -14,7 +14,7 @@ type SpanTableDto struct {
 	WorkloadIdList pq.StringArray `json:"workload_id_list"`
 	Status         string         `json:"status"`
 	Metadata       string         `json:"metadata"`
-	LatencyMs      float32        `json:"latency_ms"`
+	LatencyMs      *float32       `json:"latency_ms"`
 	Protocol       string         `json:"protocol"`
 	IssueHashList  pq.StringArray `json:"issue_hash_list"`
 	Time           time.Time      `json:"time"`

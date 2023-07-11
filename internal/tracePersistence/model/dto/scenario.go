@@ -69,16 +69,22 @@ func ConvertScenarioToTraceDto(s model.IncidentWithIssues) ([]IssueTableDto, []I
 		var spanMetadataDto SpanTableDto
 		var spanRawDataDto SpanRawDataTableDto
 
-		requestCompressedStr, err := zkCrypto.CompressStringGzip(span.RequestPayload.GetString())
-		if err != nil {
-			return nil, nil, nil, nil, &err
+		var requestCompressedStr, responseCompressedStr []byte
+		var err error
+		if span.RequestPayload != nil {
+			requestCompressedStr, err = zkCrypto.CompressStringGzip(span.RequestPayload.GetString())
+			if err != nil {
+				return nil, nil, nil, nil, &err
+			}
 		}
 
-		responseCompressedStr, err := zkCrypto.CompressStringGzip(span.ResponsePayload.GetString())
-		if err != nil {
-			return nil, nil, nil, nil, &err
+		if span.ResponsePayload != nil {
+			responseCompressedStr, err = zkCrypto.CompressStringGzip(span.ResponsePayload.GetString())
+			if err != nil {
+				return nil, nil, nil, nil, &err
+			}
+			spanMetadataDto.Status = span.ResponsePayload.GetStatus()
 		}
-
 		m, err := json.Marshal(span.Metadata)
 		if err != nil {
 			return nil, nil, nil, nil, &err
@@ -89,9 +95,9 @@ func ConvertScenarioToTraceDto(s model.IncidentWithIssues) ([]IssueTableDto, []I
 		spanMetadataDto.Source = span.Source
 		spanMetadataDto.Destination = span.Destination
 		spanMetadataDto.WorkloadIdList = span.WorkloadIdList
-		spanMetadataDto.Status = span.ResponsePayload.GetStatus()
+
 		spanMetadataDto.Metadata = string(m)
-		spanMetadataDto.LatencyMs = *span.LatencyMs
+		spanMetadataDto.LatencyMs = span.LatencyMs
 		spanMetadataDto.Protocol = span.Protocol
 		spanMetadataDto.ParentSpanId = span.ParentSpanId
 		spanMetadataDto.IssueHashList = span.IssueHashList
@@ -128,47 +134,47 @@ func ValidateIssue(s model.IncidentWithIssues) (bool, *zkerrors.ZkError) {
 		return false, common.ToPtr(zkerrors.ZkErrorBuilder{}.Build(zkerrors.ZkErrorBadRequest, "invalid data"))
 	}
 
-	for _, span := range s.Incident.Spans {
-		if span.SpanId == "" {
-			logger.Error(LogTag, "span_id empty")
-			return false, common.ToPtr(zkerrors.ZkErrorBuilder{}.Build(zkerrors.ZkErrorBadRequest, "invalid data"))
-		}
-
-		if span.Protocol == "" {
-			logger.Error(LogTag, "protocol empty")
-			return false, common.ToPtr(zkerrors.ZkErrorBuilder{}.Build(zkerrors.ZkErrorBadRequest, "invalid data"))
-		}
-
-		if span.Source == "" {
-			logger.Error(LogTag, "source empty")
-			return false, common.ToPtr(zkerrors.ZkErrorBuilder{}.Build(zkerrors.ZkErrorBadRequest, "invalid data"))
-		}
-
-		if span.Destination == "" {
-			logger.Error(LogTag, "destination empty")
-			return false, common.ToPtr(zkerrors.ZkErrorBuilder{}.Build(zkerrors.ZkErrorBadRequest, "invalid data"))
-		}
-
-		if span.LatencyMs == nil {
-			logger.Error(LogTag, "latency_ms empty")
-			return false, common.ToPtr(zkerrors.ZkErrorBuilder{}.Build(zkerrors.ZkErrorBadRequest, "invalid data"))
-		}
-
-		if span.RequestPayload.GetString() == "" {
-			logger.Error(LogTag, "request payload empty")
-			return false, common.ToPtr(zkerrors.ZkErrorBuilder{}.Build(zkerrors.ZkErrorBadRequest, "invalid data"))
-		}
-
-		if span.ResponsePayload.GetString() == "" {
-			logger.Error(LogTag, "response payload empty")
-			return false, common.ToPtr(zkerrors.ZkErrorBuilder{}.Build(zkerrors.ZkErrorBadRequest, "invalid data"))
-		}
-
-		if span.IssueHashList == nil || len(span.IssueHashList) == 0 {
-			logger.Error(LogTag, "issue hash list empty")
-			return false, common.ToPtr(zkerrors.ZkErrorBuilder{}.Build(zkerrors.ZkErrorBadRequest, "invalid data"))
-		}
-	}
+	//for _, span := range s.Incident.Spans {
+	//	if span.SpanId == "" {
+	//		logger.Error(LogTag, "span_id empty")
+	//		return false, common.ToPtr(zkerrors.ZkErrorBuilder{}.Build(zkerrors.ZkErrorBadRequest, "invalid data"))
+	//	}
+	//
+	//	if span.Protocol == "" {
+	//		logger.Error(LogTag, "protocol empty")
+	//		return false, common.ToPtr(zkerrors.ZkErrorBuilder{}.Build(zkerrors.ZkErrorBadRequest, "invalid data"))
+	//	}
+	//
+	//	if span.Source == "" {
+	//		logger.Error(LogTag, "source empty")
+	//		return false, common.ToPtr(zkerrors.ZkErrorBuilder{}.Build(zkerrors.ZkErrorBadRequest, "invalid data"))
+	//	}
+	//
+	//	if span.Destination == "" {
+	//		logger.Error(LogTag, "destination empty")
+	//		return false, common.ToPtr(zkerrors.ZkErrorBuilder{}.Build(zkerrors.ZkErrorBadRequest, "invalid data"))
+	//	}
+	//
+	//	if span.LatencyMs == nil {
+	//		logger.Error(LogTag, "latency_ms empty")
+	//		return false, common.ToPtr(zkerrors.ZkErrorBuilder{}.Build(zkerrors.ZkErrorBadRequest, "invalid data"))
+	//	}
+	//
+	//	if span.RequestPayload.GetString() == "" {
+	//		logger.Error(LogTag, "request payload empty")
+	//		return false, common.ToPtr(zkerrors.ZkErrorBuilder{}.Build(zkerrors.ZkErrorBadRequest, "invalid data"))
+	//	}
+	//
+	//	if span.ResponsePayload.GetString() == "" {
+	//		logger.Error(LogTag, "response payload empty")
+	//		return false, common.ToPtr(zkerrors.ZkErrorBuilder{}.Build(zkerrors.ZkErrorBadRequest, "invalid data"))
+	//	}
+	//
+	//	if span.IssueHashList == nil || len(span.IssueHashList) == 0 {
+	//		logger.Error(LogTag, "issue hash list empty")
+	//		return false, common.ToPtr(zkerrors.ZkErrorBuilder{}.Build(zkerrors.ZkErrorBadRequest, "invalid data"))
+	//	}
+	//}
 
 	return true, nil
 }

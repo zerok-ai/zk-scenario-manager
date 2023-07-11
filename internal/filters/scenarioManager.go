@@ -25,6 +25,7 @@ import (
 
 const (
 	ScenarioSetPrefix = "scenario:"
+	TitleDelimiter    = "¦"
 )
 
 type ScenarioManager struct {
@@ -131,6 +132,11 @@ func (scenarioManager ScenarioManager) processAllScenarios() {
 		incidents = append(incidents, incident)
 	}
 
+	if len(incidents) == 0 {
+		zkLogger.Debug(LoggerTag, "No incidents to save")
+		return
+	}
+
 	// 4. store the scenario in the persistence store along with its traces
 	saveError := scenarioManager.tracePersistenceService.SaveIncidents(incidents)
 	if saveError != nil {
@@ -217,15 +223,12 @@ func buildScenarioForPersistence(scenario *scenarioGeneratorModel.Scenario, trac
 		(*trace)[fullSpan.SpanId] = populateHttpSpan(fullSpan, *spanForPersistence, "http")
 	}
 
-	traceIdToSpansArrayMap := make(map[string][]tracePersistenceModel.Span, 0)
-
-	zkLogger.DebugF(LoggerTag, "1. Building scenario for persistence, traceIdToSpansArrayMap count: %d", len(traceIdToSpansArrayMap))
-
 	// iterate through the trace data and create IncidentWithIssues for each trace
 	incidentsWithIssues := make(map[string]tracePersistenceModel.IncidentWithIssues, 0)
 	for traceId, spanMap := range traceTreeForPersistence {
 		incidentsWithIssues[traceId] = evaluateIncidents(scenario, traceId, spanMap)
 	}
+	zkLogger.DebugF(LoggerTag, "Building incidentsWithIssues for persistence, count: %d", len(incidentsWithIssues))
 	return incidentsWithIssues
 }
 
@@ -283,12 +286,13 @@ func getListOfIssues(scenario *scenarioGeneratorModel.Scenario, spanMap *map[str
 		for _, span := range spans {
 
 			// get hash
-			hashBytes := md5.Sum([]byte(scenario.Id + scenario.Version + getTextFromStructMembers(group.Hash, span)))
-			hash := hex.EncodeToString(hashBytes[:])
+			//hashBytes := md5.Sum([]byte(scenario.Id + scenario.Version + getTextFromStructMembers(group.Hash, span)))
+			//hash := hex.EncodeToString(hashBytes[:])
+			hash := scenario.Id + scenario.Version + TitleDelimiter + getTextFromStructMembers(group.Hash, span)
 
 			// get title
-			title := getTextFromStructMembers(group.Title, span)
-			
+			title := scenario.Title + TitleDelimiter + getTextFromStructMembers(group.Title, span)
+
 			issuesForGroup = append(issuesForGroup, tracePersistenceModel.Issue{
 				IssueHash:  hash,
 				IssueTitle: title,
@@ -302,6 +306,12 @@ func getListOfIssues(scenario *scenarioGeneratorModel.Scenario, spanMap *map[str
 
 		// 3. do a cartesian product of all the groups
 		issues = getCartesianProductOfIssues(issues, issuesForGroup)
+	}
+
+	// 4. hash the id
+	for i, issue := range issues {
+		hash := md5.Sum([]byte(scenario.Id + scenario.Version + issue.IssueHash))
+		issues[i].IssueHash = hex.EncodeToString(hash[:])
 	}
 
 	return issues
@@ -339,8 +349,8 @@ func getCartesianProductOfIssues(slice1 []tracePersistenceModel.Issue, slice2 []
 	for _, s1 := range slice1 {
 		for _, s2 := range slice2 {
 			issue := tracePersistenceModel.Issue{
-				IssueHash:  s1.IssueHash + "¦" + s2.IssueHash,
-				IssueTitle: s1.IssueTitle + "¦" + s2.IssueTitle,
+				IssueHash:  s1.IssueHash + TitleDelimiter + s2.IssueHash,
+				IssueTitle: s1.IssueTitle + TitleDelimiter + s2.IssueTitle,
 			}
 			result = append(result, issue)
 		}

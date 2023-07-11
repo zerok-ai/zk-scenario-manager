@@ -73,7 +73,12 @@ func (t OTelStore) GetSpansForTracesFromDB(keys []string) (map[string]*TraceFrom
 		trace, err := hashResult.Result()
 
 		if err != nil {
-			fmt.Println("Error retrieving trace:", err)
+			zkLogger.Error(LoggerTag, "Error retrieving trace:", err)
+			continue
+		}
+
+		if len(trace) == 0 {
+			zkLogger.Debug(LoggerTag, "No trace found for traceId:", traceId)
 			continue
 		}
 
@@ -110,7 +115,7 @@ func (t OTelStore) GetSpansForTracesFromDB(keys []string) (map[string]*TraceFrom
 		// 4.3 prune the unwanted Spans
 		prune(traceFromOTel.Spans, *rootSpan)
 
-		zkLogger.DebugF(LoggerTag, "rootSpan: %s", rootSpan)
+		zkLogger.DebugF(LoggerTag, "rootSpan: %s", *rootSpan)
 		result[traceId] = traceFromOTel
 	}
 	return result, nil

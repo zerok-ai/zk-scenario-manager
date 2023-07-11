@@ -27,11 +27,11 @@ type tracePersistenceService struct {
 	repo repository.TracePersistenceRepo
 }
 
-func (s tracePersistenceService) SaveIncidents(issuesDetail []model.IncidentWithIssues) *zkErrors.ZkError {
+func (s tracePersistenceService) SaveIncidents(issuesDetails []model.IncidentWithIssues) *zkErrors.ZkError {
 
 	issuesDetailsDtoList := make([]dto.IssuesDetailDto, 0)
 
-	for _, issuesDetail := range issuesDetail {
+	for _, issuesDetail := range issuesDetails {
 		issueDtoList := make([]dto.IssueTableDto, 0)
 		traceDtoList := make([]dto.IncidentTableDto, 0)
 		spanDtoList := make([]dto.SpanTableDto, 0)
