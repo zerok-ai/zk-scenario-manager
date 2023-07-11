@@ -147,3 +147,10 @@ func (t TraceStore) SetExists(key string) bool {
 	}
 	return exists == 1
 }
+
+func (t TraceStore) DeleteSet(keys []string) {
+	if len(keys) == 0 {
+		return
+	}
+	t.redisClient.Del(ctx, keys...)
+}

@@ -29,6 +29,7 @@ const (
 )
 
 type ScenarioManager struct {
+	cfg           config.AppConfigs
 	scenarioStore *store.VersionedStore[scenarioGeneratorModel.Scenario]
 
 	traceStore *stores.TraceStore
@@ -72,6 +73,7 @@ func NewScenarioManager(cfg config.AppConfigs, tps tracePersistence.TracePersist
 		oTelStore:               stores.GetOTelStore(cfg.Redis),
 		traceRawDataCollector:   reader,
 		tracePersistenceService: tps,
+		cfg:                     cfg,
 	}
 	return &fp, nil
 }
@@ -156,11 +158,13 @@ func (scenarioManager ScenarioManager) processScenario(scenario *scenarioGenerat
 	if traceEvaluator == nil {
 		return nil
 	}
-	traceIds, err := traceEvaluator.EvalScenario(ScenarioSetPrefix)
+	traceIds, err := traceEvaluator.EvalScenario()
 	if err != nil {
 		zkLogger.Error(LoggerTag, "Error evaluating scenario", err)
 		return nil
 	}
+	// delete the sets from traceStore except for the latest one
+	traceEvaluator.DeleteOldSets(namesOfAllSets, scenarioManager.cfg.ScenarioConfig.RedisRuleSetCount)
 
 	// b. collect trace and span raw data for the qualified traceIDs
 	rawSpans := scenarioManager.collectFullSpanDataForTraces(traceIds)
