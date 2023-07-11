@@ -9,8 +9,6 @@ import (
 	"time"
 )
 
-const LoggerTagOTelStore = "oTelStore"
-
 type OTelStore struct {
 	redisClient *redis.Client
 }
@@ -25,7 +23,7 @@ func (t OTelStore) Close() {
 
 func GetOTelStore(redisConfig *config.RedisConfig) *OTelStore {
 	dbName := "otel"
-	zkLogger.Debug(LoggerTagOTelStore, "GetOTelStore: config=", redisConfig, "dbName=", dbName, "dbID=", redisConfig.DBs[dbName])
+	zkLogger.Debug(LoggerTag, "GetOTelStore: config=", redisConfig, "dbName=", dbName, "dbID=", redisConfig.DBs[dbName])
 	readTimeout := time.Duration(redisConfig.ReadTimeout) * time.Second
 	_redisClient := redis.NewClient(&redis.Options{
 		Addr:        fmt.Sprint(redisConfig.Host, ":", redisConfig.Port),
@@ -75,7 +73,12 @@ func (t OTelStore) GetSpansForTracesFromDB(keys []string) (map[string]*TraceFrom
 		trace, err := hashResult.Result()
 
 		if err != nil {
-			fmt.Println("Error retrieving trace:", err)
+			zkLogger.Error(LoggerTag, "Error retrieving trace:", err)
+			continue
+		}
+
+		if len(trace) == 0 {
+			zkLogger.Debug(LoggerTag, "No trace found for traceId:", traceId)
 			continue
 		}
 
@@ -86,7 +89,7 @@ func (t OTelStore) GetSpansForTracesFromDB(keys []string) (map[string]*TraceFrom
 			var sp SpanFromOTel
 			err = json.Unmarshal([]byte(spanData), &sp)
 			if err != nil {
-				zkLogger.ErrorF(LoggerTagOTelStore, "Error retrieving span:", err)
+				zkLogger.ErrorF(LoggerTag, "Error retrieving span:", err)
 				continue
 			}
 			sp.SpanID = spanId
@@ -105,14 +108,14 @@ func (t OTelStore) GetSpansForTracesFromDB(keys []string) (map[string]*TraceFrom
 		}
 
 		if rootSpan == nil {
-			zkLogger.Debug(LoggerTagOTelStore, "rootSpan not found")
+			zkLogger.Debug(LoggerTag, "rootSpan not found")
 			continue
 		}
 
 		// 4.3 prune the unwanted Spans
 		prune(traceFromOTel.Spans, *rootSpan)
 
-		zkLogger.DebugF(LoggerTagOTelStore, "rootSpan: %s", rootSpan)
+		zkLogger.DebugF(LoggerTag, "rootSpan: %s", *rootSpan)
 		result[traceId] = traceFromOTel
 	}
 	return result, nil

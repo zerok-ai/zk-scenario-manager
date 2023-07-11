@@ -10,34 +10,42 @@ import (
 )
 
 const (
-	ScenarioTraceTablePostgres = "scenario_trace"
-	SpanTablePostgres          = "span"
-	SpanRawDataTablePostgres   = "span_raw_data"
+	IssueTablePostgres       = "issue"
+	IncidentTablePostgres    = "incident"
+	SpanTablePostgres        = "span"
+	SpanRawDataTablePostgres = "span_raw_data"
 
-	ScenarioId      = "scenario_id"
-	ScenarioVersion = "scenario_version"
-	TraceId         = "trace_id"
+	ScenarioId             = "scenario_id"
+	ScenarioVersion        = "scenario_version"
+	TraceId                = "trace_id"
+	IssueHash              = "issue_hash"
+	IssueTitle             = "issue_title"
+	IncidentCollectionTime = "incident_collection_time"
 
 	SpanId          = "span_id"
 	ParentSpanId    = "parent_span_id"
 	Source          = "source"
 	Destination     = "destination"
 	WorkloadIdList  = "workload_id_list"
+	Status          = "status"
 	Metadata        = "metadata"
 	LatencyMs       = "latency_ms"
 	Protocol        = "protocol"
+	IssueHashList   = "issue_hash_list"
+	Time            = "time"
 	RequestPayload  = "request_payload"
 	ResponsePayload = "response_payload"
 
-	UpsertTraceQuery       = "INSERT INTO scenario_trace (scenario_id, scenario_version, trace_id, scenario_title, scenario_type) VALUES ($1, $2, $3, $4, $5) ON CONFLICT (scenario_id) DO NOTHING"
-	UpsertSpanQuery        = "INSERT INTO span (trace_id, span_id, parent_span_id, source, destination, workload_id_list, metadata, latency_ms, protocol) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) ON CONFLICT (trace_id, span_id) DO NOTHING"
+	UpsertIssueQuery       = "INSERT INTO issue (issue_hash, issue_title, scenario_id, scenario_version) VALUES ($1, $2, $3, $4) ON CONFLICT (issue_hash) DO NOTHING"
+	UpsertIncidentQuery    = "INSERT INTO incident (trace_id, issue_hash, incident_collection_time) VALUES ($1, $2, $3) ON CONFLICT (issue_hash, trace_id) DO NOTHING"
+	UpsertSpanQuery        = "INSERT INTO span (trace_id, span_id, parent_span_id, source, destination, workload_id_list, status, metadata, latency_ms, protocol, issue_hash_list, time) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) ON CONFLICT (trace_id, span_id) DO NOTHING"
 	UpsertSpanRawDataQuery = "INSERT INTO span_raw_data (trace_id, span_id, request_payload, response_payload) VALUES ($1, $2, $3, $4) ON CONFLICT (trace_id, span_id) DO NOTHING"
 )
 
 var LogTag = "zk_trace_persistence_repo"
 
 type TracePersistenceRepo interface {
-	SaveTraceList([]dto.ScenarioTableDto, []dto.SpanTableDto, []dto.SpanRawDataTableDto) error
+	SaveTraceList([]dto.IssuesDetailDto) error
 	Close() error
 }
 
@@ -53,20 +61,49 @@ func (z tracePersistenceRepo) Close() error {
 	return z.dbRepo.Close()
 }
 
-func (z tracePersistenceRepo) SaveTraceList(t []dto.ScenarioTableDto, tmd []dto.SpanTableDto, trd []dto.SpanRawDataTableDto) error {
+func (z tracePersistenceRepo) SaveTraceList(issuesDetailList []dto.IssuesDetailDto) error {
+	issueTableData := make([]interfaces.DbArgs, 0)
 	traceTableData := make([]interfaces.DbArgs, 0)
 	traceTableMetadata := make([]interfaces.DbArgs, 0)
 	traceTableRawData := make([]interfaces.DbArgs, 0)
-	for i := range t {
-		traceTableData = append(traceTableData, t[i])
-	}
 
-	for i := range tmd {
-		traceTableMetadata = append(traceTableMetadata, tmd[i])
-	}
+	uniqueIssues := make(map[string]bool)
+	uniqueTraces := make(map[string]bool)
+	uniqueSpans := make(map[string]bool)
+	uniqueRawSpans := make(map[string]bool)
 
-	for i := range trd {
-		traceTableRawData = append(traceTableRawData, trd[i])
+	for _, issue := range issuesDetailList {
+
+		for _, v := range issue.IssueTableDtoList {
+			if _, ok := uniqueIssues[v.IssueHash]; !ok {
+				uniqueIssues[v.IssueHash] = true
+				issueTableData = append(issueTableData, v)
+			}
+		}
+
+		for _, v := range issue.ScenarioTableDtoList {
+			key := v.IssueHash + v.TraceId
+			if _, ok := uniqueTraces[key]; !ok {
+				uniqueTraces[key] = true
+				traceTableData = append(traceTableData, v)
+			}
+		}
+
+		for _, v := range issue.SpanTableDtoList {
+			key := v.TraceId + v.SpanId
+			if _, ok := uniqueSpans[key]; !ok {
+				uniqueSpans[key] = true
+				traceTableMetadata = append(traceTableMetadata, v)
+			}
+		}
+
+		for _, v := range issue.SpanRawDataTableList {
+			key := v.TraceId + v.SpanId
+			if _, ok := uniqueRawSpans[key]; !ok {
+				uniqueRawSpans[key] = true
+				traceTableRawData = append(traceTableRawData, v)
+			}
+		}
 	}
 
 	tx, err := z.dbRepo.CreateTransaction()
@@ -75,7 +112,7 @@ func (z tracePersistenceRepo) SaveTraceList(t []dto.ScenarioTableDto, tmd []dto.
 		return err
 	}
 
-	err = doBulkInsertForTraceList(tx, z.dbRepo, traceTableData, traceTableMetadata, traceTableRawData)
+	err = doBulkInsertForTraceList(tx, z.dbRepo, issueTableData, traceTableData, traceTableMetadata, traceTableRawData)
 	if err == nil {
 		tx.Commit()
 		return nil
@@ -88,7 +125,7 @@ func (z tracePersistenceRepo) SaveTraceList(t []dto.ScenarioTableDto, tmd []dto.
 		return err
 	}
 	zkLogger.Info(LogTag, "CopyIn failed, starting upsert")
-	err = doBulkUpsertForTraceList(tx, z.dbRepo, traceTableData, traceTableMetadata, traceTableRawData)
+	err = doBulkUpsertForTraceList(tx, z.dbRepo, issueTableData, traceTableData, traceTableMetadata, traceTableRawData)
 	if err == nil {
 		tx.Commit()
 		return nil
@@ -98,15 +135,23 @@ func (z tracePersistenceRepo) SaveTraceList(t []dto.ScenarioTableDto, tmd []dto.
 	return err
 }
 
-func doBulkInsertForTraceList(tx *sql.Tx, dbRepo sqlDB.DatabaseRepo, traceData, span, spanRawData []interfaces.DbArgs) error {
+func doBulkInsertForTraceList(tx *sql.Tx, dbRepo sqlDB.DatabaseRepo, issueData, traceData, span, spanRawData []interfaces.DbArgs) error {
 
-	err := bulkInsert(tx, dbRepo, ScenarioTraceTablePostgres, []string{ScenarioId, ScenarioVersion, TraceId}, traceData)
+	err := bulkInsert(tx, dbRepo, IssueTablePostgres, []string{IssueHash, IssueTitle, ScenarioId, ScenarioVersion}, issueData)
 	if err != nil {
 		zkLogger.Info(LogTag, "Error in bulk insert trace table", err)
 		return err
 	}
 
-	err = bulkInsert(tx, dbRepo, SpanTablePostgres, []string{TraceId, SpanId, ParentSpanId, Source, Destination, WorkloadIdList, Metadata, LatencyMs, Protocol}, span)
+	err = bulkInsert(tx, dbRepo, IncidentTablePostgres, []string{TraceId, IssueHash, IncidentCollectionTime}, traceData)
+	if err != nil {
+		zkLogger.Info(LogTag, "Error in bulk insert trace table", err)
+		return err
+	}
+
+	cols := []string{TraceId, SpanId, ParentSpanId, Source, Destination, WorkloadIdList, Status, Metadata, LatencyMs, Protocol, IssueHashList, Time}
+
+	err = bulkInsert(tx, dbRepo, SpanTablePostgres, cols, span)
 	if err != nil {
 		zkLogger.Info(LogTag, "Error in bulk insert span table", err)
 		return err
@@ -137,23 +182,29 @@ func bulkInsert(tx *sql.Tx, dbRepo sqlDB.DatabaseRepo, table string, columns []s
 	return nil
 }
 
-func doBulkUpsertForTraceList(tx *sql.Tx, dbRepo sqlDB.DatabaseRepo, traceData, span, spanRawData []interfaces.DbArgs) error {
+func doBulkUpsertForTraceList(tx *sql.Tx, dbRepo sqlDB.DatabaseRepo, issue, incident, span, spanRawData []interfaces.DbArgs) error {
 
-	err := bulkUpsert(tx, dbRepo, UpsertTraceQuery, traceData)
+	err := bulkUpsert(tx, dbRepo, UpsertIssueQuery, issue)
 	if err != nil {
-		zkLogger.Error(LogTag, "Error in bulk upsert for trace table", err)
+		zkLogger.Error(LogTag, "Error in bulk upsert for issue table", err)
+		return err
+	}
+
+	err = bulkUpsert(tx, dbRepo, UpsertIncidentQuery, incident)
+	if err != nil {
+		zkLogger.Error(LogTag, "Error in bulk upsert for incident table", err)
 		return err
 	}
 
 	err = bulkUpsert(tx, dbRepo, UpsertSpanQuery, span)
 	if err != nil {
-		zkLogger.Error(LogTag, "Error in bulk upsert for trace table", err)
+		zkLogger.Error(LogTag, "Error in bulk upsert for span table", err)
 		return err
 	}
 
 	err = bulkUpsert(tx, dbRepo, UpsertSpanRawDataQuery, spanRawData)
 	if err != nil {
-		zkLogger.Error(LogTag, "Error in bulk upsert for trace table", err)
+		zkLogger.Error(LogTag, "Error in bulk upsert for span raw data", err)
 		return err
 	}
 

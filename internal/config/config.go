@@ -32,16 +32,21 @@ type RouterConfigs struct {
 	ZkDashboard string `yaml:"zkDashboard" env-description:"Zk dashboard url"`
 }
 
+type ScenariosConfig struct {
+	RedisRuleSetCount int `yaml:"redisRuleSetCount" env-description:"No of possible sets for a rule in redis"`
+}
+
 // AppConfigs is an application configuration structure
 type AppConfigs struct {
-	Redis      *storage.RedisConfig            `yaml:"redis"`
-	Postgres   zkPostgresConfig.PostgresConfig `yaml:"postgres"`
-	Server     ServerConfig                    `yaml:"server"`
-	AuthConfig AuthConfig                      `yaml:"auth"`
-	LogsConfig zkLogsConfig.LogsConfig         `yaml:"logs"`
-	Http       zkHttpConfig.HttpConfig         `yaml:"http"`
-	Pixie      PixieConfig                     `yaml:"pixie"`
-	Router     RouterConfigs                   `yaml:"router"`
-	Greeting   string                          `env:"GREETING" env-description:"Greeting phrase" env-default:"Hello!"`
-	SuprSend   SuprSendConfig                  `yaml:"suprsend"`
+	Redis          *storage.RedisConfig            `yaml:"redis"`
+	Postgres       zkPostgresConfig.PostgresConfig `yaml:"postgres"`
+	Server         ServerConfig                    `yaml:"server"`
+	AuthConfig     AuthConfig                      `yaml:"auth"`
+	LogsConfig     zkLogsConfig.LogsConfig         `yaml:"logs"`
+	Http           zkHttpConfig.HttpConfig         `yaml:"http"`
+	Pixie          PixieConfig                     `yaml:"pixie"`
+	Router         RouterConfigs                   `yaml:"router"`
+	Greeting       string                          `env:"GREETING" env-description:"Greeting phrase" env-default:"Hello!"`
+	SuprSend       SuprSendConfig                  `yaml:"suprsend"`
+	ScenarioConfig ScenariosConfig                 `yaml:"scenarioConfig"`
 }

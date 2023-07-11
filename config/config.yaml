@@ -15,3 +15,5 @@ postgres:
 logs:
   color: true
   level: DEBUG
+scenarioConfig:
+  redisRuleSetCount: 12

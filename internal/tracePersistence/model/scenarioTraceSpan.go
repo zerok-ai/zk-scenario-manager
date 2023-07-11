@@ -4,32 +4,83 @@ import (
 	"database/sql/driver"
 	"encoding/json"
 	"errors"
-	"github.com/lib/pq"
 	"time"
 )
 
 var LogTag = "zk_trace_model"
 
-type Scenario struct { // all the non pointer fields are mandatory
-	ScenarioId      string            `json:"scenario_id"`
-	ScenarioVersion string            `json:"scenario_version"`
-	ScenarioType    string            `json:"scenario_type"`
-	ScenarioTitle   string            `json:"scenario_title"`
-	CreatedAt       time.Time         `json:"created_at"`
-	TraceToSpansMap map[string][]Span `json:"trace_to_spans_map"`
+type IncidentWithIssues struct {
+	Incident       Incident     `json:"incident"`
+	IssueGroupList []IssueGroup `json:"issue_group_list"`
+}
+
+type IssueGroup struct {
+	ScenarioId      string  `json:"scenario_id"`
+	ScenarioVersion string  `json:"scenario_version"`
+	Issues          []Issue `json:"issues"`
+}
+
+type Issue struct {
+	IssueHash  string `json:"issue_hash"`
+	IssueTitle string `json:"issue_title"`
+}
+
+type Incident struct {
+	TraceId                string    `json:"trace_id"`
+	Spans                  []Span    `json:"spans"`
+	IncidentCollectionTime time.Time `json:"incident_collection_time"`
 }
 
 type Span struct {
-	SpanId          string         `json:"span_id"`
-	ParentSpanId    string         `json:"parent_span_id"`
-	Source          string         `json:"source"`
-	Destination     string         `json:"destination"`
-	WorkloadIdList  pq.StringArray `json:"error"`
-	Metadata        Metadata       `json:"metadata"`
-	LatencyMs       *float32       `json:"latency_ms"`
-	Protocol        string         `json:"protocol"`
-	RequestPayload  string         `json:"request_payload"`
-	ResponsePayload string         `json:"response_payload"`
+	SpanId          string          `json:"span_id"`
+	ParentSpanId    string          `json:"parent_span_id"`
+	Source          string          `json:"source"`
+	Destination     string          `json:"destination"`
+	WorkloadIdList  []string        `json:"workload_id_list"`
+	Metadata        Metadata        `json:"metadata"`
+	LatencyMs       *float32        `json:"latency_ms"`
+	Protocol        string          `json:"protocol"`
+	RequestPayload  RequestPayload  `json:"request_payload"`
+	ResponsePayload ResponsePayload `json:"response_payload"`
+	IssueHashList   []string        `json:"issue_hash_list"`
+	Time            time.Time       `json:"time"`
+}
+
+type ResponsePayload interface {
+	GetStatus() string
+	GetString() string
+}
+
+type RequestPayload interface {
+	GetString() string
+}
+
+type HTTPResponsePayload struct {
+	RespStatus  string `json:"resp_status"`
+	RespMessage string `json:"resp_message"`
+	RespHeaders string `json:"resp_headers"`
+	RespBody    string `json:"resp_body"`
+}
+
+type HTTPRequestPayload struct {
+	ReqPath    string `json:"req_path"`
+	ReqMethod  string `json:"req_method"`
+	ReqHeaders string `json:"req_headers"`
+	ReqBody    string `json:"req_body"`
+}
+
+func (res HTTPResponsePayload) GetStatus() string {
+	return res.RespStatus
+}
+
+func (res HTTPRequestPayload) GetString() string {
+	x, _ := json.Marshal(res)
+	return string(x)
+}
+
+func (res HTTPResponsePayload) GetString() string {
+	x, _ := json.Marshal(res)
+	return string(x)
 }
 
 type Metadata map[string]interface{}

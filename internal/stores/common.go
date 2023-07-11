@@ -7,6 +7,8 @@ var (
 )
 
 const (
+	LoggerTag = "stores"
+
 	INTERNAL = "INTERNAL"
 	CLIENT   = "CLIENT"
 	SERVER   = "SERVER"

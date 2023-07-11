@@ -6,6 +6,7 @@ import (
 	"github.com/zerok-ai/zk-utils-go/scenario/model"
 	"scenario-manager/internal/stores"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -39,7 +40,7 @@ func NewTraceEvaluator(scenario *model.Scenario, traceStore *stores.TraceStore, 
 	}
 }
 
-func (te TraceEvaluator) EvalScenario(resultSetNamePrefix string) ([]string, error) {
+func (te TraceEvaluator) EvalScenario() ([]string, error) {
 	zkLogger.Debug(LoggerTagEvaluation, "Evaluating scenario ", te.scenario.Id)
 	resultKey, err := te.evalFilter(te.scenario.Filter)
 	if err != nil {
@@ -49,16 +50,13 @@ func (te TraceEvaluator) EvalScenario(resultSetNamePrefix string) ([]string, err
 	if !te.traceStore.SetExists(*resultKey) {
 		return nil, fmt.Errorf("resultset: %s for scenario %v doesn't exist", *resultKey, te.scenario.Id)
 	}
-	if err = te.traceStore.SetExpiryForSet(*resultKey, te.ttlForTransientScenarioSet); err != nil {
-		return nil, err
-	}
-	resultSetName := resultSetNamePrefix + *resultKey
-	if err = te.traceStore.RenameSet(*resultKey, resultSetName); err != nil {
-		return nil, err
-	}
 
 	// get all the traceIds from the traceStore
-	traceIds, err := te.traceStore.GetAllValuesFromSet(resultSetName)
+	traceIds, err := te.traceStore.GetAllValuesFromSet(*resultKey)
+	if err != nil {
+		return nil, err
+	}
+	te.traceStore.DeleteSet([]string{*resultKey})
 	return traceIds, err
 }
 
@@ -117,6 +115,39 @@ func (te TraceEvaluator) evalCondition(c model.Condition, dataSetNames []string,
 	}
 
 	return err
+}
+
+func (te TraceEvaluator) DeleteOldSets(sets []string, maxSetCount int) {
+	// sort sets by name
+	expandedSets := make([]string, maxSetCount)
+	for _, setName := range sets {
+		// break setName on '_'
+		setNameParts := strings.Split(setName, "_")
+		if len(setNameParts) > 1 {
+			index, err := strconv.Atoi(setNameParts[len(setNameParts)-1])
+			if err == nil {
+				expandedSets[index] = setName
+			}
+		}
+	}
+
+	// other than the latest set, mark the rest of the sets for deletion
+	keysToDelete := make([]string, 0)
+	for index, setName := range expandedSets {
+		if setName == "" {
+			continue
+		}
+		prev := index - 1
+		if prev < 0 {
+			prev = maxSetCount - 1
+		}
+
+		prevSetName := expandedSets[prev]
+		if prevSetName != "" {
+			keysToDelete = append(keysToDelete, prevSetName)
+		}
+	}
+	te.traceStore.DeleteSet(keysToDelete)
 }
 
 func matchPrefixesButNotEquals(prefixes, keys []string) map[string][]string {

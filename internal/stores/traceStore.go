@@ -8,8 +8,6 @@ import (
 	"time"
 )
 
-const LoggerTagTraceStore = "traceStore"
-
 type TraceStore struct {
 	redisClient         *redis.Client
 	ttlForTransientSets time.Duration
@@ -25,7 +23,7 @@ func (t TraceStore) Close() {
 
 func GetTraceStore(redisConfig *config.RedisConfig, ttlForTransientSets time.Duration) *TraceStore {
 	dbName := "traces"
-	zkLogger.Debug(LoggerTagTraceStore, "GetTraceStore: config=", redisConfig, "dbName=", dbName, "dbID=", redisConfig.DBs[dbName])
+	zkLogger.Debug(LoggerTag, "GetTraceStore: config=", redisConfig, "dbName=", dbName, "dbID=", redisConfig.DBs[dbName])
 	readTimeout := time.Duration(redisConfig.ReadTimeout) * time.Second
 	_redisClient := redis.NewClient(&redis.Options{
 		Addr:        fmt.Sprint(redisConfig.Host, ":", redisConfig.Port),
@@ -137,7 +135,7 @@ func (t TraceStore) RenameSet(key, newKey string) error {
 	_, err := t.redisClient.Rename(ctx, key, newKey).Result()
 	if err != nil {
 		fmt.Println("Renaming set:", key, "to", newKey)
-		zkLogger.Error(LoggerTagTraceStore, "Error renaming set:", err, key)
+		zkLogger.Error(LoggerTag, "Error renaming set:", err, key)
 	}
 	return err
 }
@@ -145,7 +143,14 @@ func (t TraceStore) RenameSet(key, newKey string) error {
 func (t TraceStore) SetExists(key string) bool {
 	exists, err := t.redisClient.Exists(ctx, key).Result()
 	if err != nil {
-		zkLogger.Error(LoggerTagTraceStore, "Error checking if set exists:", err)
+		zkLogger.Error(LoggerTag, "Error checking if set exists:", err)
 	}
 	return exists == 1
+}
+
+func (t TraceStore) DeleteSet(keys []string) {
+	if len(keys) == 0 {
+		return
+	}
+	t.redisClient.Del(ctx, keys...)
 }
