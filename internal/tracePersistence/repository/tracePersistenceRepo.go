@@ -38,7 +38,7 @@ const (
 
 	UpsertIssueQuery       = "INSERT INTO issue (issue_hash, issue_title, scenario_id, scenario_version) VALUES ($1, $2, $3, $4) ON CONFLICT (issue_hash) DO NOTHING"
 	UpsertIncidentQuery    = "INSERT INTO incident (trace_id, issue_hash, incident_collection_time) VALUES ($1, $2, $3) ON CONFLICT (issue_hash, trace_id) DO NOTHING"
-	UpsertSpanQuery        = "INSERT INTO span (trace_id, span_id, parent_span_id, source, destination, workload_id_list, status, metadata, latency_ms, protocol, issue_hash_list time) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) ON CONFLICT (trace_id, span_id) DO NOTHING"
+	UpsertSpanQuery        = "INSERT INTO span (trace_id, span_id, parent_span_id, source, destination, workload_id_list, status, metadata, latency_ms, protocol, issue_hash_list, time) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) ON CONFLICT (trace_id, span_id) DO NOTHING"
 	UpsertSpanRawDataQuery = "INSERT INTO span_raw_data (trace_id, span_id, request_payload, response_payload) VALUES ($1, $2, $3, $4) ON CONFLICT (trace_id, span_id) DO NOTHING"
 )
 
@@ -66,22 +66,43 @@ func (z tracePersistenceRepo) SaveTraceList(issuesDetailList []dto.IssuesDetailD
 	traceTableData := make([]interfaces.DbArgs, 0)
 	traceTableMetadata := make([]interfaces.DbArgs, 0)
 	traceTableRawData := make([]interfaces.DbArgs, 0)
+
+	uniqueIssues := make(map[string]bool)
+	uniqueTraces := make(map[string]bool)
+	uniqueSpans := make(map[string]bool)
+	uniqueRawSpans := make(map[string]bool)
+
 	for _, issue := range issuesDetailList {
 
 		for _, v := range issue.IssueTableDtoList {
-			issueTableData = append(issueTableData, v)
+			if _, ok := uniqueIssues[v.IssueHash]; !ok {
+				uniqueIssues[v.IssueHash] = true
+				issueTableData = append(issueTableData, v)
+			}
 		}
 
 		for _, v := range issue.ScenarioTableDtoList {
-			traceTableData = append(traceTableData, v)
+			key := v.IssueHash + v.TraceId
+			if _, ok := uniqueTraces[key]; !ok {
+				uniqueTraces[key] = true
+				traceTableData = append(traceTableData, v)
+			}
 		}
 
 		for _, v := range issue.SpanTableDtoList {
-			traceTableMetadata = append(traceTableMetadata, v)
+			key := v.TraceId + v.SpanId
+			if _, ok := uniqueSpans[key]; !ok {
+				uniqueSpans[key] = true
+				traceTableMetadata = append(traceTableMetadata, v)
+			}
 		}
 
 		for _, v := range issue.SpanRawDataTableList {
-			traceTableRawData = append(traceTableRawData, v)
+			key := v.TraceId + v.SpanId
+			if _, ok := uniqueRawSpans[key]; !ok {
+				uniqueRawSpans[key] = true
+				traceTableRawData = append(traceTableRawData, v)
+			}
 		}
 	}
 
@@ -177,13 +198,13 @@ func doBulkUpsertForTraceList(tx *sql.Tx, dbRepo sqlDB.DatabaseRepo, issue, inci
 
 	err = bulkUpsert(tx, dbRepo, UpsertSpanQuery, span)
 	if err != nil {
-		zkLogger.Error(LogTag, "Error in bulk upsert for trace table", err)
+		zkLogger.Error(LogTag, "Error in bulk upsert for span table", err)
 		return err
 	}
 
 	err = bulkUpsert(tx, dbRepo, UpsertSpanRawDataQuery, spanRawData)
 	if err != nil {
-		zkLogger.Error(LogTag, "Error in bulk upsert for trace table", err)
+		zkLogger.Error(LogTag, "Error in bulk upsert for span raw data", err)
 		return err
 	}
 
