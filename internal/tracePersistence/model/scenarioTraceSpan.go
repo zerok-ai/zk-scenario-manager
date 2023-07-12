@@ -33,6 +33,7 @@ type Incident struct {
 
 type Span struct {
 	SpanId          string          `json:"span_id"`
+	TraceId         string          `json:"trace_id"`
 	ParentSpanId    string          `json:"parent_span_id"`
 	Source          string          `json:"source"`
 	Destination     string          `json:"destination"`

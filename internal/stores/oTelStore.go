@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/redis/go-redis/v9"
+	"github.com/zerok-ai/zk-utils-go/ds"
 	zkLogger "github.com/zerok-ai/zk-utils-go/logs"
 	"github.com/zerok-ai/zk-utils-go/storage/redis/config"
 	"time"
@@ -38,6 +39,7 @@ func GetOTelStore(redisConfig *config.RedisConfig) *OTelStore {
 type SpanFromOTel struct {
 	SpanID       string
 	Kind         string `json:"spanKind"`
+	Protocol     string `json:"protocol"`
 	ParentSpanID string `json:"parentSpanID"`
 	Children     []SpanFromOTel
 }
@@ -47,7 +49,10 @@ type TraceFromOTel struct {
 	Spans map[string]*SpanFromOTel
 }
 
-func (t OTelStore) GetSpansForTracesFromDB(keys []string) (map[string]*TraceFromOTel, error) {
+// GetSpansForTracesFromDB retrieves the spans for the given traceIds from the database
+// Returns a map of traceId to TraceFromOTel
+// Returns a map of protocol to array of traces
+func (t OTelStore) GetSpansForTracesFromDB(keys []string) (map[string]*TraceFromOTel, *map[string][]string, error) {
 
 	redisClient := t.redisClient
 
@@ -63,11 +68,12 @@ func (t OTelStore) GetSpansForTracesFromDB(keys []string) (map[string]*TraceFrom
 	_, err := pipe.Exec(ctx)
 	if err != nil {
 		fmt.Println("Error executing transaction:", err)
-		return nil, err
+		return nil, nil, err
 	}
 
 	// 4. Process the results
 	result := map[string]*TraceFromOTel{}
+	tracesForProtocol := make(map[string]ds.Set, 0)
 	for i, hashResult := range hashResults {
 		traceId := keys[i]
 		trace, err := hashResult.Result()
@@ -115,10 +121,28 @@ func (t OTelStore) GetSpansForTracesFromDB(keys []string) (map[string]*TraceFrom
 		// 4.3 prune the unwanted Spans
 		prune(traceFromOTel.Spans, *rootSpan)
 
+		// 4.4 find the protocol for each span
+		for _, value := range traceFromOTel.Spans {
+			protocol := value.Protocol
+			traceSetForProtocol, ok := tracesForProtocol[protocol]
+			if !ok {
+				traceSetForProtocol = make(ds.Set, 0)
+			}
+			traceSetForProtocol[traceId] = true
+			tracesForProtocol[protocol] = traceSetForProtocol
+		}
+
 		zkLogger.DebugF(LoggerTag, "rootSpan: %s", *rootSpan)
 		result[traceId] = traceFromOTel
 	}
-	return result, nil
+
+	// 5. Convert the tracesForProtocol map to a map of protocol to array of traces
+	traceArrayForProtocol := make(map[string][]string, 0)
+	for protocol, traceSet := range tracesForProtocol {
+		traceArrayForProtocol[protocol] = traceSet.GetAll()
+	}
+
+	return result, &traceArrayForProtocol, nil
 }
 
 // prune removes the Spans that are not required - internal Spans and server Spans that are not the root span

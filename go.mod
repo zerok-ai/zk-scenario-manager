@@ -9,8 +9,8 @@ require (
 	github.com/pkg/errors v0.9.1
 	github.com/redis/go-redis/v9 v9.0.5
 	github.com/stretchr/testify v1.8.4
-	github.com/zerok-ai/zk-rawdata-reader v0.0.0-20230705140328-e137886dad68
-	github.com/zerok-ai/zk-utils-go v0.4.7-0.20230706061423-e666b08830dc
+	github.com/zerok-ai/zk-rawdata-reader v0.0.0-20230711114251-924a5fe0d77c
+	github.com/zerok-ai/zk-utils-go v0.4.7-0.20230712035424-433fbd2aa2b2
 )
 
 require (

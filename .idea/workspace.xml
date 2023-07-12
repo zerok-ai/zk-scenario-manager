@@ -6,11 +6,11 @@
   <component name="ChangeListManager">
     <list default="true" id="709ca14d-56fa-4c20-a305-fb4e1a06689a" name="Changes" comment="">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/cmd/main.go" beforeDir="false" afterPath="$PROJECT_DIR$/cmd/main.go" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/config/config.yaml" beforeDir="false" afterPath="$PROJECT_DIR$/config/config.yaml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/internal/config/config.go" beforeDir="false" afterPath="$PROJECT_DIR$/internal/config/config.go" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/k8s/minikube/deployment.yaml" beforeDir="false" afterPath="$PROJECT_DIR$/k8s/minikube/deployment.yaml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/k8s/minikube/service.yaml" beforeDir="false" afterPath="$PROJECT_DIR$/k8s/minikube/service.yaml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/go.mod" beforeDir="false" afterPath="$PROJECT_DIR$/go.mod" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/go.sum" beforeDir="false" afterPath="$PROJECT_DIR$/go.sum" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/internal/filters/scenarioManager.go" beforeDir="false" afterPath="$PROJECT_DIR$/internal/filters/scenarioManager.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/internal/stores/oTelStore.go" beforeDir="false" afterPath="$PROJECT_DIR$/internal/stores/oTelStore.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/internal/tracePersistence/model/scenarioTraceSpan.go" beforeDir="false" afterPath="$PROJECT_DIR$/internal/tracePersistence/model/scenarioTraceSpan.go" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -116,17 +116,17 @@
         </line-breakpoint>
         <line-breakpoint type="DlvLineBreakpoint">
           <url>file://$PROJECT_DIR$/internal/stores/oTelStore.go</url>
-          <line>133</line>
+          <line>157</line>
           <option name="timeStamp" value="222" />
         </line-breakpoint>
         <line-breakpoint type="DlvLineBreakpoint">
           <url>file://$PROJECT_DIR$/internal/stores/oTelStore.go</url>
-          <line>156</line>
+          <line>180</line>
           <option name="timeStamp" value="223" />
         </line-breakpoint>
         <line-breakpoint enabled="true" type="DlvLineBreakpoint">
           <url>file://$PROJECT_DIR$/internal/filters/scenarioManager.go</url>
-          <line>292</line>
+          <line>327</line>
           <option name="timeStamp" value="249" />
         </line-breakpoint>
         <line-breakpoint enabled="true" type="DlvLineBreakpoint">

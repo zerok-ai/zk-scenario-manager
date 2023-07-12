@@ -8,8 +8,8 @@ import (
 	"github.com/pkg/errors"
 	"github.com/zerok-ai/zk-rawdata-reader/vzReader"
 	"github.com/zerok-ai/zk-rawdata-reader/vzReader/models"
+	"strconv"
 
-	"github.com/zerok-ai/zk-utils-go/common"
 	zkLogger "github.com/zerok-ai/zk-utils-go/logs"
 	scenarioGeneratorModel "github.com/zerok-ai/zk-utils-go/scenario/model"
 	store "github.com/zerok-ai/zk-utils-go/storage/redis"
@@ -107,8 +107,7 @@ func (scenarioManager ScenarioManager) processAllScenarios() {
 
 	// 2. get all traceId sets from traceStore
 	namesOfAllSets, err := scenarioManager.traceStore.GetAllKeys()
-	zkLogger.DebugF(LoggerTag, "Number of available scenarios: %d", len(scenarios))
-	zkLogger.DebugF(LoggerTag, "Number of keys in traceStore: %d", len(namesOfAllSets))
+	zkLogger.DebugF(LoggerTag, "Number of available scenarios: %d, traceStore: %d", len(scenarios), len(namesOfAllSets))
 	if err != nil {
 		zkLogger.Error(LoggerTag, "Error getting all keys from traceStore ", err)
 		return
@@ -118,6 +117,9 @@ func (scenarioManager ScenarioManager) processAllScenarios() {
 	traceIncidentsMap := make(map[string]tracePersistenceModel.IncidentWithIssues, 0)
 	for _, scenario := range scenarios {
 		incidentsOfScenario := scenarioManager.processScenario(scenario, namesOfAllSets)
+		if incidentsOfScenario == nil {
+			continue
+		}
 
 		for traceId, incident := range incidentsOfScenario {
 			oldIncidence, ok := traceIncidentsMap[traceId]
@@ -154,46 +156,77 @@ func (scenarioManager ScenarioManager) processScenario(scenario *scenarioGenerat
 	}
 
 	// a. evaluate the scenario and get the qualified traceIDs
-	traceEvaluator := NewTraceEvaluator(scenario, scenarioManager.traceStore, namesOfAllSets, TTLForScenarioSets)
-	if traceEvaluator == nil {
+	traceIds, err := scenarioManager.evaluateScenario(scenario, namesOfAllSets)
+	if err != nil || traceIds == nil || len(traceIds) == 0 {
 		return nil
 	}
-	traceIds, err := traceEvaluator.EvalScenario()
-	if err != nil {
-		zkLogger.Error(LoggerTag, "Error evaluating scenario", err)
-		return nil
-	}
-	// delete the sets from traceStore except for the latest one
-	traceEvaluator.DeleteOldSets(namesOfAllSets, scenarioManager.cfg.ScenarioConfig.RedisRuleSetCount)
 
 	// b. collect trace and span raw data for the qualified traceIDs
-	rawSpans := scenarioManager.collectFullSpanDataForTraces(traceIds)
-	if rawSpans == nil || len(*rawSpans) == 0 {
-		zkLogger.Debug(LoggerTag, "no spans found")
-		return nil
-	}
-
-	// c. get span co-relation data from the OTel store for the qualified for the spans for which we have raw data
-	traceIdsOfRawSpans := make([]string, 0)
-	for _, value := range *rawSpans {
-		traceId := value.TraceId
-		traceIdsOfRawSpans = append(traceIdsOfRawSpans, traceId)
-	}
-	traceFromOTelStore, err := scenarioManager.oTelStore.GetSpansForTracesFromDB(traceIdsOfRawSpans)
-	if err != nil {
+	tracesFromOTelStore, tracesForProtocol, err := scenarioManager.oTelStore.GetSpansForTracesFromDB(traceIds)
+	if err != nil || tracesForProtocol == nil {
 		zkLogger.Error(LoggerTag, "error processing trace from OTel", err)
 		return nil
 	}
 
+	// c. get the raw data for traces from vizier
+	rawSpans := scenarioManager.getAllRawSpans(tracesForProtocol)
+
 	// d. Feed the span co-relation to raw span data and build the scenario model for storage
-	incidents := buildScenarioForPersistence(scenario, traceFromOTelStore, rawSpans)
+	incidents := buildScenarioForPersistence(scenario, tracesFromOTelStore, rawSpans)
 
 	return incidents
 }
 
-func buildScenarioForPersistence(scenario *scenarioGeneratorModel.Scenario, tracesFromOTel map[string]*stores.TraceFromOTel, httpRawData *[]models.HttpRawDataModel) map[string]tracePersistenceModel.IncidentWithIssues {
+func (scenarioManager ScenarioManager) evaluateScenario(scenario *scenarioGeneratorModel.Scenario, namesOfAllSets []string) ([]string, error) {
+	traceEvaluator := NewTraceEvaluator(scenario, scenarioManager.traceStore, namesOfAllSets, TTLForScenarioSets)
+	if traceEvaluator == nil {
+		return nil, errors.New("failed to create trace evaluator")
+	}
+	traceIds, err := traceEvaluator.EvalScenario()
+	if err != nil {
+		return nil, err
+	}
+	// delete the sets from traceStore except for the latest one
+	traceEvaluator.DeleteOldSets(namesOfAllSets, scenarioManager.cfg.ScenarioConfig.RedisRuleSetCount)
+	return traceIds, nil
+}
 
-	zkLogger.DebugF(LoggerTag, "Building scenario for persistence, scenario: %v for %d number of traces", scenario.Id, len(tracesFromOTel))
+func (scenarioManager ScenarioManager) getAllRawSpans(tracesForProtocol *map[string][]string) []tracePersistenceModel.Span {
+	rawSpans := make([]tracePersistenceModel.Span, 0)
+
+	// get the raw data for traces for each protocol
+	for protocol, traceArray := range *tracesForProtocol {
+		startTime := timeRangeForRawDataQuery
+		spans := make([]tracePersistenceModel.Span, 0)
+		traceIdCount := len(traceArray)
+		for startIndex := 0; startIndex < traceIdCount; {
+			endIndex := startIndex + batchSizeForRawDataCollector
+			if endIndex > traceIdCount {
+				endIndex = traceIdCount
+			}
+			zkLogger.DebugF(LoggerTag, "calling traceRawDataCollector for %d traces", len(traceArray[startIndex:endIndex]))
+
+			// collect raw data for protocol spans
+			if protocol == "http" {
+				spans = append(spans, scenarioManager.collectHTTPRawData(traceArray[startIndex:endIndex], startTime)...)
+			} else if protocol == "mysql" {
+				spans = append(spans, scenarioManager.collectMySQLRawData(traceArray[startIndex:endIndex], startTime)...)
+			}
+
+			startIndex = endIndex
+		}
+		rawSpans = append(rawSpans, spans...)
+	}
+	return rawSpans
+}
+
+func buildScenarioForPersistence(scenario *scenarioGeneratorModel.Scenario, tracesFromOTel map[string]*stores.TraceFromOTel, spans []tracePersistenceModel.Span) map[string]tracePersistenceModel.IncidentWithIssues {
+
+	zkLogger.DebugF(LoggerTag, "Building scenario for persistence, scenario: %v,  trace_count=%d, span_count=%d", scenario.Id, len(tracesFromOTel), len(spans))
+
+	if len(spans) == 0 {
+		return nil
+	}
 
 	// process all the spans in httpRawData and build the traceIdToSpansArrayMap
 	traceTreeForPersistence := make(map[string]*map[string]*tracePersistenceModel.Span, 0)
@@ -205,15 +238,15 @@ func buildScenarioForPersistence(scenario *scenarioGeneratorModel.Scenario, trac
 			spanForPersistence := &tracePersistenceModel.Span{
 				SpanId:       spanFromOTel.SpanID,
 				ParentSpanId: spanFromOTel.ParentSpanID,
-				Protocol:     "unknown",
+				Protocol:     spanFromOTel.Protocol,
 			}
 			spanMapOfPersistentSpans[spanFromOTel.SpanID] = spanForPersistence
 		}
 		traceTreeForPersistence[traceId] = &spanMapOfPersistentSpans
 	}
 
-	// process all the spans in httpRawData and set data in traceIdToSpansMap
-	for _, fullSpan := range *httpRawData {
+	// process all the elements of `spans`
+	for _, fullSpan := range spans {
 
 		trace, ok := traceTreeForPersistence[fullSpan.TraceId]
 		if !ok || trace == nil {
@@ -224,7 +257,8 @@ func buildScenarioForPersistence(scenario *scenarioGeneratorModel.Scenario, trac
 			continue
 		}
 
-		(*trace)[fullSpan.SpanId] = populateHttpSpan(fullSpan, *spanForPersistence, "http")
+		fullSpan.ParentSpanId = spanForPersistence.ParentSpanId
+		(*trace)[fullSpan.SpanId] = &fullSpan
 	}
 
 	// iterate through the trace data and create IncidentWithIssues for each trace
@@ -232,6 +266,7 @@ func buildScenarioForPersistence(scenario *scenarioGeneratorModel.Scenario, trac
 	for traceId, spanMap := range traceTreeForPersistence {
 		incidentsWithIssues[traceId] = evaluateIncidents(scenario, traceId, spanMap)
 	}
+
 	zkLogger.DebugF(LoggerTag, "Building incidentsWithIssues for persistence, count: %d", len(incidentsWithIssues))
 	return incidentsWithIssues
 }
@@ -362,31 +397,32 @@ func getCartesianProductOfIssues(slice1 []tracePersistenceModel.Issue, slice2 []
 	return result
 }
 
-func (scenarioManager ScenarioManager) collectFullSpanDataForTraces(traceIds []string) *[]models.HttpRawDataModel {
-
-	// get the raw data for traces from vizier
-	startTime := timeRangeForRawDataQuery
-
-	results := make([]models.HttpRawDataModel, 0)
-	traceIdCount := len(traceIds)
-
-	for startIndex := 0; startIndex < traceIdCount; {
-		endIndex := startIndex + batchSizeForRawDataCollector
-		if endIndex > traceIdCount {
-			endIndex = traceIdCount
-		}
-		zkLogger.DebugF(LoggerTag, "calling traceRawDataCollector for %d traces", len(traceIds[startIndex:endIndex]))
-		rawData, err := scenarioManager.traceRawDataCollector.GetHTTPRawData(traceIds[startIndex:endIndex], startTime)
-		if err != nil {
-			zkLogger.Error(LoggerTag, "Error getting raw data for traces ", traceIds, err)
-			return nil
-		}
-		results = append(results, rawData.Results...)
-		startIndex = endIndex
+func (scenarioManager ScenarioManager) collectHTTPRawData(traceIds []string, startTime string) []tracePersistenceModel.Span {
+	spans := make([]tracePersistenceModel.Span, 0)
+	rawData, err := scenarioManager.traceRawDataCollector.GetHTTPRawData(traceIds, startTime)
+	if err != nil {
+		zkLogger.Error(LoggerTag, "Error getting raw spans for http traces ", traceIds, err)
+		return spans
 	}
+	httpSpans := rawData.Results
+	for _, span := range httpSpans {
+		spans = append(spans, transformHTTPSpan(span))
+	}
+	return spans
+}
 
-	zkLogger.Debug(LoggerTag, "Number of raw values from traceRawDataCollector = ", len(results))
-	return &results
+func (scenarioManager ScenarioManager) collectMySQLRawData(traceIds []string, startTime string) []tracePersistenceModel.Span {
+	spans := make([]tracePersistenceModel.Span, 0)
+	rawData, err := scenarioManager.traceRawDataCollector.GetMySQLRawData(traceIds, startTime)
+	if err != nil {
+		zkLogger.Error(LoggerTag, "Error getting raw spans for mysql traces ", traceIds, err)
+		return spans
+	}
+	httpSpans := rawData.Results
+	for _, span := range httpSpans {
+		spans = append(spans, transformMySQLSpan(span))
+	}
+	return spans
 }
 
 func getHttpRequestData(value models.HttpRawDataModel) tracePersistenceModel.HTTPRequestPayload {
@@ -409,23 +445,80 @@ func getHttpResponseData(value models.HttpRawDataModel) tracePersistenceModel.HT
 	return res
 }
 
-func populateHttpSpan(fullSpan models.HttpRawDataModel, spanForStorage tracePersistenceModel.Span, protocol string) *tracePersistenceModel.Span {
-	spanForStorage.Source = fullSpan.Source
-	spanForStorage.Destination = fullSpan.Destination
-	spanForStorage.WorkloadIdList = strings.Split(fullSpan.WorkloadIds, ",")
-	spanForStorage.Metadata = map[string]interface{}{}
-	spanForStorage.LatencyMs = getLatencyPtr(fullSpan.Latency)
-	spanForStorage.Protocol = protocol
-	spanForStorage.RequestPayload = getHttpRequestData(fullSpan)
-	spanForStorage.ResponsePayload = getHttpResponseData(fullSpan)
-
-	return &spanForStorage
+func getMySQLRequestData(value models.MySQLRawDataModel) tracePersistenceModel.HTTPRequestPayload {
+	req := tracePersistenceModel.HTTPRequestPayload{
+		ReqPath: strconv.Itoa(value.RemotePort),
+		ReqBody: value.ReqBody,
+	}
+	return req
 }
 
-func getLatencyPtr(latencyStr string) *float32 {
-	latency32, err := common.ToFloat32(latencyStr)
-	if err == nil {
-		return &latency32
+func getMySQLResponseData(value models.MySQLRawDataModel) tracePersistenceModel.HTTPResponsePayload {
+	res := tracePersistenceModel.HTTPResponsePayload{
+		RespStatus: strconv.Itoa(value.RespStatus),
+		RespBody:   value.RespBody,
 	}
-	return nil
+	return res
+}
+
+//func populateHttpSpan(fullSpan models.HttpRawDataModel, spanForStorage tracePersistenceModel.Span) *tracePersistenceModel.Span {
+//	spanForStorage.Source = fullSpan.Source
+//	spanForStorage.Destination = fullSpan.Destination
+//	spanForStorage.WorkloadIdList = strings.Split(fullSpan.WorkloadIds, ",")
+//	spanForStorage.Metadata = map[string]interface{}{}
+//	spanForStorage.LatencyMs = &fullSpan.Latency
+//	spanForStorage.RequestPayload = getHttpRequestData(fullSpan)
+//	spanForStorage.ResponsePayload = getHttpResponseData(fullSpan)
+//	spanForStorage.Time = epochNSToTime(fullSpan.Time)
+//
+//	return &spanForStorage
+//}
+
+//func populateMySQLSpan(fullSpan models.MySQLRawDataModel, spanForStorage tracePersistenceModel.Span) *tracePersistenceModel.Span {
+//	spanForStorage.Source = fullSpan.Source
+//	spanForStorage.Destination = fullSpan.Destination
+//	spanForStorage.WorkloadIdList = strings.Split(fullSpan.WorkloadIds, ",")
+//	spanForStorage.Metadata = map[string]interface{}{}
+//	spanForStorage.LatencyMs = &fullSpan.Latency
+//	spanForStorage.RequestPayload = getMySQLRequestData(fullSpan)
+//	spanForStorage.ResponsePayload = getMySQLResponseData(fullSpan)
+//	spanForStorage.Time = epochNSToTime(fullSpan.Time)
+//
+//	return &spanForStorage
+//}
+
+func transformHTTPSpan(fullSpan models.HttpRawDataModel) tracePersistenceModel.Span {
+	spanForStorage := tracePersistenceModel.Span{
+		SpanId:          fullSpan.SpanId,
+		TraceId:         fullSpan.TraceId,
+		Source:          fullSpan.Source,
+		Destination:     fullSpan.Destination,
+		WorkloadIdList:  strings.Split(fullSpan.WorkloadIds, ","),
+		Metadata:        map[string]interface{}{},
+		LatencyMs:       &fullSpan.Latency,
+		RequestPayload:  getHttpRequestData(fullSpan),
+		ResponsePayload: getHttpResponseData(fullSpan),
+		Time:            epochNSToTime(fullSpan.Time),
+	}
+	return spanForStorage
+}
+
+func transformMySQLSpan(fullSpan models.MySQLRawDataModel) tracePersistenceModel.Span {
+	spanForStorage := tracePersistenceModel.Span{
+		SpanId:          fullSpan.SpanId,
+		TraceId:         fullSpan.TraceId,
+		Source:          fullSpan.Source,
+		Destination:     fullSpan.Destination,
+		WorkloadIdList:  strings.Split(fullSpan.WorkloadIds, ","),
+		Metadata:        map[string]interface{}{},
+		LatencyMs:       &fullSpan.Latency,
+		RequestPayload:  getMySQLRequestData(fullSpan),
+		ResponsePayload: getMySQLResponseData(fullSpan),
+		Time:            epochNSToTime(fullSpan.Time),
+	}
+	return spanForStorage
+}
+
+func epochNSToTime(epochNS uint64) time.Time {
+	return time.Unix(0, int64(epochNS))
 }

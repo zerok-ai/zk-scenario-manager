@@ -181,8 +181,14 @@ github.com/yuin/goldmark v1.4.1/go.mod h1:mwnBkeHKe2W/ZEtQ+71ViKU8L12m81fl3OWwC1
 github.com/yuin/goldmark v1.4.13/go.mod h1:6yULJ656Px+3vBD8DxQVa3kxgyrAnzto9xy5taEt/CY=
 github.com/zerok-ai/zk-rawdata-reader v0.0.0-20230705140328-e137886dad68 h1:PJs3fD1T3OOCBhW9s+9IBGr9andXDZLWWPkaB5KoXXw=
 github.com/zerok-ai/zk-rawdata-reader v0.0.0-20230705140328-e137886dad68/go.mod h1:GNFYev1p4/t9IoHMCX43/Yexc6K4j93to/kkcytIsFc=
+github.com/zerok-ai/zk-rawdata-reader v0.0.0-20230711113836-fe89c9950c8c h1:gleb8ThGclYajN/QLWw3PganRJSKBAQbcQYGdD6rdgQ=
+github.com/zerok-ai/zk-rawdata-reader v0.0.0-20230711113836-fe89c9950c8c/go.mod h1:GNFYev1p4/t9IoHMCX43/Yexc6K4j93to/kkcytIsFc=
+github.com/zerok-ai/zk-rawdata-reader v0.0.0-20230711114251-924a5fe0d77c h1:wzhavTjrjnovkX5fgslZSiK6bqte8vuDESavwXru/ms=
+github.com/zerok-ai/zk-rawdata-reader v0.0.0-20230711114251-924a5fe0d77c/go.mod h1:GNFYev1p4/t9IoHMCX43/Yexc6K4j93to/kkcytIsFc=
 github.com/zerok-ai/zk-utils-go v0.4.7-0.20230706061423-e666b08830dc h1:/g/C+nzHOWtVB8fly45O314Qju+1pH/vpob3W9omGW8=
 github.com/zerok-ai/zk-utils-go v0.4.7-0.20230706061423-e666b08830dc/go.mod h1:LNXMma0iQ0V9K4H/bNKbBIOquLp4TLJDjjTyQ4OiEZk=
+github.com/zerok-ai/zk-utils-go v0.4.7-0.20230712035424-433fbd2aa2b2 h1:H8iBciT5sQroVF43jTlfehuebelqtapz3PfrRyNqxnc=
+github.com/zerok-ai/zk-utils-go v0.4.7-0.20230712035424-433fbd2aa2b2/go.mod h1:LNXMma0iQ0V9K4H/bNKbBIOquLp4TLJDjjTyQ4OiEZk=
 golang.org/x/crypto v0.0.0-20190308221718-c2843e01d9a2/go.mod h1:djNgcEr1/C05ACkg1iLfiJU5Ep61QUkGW8qpdssI0+w=
 golang.org/x/crypto v0.0.0-20191011191535-87dc89f01550/go.mod h1:yigFU9vqHzYiE8UmvKecakEJjdnWj3jj499lnFckfCI=
 golang.org/x/crypto v0.0.0-20200622213623-75b288015ac9/go.mod h1:LzIPMQfyMNhhGPhUkYOs5KpL4U8rLKemX1yGLhDgUto=
