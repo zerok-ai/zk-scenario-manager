@@ -7,9 +7,6 @@ import (
 	"github.com/jmespath/go-jmespath"
 	"github.com/pkg/errors"
 	"github.com/zerok-ai/zk-rawdata-reader/vzReader"
-	"github.com/zerok-ai/zk-rawdata-reader/vzReader/models"
-	"strconv"
-
 	zkLogger "github.com/zerok-ai/zk-utils-go/logs"
 	scenarioGeneratorModel "github.com/zerok-ai/zk-utils-go/scenario/model"
 	store "github.com/zerok-ai/zk-utils-go/storage/redis"
@@ -19,7 +16,6 @@ import (
 	"scenario-manager/internal/stores"
 	tracePersistenceModel "scenario-manager/internal/tracePersistence/model"
 	tracePersistence "scenario-manager/internal/tracePersistence/service"
-	"strings"
 	"time"
 )
 
@@ -40,11 +36,11 @@ type ScenarioManager struct {
 	tracePersistenceService tracePersistence.TracePersistenceService
 }
 
-func getNewVZReader() (*vzReader.VzReader, error) {
+func getNewVZReader(cfg config.AppConfigs) (*vzReader.VzReader, error) {
 	reader := vzReader.VzReader{
-		CloudAddr:  "px.avinpx07.getanton.com:443",
-		ClusterId:  "94711f31-f693-46be-91c3-832c0f64b12f",
-		ClusterKey: "px-api-ce1bbae5-49c7-4d81-99e2-0d11865bb5df",
+		CloudAddr:  cfg.ScenarioConfig.VZCloudAddr,
+		ClusterId:  cfg.ScenarioConfig.VZClusterId,
+		ClusterKey: cfg.ScenarioConfig.VZClusterKey,
 	}
 
 	err := reader.Init()
@@ -57,7 +53,7 @@ func getNewVZReader() (*vzReader.VzReader, error) {
 }
 
 func NewScenarioManager(cfg config.AppConfigs, tps tracePersistence.TracePersistenceService) (*ScenarioManager, error) {
-	reader, err := getNewVZReader()
+	reader, err := getNewVZReader(cfg)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to get new VZ reader")
 	}
@@ -79,8 +75,11 @@ func NewScenarioManager(cfg config.AppConfigs, tps tracePersistence.TracePersist
 }
 
 func (scenarioManager ScenarioManager) Init() ScenarioManager {
+
+	duration := time.Duration(scenarioManager.cfg.ScenarioConfig.ProcessingIntervalInSeconds) * time.Second
+
 	// trigger recurring processing of trace data against filters
-	tickerTask := ticker.GetNewTickerTask("filter-processor", FilterProcessingTickInterval, scenarioManager.processAllScenarios)
+	tickerTask := ticker.GetNewTickerTask("filter-processor", duration, scenarioManager.processAllScenarios)
 	tickerTask.Start()
 	return scenarioManager
 }
@@ -211,11 +210,13 @@ func (scenarioManager ScenarioManager) getAllRawSpans(tracesForProtocol *map[str
 				spans = append(spans, scenarioManager.collectHTTPRawData(traceArray[startIndex:endIndex], startTime)...)
 			} else if protocol == "mysql" {
 				spans = append(spans, scenarioManager.collectMySQLRawData(traceArray[startIndex:endIndex], startTime)...)
+			} else if protocol == "postgresql" {
+				spans = append(spans, scenarioManager.collectPostgresRawData(traceArray[startIndex:endIndex], startTime)...)
 			}
 
 			startIndex = endIndex
+			rawSpans = append(rawSpans, spans...)
 		}
-		rawSpans = append(rawSpans, spans...)
 	}
 	return rawSpans
 }
@@ -325,8 +326,6 @@ func getListOfIssues(scenario *scenarioGeneratorModel.Scenario, spanMap *map[str
 		for _, span := range spans {
 
 			// get hash
-			//hashBytes := md5.Sum([]byte(scenario.Id + scenario.Version + getTextFromStructMembers(group.Hash, span)))
-			//hash := hex.EncodeToString(hashBytes[:])
 			hash := scenario.Id + scenario.Version + TitleDelimiter + getTextFromStructMembers(group.Hash, span)
 
 			// get title
@@ -404,8 +403,7 @@ func (scenarioManager ScenarioManager) collectHTTPRawData(traceIds []string, sta
 		zkLogger.Error(LoggerTag, "Error getting raw spans for http traces ", traceIds, err)
 		return spans
 	}
-	httpSpans := rawData.Results
-	for _, span := range httpSpans {
+	for _, span := range rawData.Results {
 		spans = append(spans, transformHTTPSpan(span))
 	}
 	return spans
@@ -418,107 +416,21 @@ func (scenarioManager ScenarioManager) collectMySQLRawData(traceIds []string, st
 		zkLogger.Error(LoggerTag, "Error getting raw spans for mysql traces ", traceIds, err)
 		return spans
 	}
-	httpSpans := rawData.Results
-	for _, span := range httpSpans {
+	for _, span := range rawData.Results {
 		spans = append(spans, transformMySQLSpan(span))
 	}
 	return spans
 }
 
-func getHttpRequestData(value models.HttpRawDataModel) tracePersistenceModel.HTTPRequestPayload {
-	req := tracePersistenceModel.HTTPRequestPayload{
-		ReqPath:    value.ReqPath,
-		ReqMethod:  value.ReqMethod,
-		ReqHeaders: value.ReqHeaders,
-		ReqBody:    value.ReqBody,
+func (scenarioManager ScenarioManager) collectPostgresRawData(traceIds []string, startTime string) []tracePersistenceModel.Span {
+	spans := make([]tracePersistenceModel.Span, 0)
+	rawData, err := scenarioManager.traceRawDataCollector.GetPgSQLRawData(traceIds, startTime)
+	if err != nil {
+		zkLogger.Error(LoggerTag, "Error getting raw spans for postgres traces ", traceIds, err)
+		return spans
 	}
-	return req
-}
-
-func getHttpResponseData(value models.HttpRawDataModel) tracePersistenceModel.HTTPResponsePayload {
-	res := tracePersistenceModel.HTTPResponsePayload{
-		RespStatus:  value.RespStatus,
-		RespMessage: value.RespMessage,
-		RespHeaders: value.RespHeaders,
-		RespBody:    value.RespBody,
+	for _, span := range rawData.Results {
+		spans = append(spans, transformPGSpan(span))
 	}
-	return res
-}
-
-func getMySQLRequestData(value models.MySQLRawDataModel) tracePersistenceModel.HTTPRequestPayload {
-	req := tracePersistenceModel.HTTPRequestPayload{
-		ReqPath: strconv.Itoa(value.RemotePort),
-		ReqBody: value.ReqBody,
-	}
-	return req
-}
-
-func getMySQLResponseData(value models.MySQLRawDataModel) tracePersistenceModel.HTTPResponsePayload {
-	res := tracePersistenceModel.HTTPResponsePayload{
-		RespStatus: strconv.Itoa(value.RespStatus),
-		RespBody:   value.RespBody,
-	}
-	return res
-}
-
-//func populateHttpSpan(fullSpan models.HttpRawDataModel, spanForStorage tracePersistenceModel.Span) *tracePersistenceModel.Span {
-//	spanForStorage.Source = fullSpan.Source
-//	spanForStorage.Destination = fullSpan.Destination
-//	spanForStorage.WorkloadIdList = strings.Split(fullSpan.WorkloadIds, ",")
-//	spanForStorage.Metadata = map[string]interface{}{}
-//	spanForStorage.LatencyMs = &fullSpan.Latency
-//	spanForStorage.RequestPayload = getHttpRequestData(fullSpan)
-//	spanForStorage.ResponsePayload = getHttpResponseData(fullSpan)
-//	spanForStorage.Time = epochNSToTime(fullSpan.Time)
-//
-//	return &spanForStorage
-//}
-
-//func populateMySQLSpan(fullSpan models.MySQLRawDataModel, spanForStorage tracePersistenceModel.Span) *tracePersistenceModel.Span {
-//	spanForStorage.Source = fullSpan.Source
-//	spanForStorage.Destination = fullSpan.Destination
-//	spanForStorage.WorkloadIdList = strings.Split(fullSpan.WorkloadIds, ",")
-//	spanForStorage.Metadata = map[string]interface{}{}
-//	spanForStorage.LatencyMs = &fullSpan.Latency
-//	spanForStorage.RequestPayload = getMySQLRequestData(fullSpan)
-//	spanForStorage.ResponsePayload = getMySQLResponseData(fullSpan)
-//	spanForStorage.Time = epochNSToTime(fullSpan.Time)
-//
-//	return &spanForStorage
-//}
-
-func transformHTTPSpan(fullSpan models.HttpRawDataModel) tracePersistenceModel.Span {
-	spanForStorage := tracePersistenceModel.Span{
-		SpanId:          fullSpan.SpanId,
-		TraceId:         fullSpan.TraceId,
-		Source:          fullSpan.Source,
-		Destination:     fullSpan.Destination,
-		WorkloadIdList:  strings.Split(fullSpan.WorkloadIds, ","),
-		Metadata:        map[string]interface{}{},
-		LatencyMs:       &fullSpan.Latency,
-		RequestPayload:  getHttpRequestData(fullSpan),
-		ResponsePayload: getHttpResponseData(fullSpan),
-		Time:            epochNSToTime(fullSpan.Time),
-	}
-	return spanForStorage
-}
-
-func transformMySQLSpan(fullSpan models.MySQLRawDataModel) tracePersistenceModel.Span {
-	spanForStorage := tracePersistenceModel.Span{
-		SpanId:          fullSpan.SpanId,
-		TraceId:         fullSpan.TraceId,
-		Source:          fullSpan.Source,
-		Destination:     fullSpan.Destination,
-		WorkloadIdList:  strings.Split(fullSpan.WorkloadIds, ","),
-		Metadata:        map[string]interface{}{},
-		LatencyMs:       &fullSpan.Latency,
-		RequestPayload:  getMySQLRequestData(fullSpan),
-		ResponsePayload: getMySQLResponseData(fullSpan),
-		Time:            epochNSToTime(fullSpan.Time),
-	}
-	return spanForStorage
-}
-
-func epochNSToTime(epochNS uint64) time.Time {
-	return time.Unix(0, int64(epochNS))
+	return spans
 }

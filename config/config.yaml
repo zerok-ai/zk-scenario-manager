@@ -10,13 +10,17 @@ postgres:
   host: 127.0.0.1
   port: 5432
   user: "postgres"
-  password: "eo1Mgtm6HI"
+  password: "dQsibXGVE3"
   dbname: "pl"
 logs:
   color: true
   level: DEBUG
 scenarioConfig:
   redisRuleSetCount: 12
+  processingIntervalInSeconds: 10
+  vzCloudAddr: "px.loadcloud01.getanton.com:443"
+  vzClusterId: "d6ab4cb1-a202-4c48-ae42-f7e480063663"
+  vzClusterKey: "px-api-466ba2de-43d0-4d51-a678-005a5ecfb1d9"
 server:
   host: localhost
   port: 80
