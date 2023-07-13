@@ -37,6 +37,7 @@ func GetOTelStore(redisConfig *config.RedisConfig) *OTelStore {
 }
 
 type SpanFromOTel struct {
+	TraceID      string
 	SpanID       string
 	Kind         string `json:"spanKind"`
 	Protocol     string `json:"protocol"`
@@ -73,7 +74,7 @@ func (t OTelStore) GetSpansForTracesFromDB(keys []string) (map[string]*TraceFrom
 
 	// 4. Process the results
 	result := map[string]*TraceFromOTel{}
-	tracesForProtocol := make(map[string]ds.Set, 0)
+	tracesForProtocol := make(map[string]ds.Set[string], 0)
 	for i, hashResult := range hashResults {
 		traceId := keys[i]
 		trace, err := hashResult.Result()
@@ -98,41 +99,53 @@ func (t OTelStore) GetSpansForTracesFromDB(keys []string) (map[string]*TraceFrom
 				zkLogger.ErrorF(LoggerTag, "Error retrieving span:", err)
 				continue
 			}
+			sp.TraceID = traceId
 			sp.SpanID = spanId
 			traceFromOTel.Spans[spanId] = &sp
 		}
 
 		// 4.2 set the parent-child relationships and find root span
-		var rootSpan *string
+		var rootSpan *SpanFromOTel
 		for _, spanFromOTel := range traceFromOTel.Spans {
 			parentSpan, ok := traceFromOTel.Spans[spanFromOTel.ParentSpanID]
 			if ok {
 				parentSpan.Children = append(parentSpan.Children, *spanFromOTel)
 			} else {
-				rootSpan = &spanFromOTel.SpanID
+				rootSpan = spanFromOTel
 			}
 		}
 
 		if rootSpan == nil {
-			zkLogger.Debug(LoggerTag, "rootSpan not found")
+			zkLogger.Debug(LoggerTag, "rootSpanID not found")
 			continue
+		} else if rootSpan.Kind == SERVER {
+			rootClient := SpanFromOTel{
+				TraceID:  rootSpan.TraceID,
+				SpanID:   rootSpan.ParentSpanID,
+				Kind:     CLIENT,
+				Protocol: rootSpan.Protocol,
+				Children: []SpanFromOTel{*rootSpan},
+			}
+			traceFromOTel.Spans[rootSpan.ParentSpanID] = &rootClient
+			rootSpan = &rootClient
 		}
+		rootSpanID := &rootSpan.SpanID
 
 		// 4.3 prune the unwanted Spans
-		prune(traceFromOTel.Spans, *rootSpan)
+		prune(traceFromOTel.Spans, *rootSpanID)
 
 		// 4.4 find the protocol for each span
 		for _, value := range traceFromOTel.Spans {
 			protocol := value.Protocol
 			traceSetForProtocol, ok := tracesForProtocol[protocol]
 			if !ok {
-				traceSetForProtocol = make(ds.Set, 0)
+				traceSetForProtocol = make(ds.Set[string], 0)
 			}
 			traceSetForProtocol[traceId] = true
 			tracesForProtocol[protocol] = traceSetForProtocol
 		}
 
-		zkLogger.DebugF(LoggerTag, "rootSpan: %s", *rootSpan)
+		zkLogger.DebugF(LoggerTag, "rootSpanID: %s", *rootSpanID)
 		result[traceId] = traceFromOTel
 	}
 
