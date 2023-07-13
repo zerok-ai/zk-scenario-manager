@@ -7,6 +7,7 @@ import (
 	"github.com/jmespath/go-jmespath"
 	"github.com/pkg/errors"
 	"github.com/zerok-ai/zk-rawdata-reader/vzReader"
+	"github.com/zerok-ai/zk-utils-go/ds"
 	zkLogger "github.com/zerok-ai/zk-utils-go/logs"
 	scenarioGeneratorModel "github.com/zerok-ai/zk-utils-go/scenario/model"
 	store "github.com/zerok-ai/zk-utils-go/storage/redis"
@@ -237,6 +238,7 @@ func buildScenarioForPersistence(scenario *scenarioGeneratorModel.Scenario, trac
 		spanMapOfPersistentSpans := make(map[string]*tracePersistenceModel.Span, 0)
 		for _, spanFromOTel := range traceFromOTel.Spans {
 			spanForPersistence := &tracePersistenceModel.Span{
+				TraceId:      spanFromOTel.TraceID,
 				SpanId:       spanFromOTel.SpanID,
 				ParentSpanId: spanFromOTel.ParentSpanID,
 				Protocol:     spanFromOTel.Protocol,
@@ -244,6 +246,17 @@ func buildScenarioForPersistence(scenario *scenarioGeneratorModel.Scenario, trac
 			spanMapOfPersistentSpans[spanFromOTel.SpanID] = spanForPersistence
 		}
 		traceTreeForPersistence[traceId] = &spanMapOfPersistentSpans
+	}
+
+	traceTreeFromRawSpans := make(map[string]*map[string]*tracePersistenceModel.Span, 0)
+	for _, span := range spans {
+		trace, ok := traceTreeFromRawSpans[span.TraceId]
+		if !ok {
+			temp := make(map[string]*tracePersistenceModel.Span, 0)
+			trace = &temp
+		}
+		(*trace)[span.SpanId] = &span
+		traceTreeFromRawSpans[span.TraceId] = trace
 	}
 
 	// process all the elements of `spans`
@@ -298,61 +311,94 @@ func evaluateIncidents(scenario *scenarioGeneratorModel.Scenario, traceId string
 
 func getListOfIssues(scenario *scenarioGeneratorModel.Scenario, spanMap *map[string]*tracePersistenceModel.Span) []tracePersistenceModel.Issue {
 
-	// 1. create a set of workspaceIds vs spans
-	workloadIdToSpansMap := make(map[string][]tracePersistenceModel.Span, 0)
+	// 1. create a set of used workload ids
+	workloadIdListInGroup := make(ds.Set[string], 0)
+	for _, group := range scenario.GroupBy {
+		workloadIdListInGroup.Add(group.WorkloadId)
+	}
+
+	// 2. create a set of workspaceIds vs spans
+	workloadIdToSpansMap := make(map[string][]*tracePersistenceModel.Span, 0)
 	for _, span := range *spanMap {
 		workloadIdList := span.WorkloadIdList
 		for _, workloadId := range workloadIdList {
 			spans, ok := workloadIdToSpansMap[workloadId]
 			if !ok {
-				spans = make([]tracePersistenceModel.Span, 0)
+				spans = make([]*tracePersistenceModel.Span, 0)
 			}
-			workloadIdToSpansMap[workloadId] = append(spans, *span)
+			newSpans := append(spans, span)
+			workloadIdToSpansMap[workloadId] = newSpans
 		}
 	}
 
-	// 2. iterate through the `GroupBy` construct in scenario and evaluate each `groupBy` clause
-	issues := make([]tracePersistenceModel.Issue, 0)
-	for _, group := range scenario.GroupBy {
+	// 3. do a cartesian product of all the elements in workloadIdSet
+	spansForGrpBy := make([]map[string]*tracePersistenceModel.Span, 0)
+	for workloadId, _ := range workloadIdListInGroup {
+		arrSpans := workloadIdToSpansMap[workloadId]
+		spansForGrpBy = getCartesianProductOfSpans(spansForGrpBy, workloadId, arrSpans)
+	}
 
-		// 2.1 get the list of spans for each workloadId
-		spans, ok := workloadIdToSpansMap[group.WorkloadId]
-		if !ok {
-			continue
+	// 4. iterate through spansForGrpBy and evaluate each groupBy clause
+	issueMap := make(map[string]tracePersistenceModel.Issue, 0)
+	for _, mapOfIssueSpans := range spansForGrpBy {
+
+		hash := scenario.Id + scenario.Version
+		title := scenario.Title
+		for _, group := range scenario.GroupBy {
+			span, ok := mapOfIssueSpans[group.WorkloadId]
+			if !ok {
+				continue
+			}
+
+			// get hash and title
+			hash = hash + TitleDelimiter + getTextFromStructMembers(group.Hash, span)
+			title = title + TitleDelimiter + getTextFromStructMembers(group.Title, span)
+		}
+		md5OfHash := md5.Sum([]byte(hash))
+		hash = hex.EncodeToString(md5OfHash[:])
+		issueMap[hash] = tracePersistenceModel.Issue{
+			IssueHash:  hash,
+			IssueTitle: title,
 		}
 
-		// 2.2 create title and hash by iterating through the spans
-		issuesForGroup := make([]tracePersistenceModel.Issue, 0)
-		for _, span := range spans {
-
-			// get hash
-			hash := scenario.Id + scenario.Version + TitleDelimiter + getTextFromStructMembers(group.Hash, span)
-
-			// get title
-			title := scenario.Title + TitleDelimiter + getTextFromStructMembers(group.Title, span)
-
-			issuesForGroup = append(issuesForGroup, tracePersistenceModel.Issue{
-				IssueHash:  hash,
-				IssueTitle: title,
-			})
-
+		// iterate over mapOfIssueSpans
+		for _, span := range mapOfIssueSpans {
 			if span.IssueHashList == nil {
 				span.IssueHashList = make([]string, 0)
 			}
-			span.IssueHashList = append(span.IssueHashList, hash)
+			set := ds.Set[string]{}.AddBulk(span.IssueHashList).Add(hash)
+			span.IssueHashList = set.GetAll()
 		}
-
-		// 3. do a cartesian product of all the groups
-		issues = getCartesianProductOfIssues(issues, issuesForGroup)
 	}
 
-	// 4. hash the id
-	for i, issue := range issues {
-		hash := md5.Sum([]byte(scenario.Id + scenario.Version + issue.IssueHash))
-		issues[i].IssueHash = hex.EncodeToString(hash[:])
+	// 5. iterate through the issueMap and create a list of issues
+	issues := make([]tracePersistenceModel.Issue, 0)
+	for _, issue := range issueMap {
+		issues = append(issues, issue)
 	}
 
 	return issues
+}
+
+func getCartesianProductOfSpans(arrOfWorkLoadSpanMap []map[string]*tracePersistenceModel.Span, workload string, arrOfSpans []*tracePersistenceModel.Span) []map[string]*tracePersistenceModel.Span {
+
+	if len(arrOfSpans) == 0 {
+		return arrOfWorkLoadSpanMap
+	}
+
+	if len(arrOfWorkLoadSpanMap) == 0 {
+		arrOfWorkLoadSpanMap = append(arrOfWorkLoadSpanMap, make(map[string]*tracePersistenceModel.Span, 0))
+	}
+
+	result := make([]map[string]*tracePersistenceModel.Span, 0)
+	for _, s1 := range arrOfWorkLoadSpanMap {
+		for _, s2 := range arrOfSpans {
+			newMap := s1
+			newMap[workload] = s2
+			result = append(result, newMap)
+		}
+	}
+	return result
 }
 
 func getTextFromStructMembers(path string, span interface{}) string {
@@ -366,34 +412,6 @@ func getTextFromStructMembers(path string, span interface{}) string {
 		zkLogger.Error(LoggerTag, "Error evaluating jmespath for span ", span)
 	}
 	return ""
-}
-
-// function to get cartesian product of two string slices
-func getCartesianProductOfIssues(slice1 []tracePersistenceModel.Issue, slice2 []tracePersistenceModel.Issue) []tracePersistenceModel.Issue {
-
-	if len(slice1) == 0 && len(slice2) == 0 {
-		return slice1
-	}
-
-	if len(slice1) != 0 && len(slice2) == 0 {
-		return slice1
-	}
-
-	if len(slice1) == 0 && len(slice2) != 0 {
-		return slice2
-	}
-
-	result := make([]tracePersistenceModel.Issue, 0)
-	for _, s1 := range slice1 {
-		for _, s2 := range slice2 {
-			issue := tracePersistenceModel.Issue{
-				IssueHash:  s1.IssueHash + TitleDelimiter + s2.IssueHash,
-				IssueTitle: s1.IssueTitle + TitleDelimiter + s2.IssueTitle,
-			}
-			result = append(result, issue)
-		}
-	}
-	return result
 }
 
 func (scenarioManager ScenarioManager) collectHTTPRawData(traceIds []string, startTime string) []tracePersistenceModel.Span {
