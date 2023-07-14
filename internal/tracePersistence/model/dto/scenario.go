@@ -215,6 +215,4 @@ func ValidateIssue(s model.IncidentWithIssues) (bool, *zkerrors.ZkError) {
 	//		return false, common.ToPtr(zkerrors.ZkErrorBuilder{}.Build(zkerrors.ZkErrorBadRequest, "invalid data"))
 	//	}
 	//}
-
-	return true, nil
 }
