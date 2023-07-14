@@ -43,10 +43,10 @@ func (s tracePersistenceService) SaveIncidents(issuesDetails []model.IncidentWit
 			continue
 		}
 
-		issueDtoList := make([]dto.IssueTableDto, 0)
-		traceDtoList := make([]dto.IncidentTableDto, 0)
-		spanDtoList := make([]dto.SpanTableDto, 0)
-		spanRawDataDtoList := make([]dto.SpanRawDataTableDto, 0)
+		//issueDtoList := make([]dto.IssueTableDto, 0)
+		//traceDtoList := make([]dto.IncidentTableDto, 0)
+		//spanDtoList := make([]dto.SpanTableDto, 0)
+		//spanRawDataDtoList := make([]dto.SpanRawDataTableDto, 0)
 
 		i, t, tmd, trd, err := dto.ConvertScenarioToTraceDto(issuesDetail)
 		if err != nil {
@@ -54,20 +54,20 @@ func (s tracePersistenceService) SaveIncidents(issuesDetails []model.IncidentWit
 			continue
 		}
 
-		issueDtoList = append(issueDtoList, i...)
-		traceDtoList = append(traceDtoList, t...)
-		spanDtoList = append(spanDtoList, tmd...)
-		spanRawDataDtoList = append(spanRawDataDtoList, trd...)
+		// TODO: check if this is to be removed
+		//issueDtoList = append(issueDtoList, i...)
+		//traceDtoList = append(traceDtoList, t...)
+		//spanDtoList = append(spanDtoList, tmd...)
+		//spanRawDataDtoList = append(spanRawDataDtoList, trd...)
 
 		v := dto.IssuesDetailDto{
-			IssueTableDtoList:    issueDtoList,
-			ScenarioTableDtoList: traceDtoList,
-			SpanTableDtoList:     spanDtoList,
-			SpanRawDataTableList: spanRawDataDtoList,
+			IssueTableDtoList:    i,
+			ScenarioTableDtoList: t,
+			SpanTableDtoList:     tmd,
+			SpanRawDataTableList: trd,
 		}
 
 		issuesDetailsDtoList = append(issuesDetailsDtoList, v)
-
 	}
 
 	saveErr := s.repo.SaveTraceList(issuesDetailsDtoList)
