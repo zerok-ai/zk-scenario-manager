@@ -37,37 +37,24 @@ func (s tracePersistenceService) SaveIncidents(issuesDetails []model.IncidentWit
 	issuesDetailsDtoList := make([]dto.IssuesDetailDto, 0)
 
 	for _, issuesDetail := range issuesDetails {
-
-		if b, zkErr := dto.ValidateIssue(issuesDetail); !b || zkErr != nil {
+		b, zkErr, validIssueDetail := dto.ValidateAndSanitiseIssue(issuesDetail)
+		if !b || zkErr != nil {
 			zkLogger.Error("Invalid issuesDetail", zkErr)
 			continue
 		}
 
-		//issueDtoList := make([]dto.IssueTableDto, 0)
-		//traceDtoList := make([]dto.IncidentTableDto, 0)
-		//spanDtoList := make([]dto.SpanTableDto, 0)
-		//spanRawDataDtoList := make([]dto.SpanRawDataTableDto, 0)
-
-		i, t, tmd, trd, err := dto.ConvertScenarioToTraceDto(issuesDetail)
+		v, err := dto.ConvertIncidentIssuesToIssueDto(validIssueDetail)
 		if err != nil {
 			zkLogger.Error(LogTag, err)
 			continue
 		}
 
-		// TODO: check if this is to be removed
-		//issueDtoList = append(issueDtoList, i...)
-		//traceDtoList = append(traceDtoList, t...)
-		//spanDtoList = append(spanDtoList, tmd...)
-		//spanRawDataDtoList = append(spanRawDataDtoList, trd...)
-
-		v := dto.IssuesDetailDto{
-			IssueTableDtoList:    i,
-			ScenarioTableDtoList: t,
-			SpanTableDtoList:     tmd,
-			SpanRawDataTableList: trd,
-		}
-
 		issuesDetailsDtoList = append(issuesDetailsDtoList, v)
+	}
+
+	if len(issuesDetailsDtoList) == 0 {
+		zkErr := zkErrors.ZkErrorBuilder{}.Build(zkErrors.ZkErrorBadRequest, nil)
+		return &zkErr
 	}
 
 	saveErr := s.repo.SaveTraceList(issuesDetailsDtoList)
