@@ -76,7 +76,7 @@ package dto
 //		Destination:    "d1",
 //		WorkloadIdList: []string{"id1", "id2"},
 //		Metadata:       "{'k':'value}",
-//		LatencyMs:      67.9,
+//		LatencyNs:      67.9,
 //		Protocol:       "HTTP",
 //	}
 //
@@ -89,7 +89,7 @@ package dto
 //	assert.Equal(t1, c[4], s.Destination)
 //	assert.Equal(t1, c[5], s.WorkloadIdList)
 //	assert.Equal(t1, c[6], s.Metadata)
-//	assert.Equal(t1, c[7], s.LatencyMs)
+//	assert.Equal(t1, c[7], s.LatencyNs)
 //	assert.Equal(t1, c[8], s.Protocol)
 //}
 
