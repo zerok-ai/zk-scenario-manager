@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"github.com/zerok-ai/zk-utils-go/common"
 	zkCrypto "github.com/zerok-ai/zk-utils-go/crypto"
-	logger "github.com/zerok-ai/zk-utils-go/logs"
+	zkLogger "github.com/zerok-ai/zk-utils-go/logs"
 	"github.com/zerok-ai/zk-utils-go/zkerrors"
 	"scenario-manager/internal/tracePersistence/model"
 	"time"
@@ -40,12 +40,14 @@ func (t IncidentTableDto) GetAllColumns() []any {
 	return []any{t.TraceId, t.IssueHash, t.IncidentCollectionTime}
 }
 
-func ConvertScenarioToTraceDto(s model.IncidentWithIssues) ([]IssueTableDto, []IncidentTableDto, []SpanTableDto, []SpanRawDataTableDto, *error) {
+func ConvertIncidentIssuesToIssueDto(s model.IncidentWithIssues) (IssuesDetailDto, *error) {
+	var response IssuesDetailDto
 	var issueDtoList []IssueTableDto
-	var scenarioDtoList []IncidentTableDto
+	var incidentDtoList []IncidentTableDto
 	var spanDtoList []SpanTableDto
 	var spanRawDataDtoList []SpanRawDataTableDto
 	traceId := s.Incident.TraceId
+	incidentCollectionTime := s.Incident.IncidentCollectionTime
 	for _, issueGroup := range s.IssueGroupList {
 		for _, issue := range issueGroup.Issues {
 			issueDto := IssueTableDto{
@@ -56,12 +58,12 @@ func ConvertScenarioToTraceDto(s model.IncidentWithIssues) ([]IssueTableDto, []I
 			}
 			issueDtoList = append(issueDtoList, issueDto)
 
-			scenarioDto := IncidentTableDto{
+			incidentDto := IncidentTableDto{
 				TraceId:                traceId,
 				IssueHash:              issue.IssueHash,
-				IncidentCollectionTime: s.Incident.IncidentCollectionTime,
+				IncidentCollectionTime: incidentCollectionTime,
 			}
-			scenarioDtoList = append(scenarioDtoList, scenarioDto)
+			incidentDtoList = append(incidentDtoList, incidentDto)
 		}
 	}
 
@@ -74,20 +76,20 @@ func ConvertScenarioToTraceDto(s model.IncidentWithIssues) ([]IssueTableDto, []I
 		if span.RequestPayload != nil {
 			requestCompressedStr, err = zkCrypto.CompressStringGzip(span.RequestPayload.GetString())
 			if err != nil {
-				return nil, nil, nil, nil, &err
+				return response, &err
 			}
 		}
 
 		if span.ResponsePayload != nil {
 			responseCompressedStr, err = zkCrypto.CompressStringGzip(span.ResponsePayload.GetString())
 			if err != nil {
-				return nil, nil, nil, nil, &err
+				return response, &err
 			}
 			spanMetadataDto.Status = span.ResponsePayload.GetStatus()
 		}
 		m, err := json.Marshal(span.Metadata)
 		if err != nil {
-			return nil, nil, nil, nil, &err
+			return response, &err
 		}
 
 		spanMetadataDto.TraceId = traceId
@@ -97,7 +99,7 @@ func ConvertScenarioToTraceDto(s model.IncidentWithIssues) ([]IssueTableDto, []I
 		spanMetadataDto.WorkloadIdList = span.WorkloadIdList
 
 		spanMetadataDto.Metadata = string(m)
-		spanMetadataDto.LatencyMs = span.LatencyMs
+		spanMetadataDto.LatencyNs = span.LatencyNs
 		spanMetadataDto.Protocol = span.Protocol
 		spanMetadataDto.ParentSpanId = span.ParentSpanId
 		spanMetadataDto.IssueHashList = span.IssueHashList
@@ -113,68 +115,123 @@ func ConvertScenarioToTraceDto(s model.IncidentWithIssues) ([]IssueTableDto, []I
 
 	}
 
-	return issueDtoList, scenarioDtoList, spanDtoList, spanRawDataDtoList, nil
+	zkLogger.Info(LogTag, "issueDtoList len: ", len(issueDtoList))
+	zkLogger.Info(LogTag, "incidentDtoList len: ", len(incidentDtoList))
+	zkLogger.Info(LogTag, "spanDtoList len: ", len(spanDtoList))
+	zkLogger.Info(LogTag, "spanRawDataDtoList len: ", len(spanRawDataDtoList))
+
+	response = IssuesDetailDto{
+		IssueTableDtoList:    issueDtoList,
+		ScenarioTableDtoList: incidentDtoList,
+		SpanTableDtoList:     spanDtoList,
+		SpanRawDataTableList: spanRawDataDtoList,
+	}
+
+	return response, nil
 }
 
-func ValidateIssue(s model.IncidentWithIssues) (bool, *zkerrors.ZkError) {
-	for _, issueGroup := range s.IssueGroupList {
-		if issueGroup.ScenarioId == "" {
-			logger.Error(LogTag, "scenario_id empty")
-			return false, common.ToPtr(zkerrors.ZkErrorBuilder{}.Build(zkerrors.ZkErrorBadRequest, "invalid data"))
-		}
-
-		if issueGroup.ScenarioVersion == "" {
-			logger.Error(LogTag, "scenario_version empty")
-			return false, common.ToPtr(zkerrors.ZkErrorBuilder{}.Build(zkerrors.ZkErrorBadRequest, "invalid data"))
-		}
+func ValidateAndSanitiseIssue(s model.IncidentWithIssues) (bool, *zkerrors.ZkError, model.IncidentWithIssues) {
+	var resp model.IncidentWithIssues
+	if s.IssueGroupList == nil || len(s.IssueGroupList) == 0 {
+		zkLogger.Error(LogTag, "issue_group_list empty")
+		return false, common.ToPtr(zkerrors.ZkErrorBuilder{}.Build(zkerrors.ZkErrorBadRequest, "issue_group_list empty")), resp
 	}
 
 	if s.Incident.TraceId == "" {
-		logger.Error(LogTag, "trace Id empty")
-		return false, common.ToPtr(zkerrors.ZkErrorBuilder{}.Build(zkerrors.ZkErrorBadRequest, "invalid data"))
+		zkLogger.Error(LogTag, "traceid empty")
+		return false, common.ToPtr(zkerrors.ZkErrorBuilder{}.Build(zkerrors.ZkErrorBadRequest, "traceId empty")), resp
 	}
+
+	validIssueGroupList := make([]model.IssueGroup, 0)
+
+	for _, issueGroup := range s.IssueGroupList {
+		if issueGroup.ScenarioId == "" {
+			zkLogger.Error(LogTag, "scenario_id empty")
+			continue
+		}
+
+		if issueGroup.ScenarioVersion == "" {
+			zkLogger.Error(LogTag, "scenario_version empty")
+			continue
+		}
+
+		if issueGroup.Issues == nil || len(issueGroup.Issues) == 0 {
+			zkLogger.Error(LogTag, "issues list empty")
+			continue
+		}
+
+		// todo: check if this is even possible to happen
+		validIssuesList := make([]model.Issue, 0)
+
+		for _, issue := range issueGroup.Issues {
+			if issue.IssueHash == "" || issue.IssueTitle == "" {
+				zkLogger.Error(LogTag, "issueHash or issueTitle empty")
+				continue
+			}
+			validIssuesList = append(validIssuesList, issue)
+		}
+
+		if len(validIssuesList) == 0 {
+			zkLogger.Error(LogTag, "issues list empty")
+			continue
+		}
+
+		i := model.IssueGroup{
+			ScenarioId:      issueGroup.ScenarioId,
+			ScenarioVersion: issueGroup.ScenarioVersion,
+			Issues:          validIssuesList,
+		}
+		validIssueGroupList = append(validIssueGroupList, i)
+	}
+
+	if len(validIssueGroupList) == 0 {
+		zkLogger.Error(LogTag, "issueGroup list empty")
+		return false, common.ToPtr(zkerrors.ZkErrorBuilder{}.Build(zkerrors.ZkErrorBadRequest, "issueGroup list empty")), resp
+	}
+
+	resp.IssueGroupList = validIssueGroupList
+	resp.Incident = s.Incident
+	return true, nil, resp
 
 	//for _, span := range s.Incident.Spans {
 	//	if span.SpanId == "" {
-	//		logger.Error(LogTag, "span_id empty")
+	//		zkLogger.Error(LogTag, "span_id empty")
 	//		return false, common.ToPtr(zkerrors.ZkErrorBuilder{}.Build(zkerrors.ZkErrorBadRequest, "invalid data"))
 	//	}
 	//
 	//	if span.Protocol == "" {
-	//		logger.Error(LogTag, "protocol empty")
+	//		zkLogger.Error(LogTag, "protocol empty")
 	//		return false, common.ToPtr(zkerrors.ZkErrorBuilder{}.Build(zkerrors.ZkErrorBadRequest, "invalid data"))
 	//	}
 	//
 	//	if span.Source == "" {
-	//		logger.Error(LogTag, "source empty")
+	//		zkLogger.Error(LogTag, "source empty")
 	//		return false, common.ToPtr(zkerrors.ZkErrorBuilder{}.Build(zkerrors.ZkErrorBadRequest, "invalid data"))
 	//	}
 	//
 	//	if span.Destination == "" {
-	//		logger.Error(LogTag, "destination empty")
+	//		zkLogger.Error(LogTag, "destination empty")
 	//		return false, common.ToPtr(zkerrors.ZkErrorBuilder{}.Build(zkerrors.ZkErrorBadRequest, "invalid data"))
 	//	}
 	//
-	//	if span.LatencyMs == nil {
-	//		logger.Error(LogTag, "latency_ms empty")
+	//	if span.LatencyNs == nil {
+	//		zkLogger.Error(LogTag, "latency_ns empty")
 	//		return false, common.ToPtr(zkerrors.ZkErrorBuilder{}.Build(zkerrors.ZkErrorBadRequest, "invalid data"))
 	//	}
 	//
 	//	if span.RequestPayload.GetString() == "" {
-	//		logger.Error(LogTag, "request payload empty")
+	//		zkLogger.Error(LogTag, "request payload empty")
 	//		return false, common.ToPtr(zkerrors.ZkErrorBuilder{}.Build(zkerrors.ZkErrorBadRequest, "invalid data"))
 	//	}
 	//
 	//	if span.ResponsePayload.GetString() == "" {
-	//		logger.Error(LogTag, "response payload empty")
+	//		zkLogger.Error(LogTag, "response payload empty")
 	//		return false, common.ToPtr(zkerrors.ZkErrorBuilder{}.Build(zkerrors.ZkErrorBadRequest, "invalid data"))
 	//	}
 	//
 	//	if span.IssueHashList == nil || len(span.IssueHashList) == 0 {
-	//		logger.Error(LogTag, "issue hash list empty")
+	//		zkLogger.Error(LogTag, "issue hash list empty")
 	//		return false, common.ToPtr(zkerrors.ZkErrorBuilder{}.Build(zkerrors.ZkErrorBadRequest, "invalid data"))
 	//	}
 	//}
-
-	return true, nil
 }

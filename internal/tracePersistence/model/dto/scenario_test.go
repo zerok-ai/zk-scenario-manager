@@ -16,18 +16,18 @@ package dto
 //	}
 //	for _, tt := range tests {
 //		t.Run(tt.name, func(t *testing.T) {
-//			got, got1, got2, got3 := ConvertScenarioToTraceDto(tt.args.s)
+//			got, got1, got2, got3 := ConvertIncidentIssuesToIssueDto(tt.args.s)
 //			if !reflect.DeepEqual(got, tt.want) {
-//				t.Errorf("ConvertScenarioToTraceDto() got = %v, want %v", got, tt.want)
+//				t.Errorf("ConvertIncidentIssuesToIssueDto() got = %v, want %v", got, tt.want)
 //			}
 //			if !reflect.DeepEqual(got1, tt.want1) {
-//				t.Errorf("ConvertScenarioToTraceDto() got1 = %v, want %v", got1, tt.want1)
+//				t.Errorf("ConvertIncidentIssuesToIssueDto() got1 = %v, want %v", got1, tt.want1)
 //			}
 //			if !reflect.DeepEqual(got2, tt.want2) {
-//				t.Errorf("ConvertScenarioToTraceDto() got2 = %v, want %v", got2, tt.want2)
+//				t.Errorf("ConvertIncidentIssuesToIssueDto() got2 = %v, want %v", got2, tt.want2)
 //			}
 //			if !reflect.DeepEqual(got3, tt.want3) {
-//				t.Errorf("ConvertScenarioToTraceDto() got3 = %v, want %v", got3, tt.want3)
+//				t.Errorf("ConvertIncidentIssuesToIssueDto() got3 = %v, want %v", got3, tt.want3)
 //			}
 //		})
 //	}
@@ -76,7 +76,7 @@ package dto
 //		Destination:    "d1",
 //		WorkloadIdList: []string{"id1", "id2"},
 //		Metadata:       "{'k':'value}",
-//		LatencyMs:      67.9,
+//		LatencyNs:      67.9,
 //		Protocol:       "HTTP",
 //	}
 //
@@ -89,7 +89,7 @@ package dto
 //	assert.Equal(t1, c[4], s.Destination)
 //	assert.Equal(t1, c[5], s.WorkloadIdList)
 //	assert.Equal(t1, c[6], s.Metadata)
-//	assert.Equal(t1, c[7], s.LatencyMs)
+//	assert.Equal(t1, c[7], s.LatencyNs)
 //	assert.Equal(t1, c[8], s.Protocol)
 //}
 
@@ -107,12 +107,12 @@ package dto
 //	}
 //	for _, tt := range tests {
 //		t.Run(tt.name, func(t *testing.T) {
-//			got, got1 := ValidateIssue(tt.args.s)
+//			got, got1 := ValidateAndSanitiseIssue(tt.args.s)
 //			if got != tt.want {
-//				t.Errorf("ValidateIssue() got = %v, want %v", got, tt.want)
+//				t.Errorf("ValidateAndSanitiseIssue() got = %v, want %v", got, tt.want)
 //			}
 //			if !reflect.DeepEqual(got1, tt.want1) {
-//				t.Errorf("ValidateIssue() got1 = %v, want %v", got1, tt.want1)
+//				t.Errorf("ValidateAndSanitiseIssue() got1 = %v, want %v", got1, tt.want1)
 //			}
 //		})
 //	}
