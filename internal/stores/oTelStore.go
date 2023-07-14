@@ -4,9 +4,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/redis/go-redis/v9"
-	"github.com/zerok-ai/zk-utils-go/ds"
 	zkLogger "github.com/zerok-ai/zk-utils-go/logs"
 	"github.com/zerok-ai/zk-utils-go/storage/redis/config"
+	typedef "scenario-manager/internal"
 	"time"
 )
 
@@ -37,23 +37,23 @@ func GetOTelStore(redisConfig *config.RedisConfig) *OTelStore {
 }
 
 type SpanFromOTel struct {
-	TraceID      string
-	SpanID       string
-	Kind         string `json:"spanKind"`
-	Protocol     string `json:"protocol"`
-	ParentSpanID string `json:"parentSpanID"`
+	TraceID      typedef.TTraceid
+	SpanID       typedef.TSpanId
+	Kind         string          `json:"spanKind"`
+	Protocol     string          `json:"protocol"`
+	ParentSpanID typedef.TSpanId `json:"parentSpanID"`
 	Children     []SpanFromOTel
 }
 
 type TraceFromOTel struct {
 	// Spans is a map of spanID to span
-	Spans map[string]*SpanFromOTel
+	Spans map[typedef.TSpanId]*SpanFromOTel
 }
 
 // GetSpansForTracesFromDB retrieves the spans for the given traceIds from the database
 // Returns a map of traceId to TraceFromOTel
 // Returns a map of protocol to array of traces
-func (t OTelStore) GetSpansForTracesFromDB(keys []string) (map[string]*TraceFromOTel, *map[string][]string, error) {
+func (t OTelStore) GetSpansForTracesFromDB(keys []typedef.TTraceid) (map[typedef.TTraceid]*TraceFromOTel, error) {
 
 	redisClient := t.redisClient
 
@@ -62,19 +62,19 @@ func (t OTelStore) GetSpansForTracesFromDB(keys []string) (map[string]*TraceFrom
 	// 2. Retrieve the hashes within the transaction
 	var hashResults []*redis.MapStringStringCmd
 	for _, hashKey := range keys {
-		hashResult := pipe.HGetAll(ctx, hashKey)
+		hashResult := pipe.HGetAll(ctx, string(hashKey))
 		hashResults = append(hashResults, hashResult)
 	}
 	// 3. Execute the transaction
 	_, err := pipe.Exec(ctx)
 	if err != nil {
 		fmt.Println("Error executing transaction:", err)
-		return nil, nil, err
+		return nil, err
 	}
 
 	// 4. Process the results
-	result := map[string]*TraceFromOTel{}
-	tracesForProtocol := make(map[string]ds.Set[string], 0)
+	result := map[typedef.TTraceid]*TraceFromOTel{}
+	//tracesForProtocol := make(map[string]ds.Set[string], 0)
 	for i, hashResult := range hashResults {
 		traceId := keys[i]
 		trace, err := hashResult.Result()
@@ -89,29 +89,35 @@ func (t OTelStore) GetSpansForTracesFromDB(keys []string) (map[string]*TraceFrom
 			continue
 		}
 
-		traceFromOTel := &TraceFromOTel{Spans: map[string]*SpanFromOTel{}}
+		traceFromOTel := &TraceFromOTel{Spans: map[typedef.TSpanId]*SpanFromOTel{}}
 
 		// 4.1 Unmarshal the Spans
 		for spanId, spanData := range trace {
 			var sp SpanFromOTel
-			err = json.Unmarshal([]byte(spanData), &sp)
-			if err != nil {
+			err1 := json.Unmarshal([]byte(spanData), &sp)
+			if err1 != nil {
 				zkLogger.ErrorF(LoggerTag, "Error retrieving span:", err)
 				continue
 			}
 			sp.TraceID = traceId
-			sp.SpanID = spanId
-			traceFromOTel.Spans[spanId] = &sp
+			sp.SpanID = typedef.TSpanId(spanId)
+			traceFromOTel.Spans[typedef.TSpanId(spanId)] = &sp
 		}
 
 		// 4.2 set the parent-child relationships and find root span
 		var rootSpan *SpanFromOTel
+		rootFound := false
 		for _, spanFromOTel := range traceFromOTel.Spans {
 			parentSpan, ok := traceFromOTel.Spans[spanFromOTel.ParentSpanID]
 			if ok {
 				parentSpan.Children = append(parentSpan.Children, *spanFromOTel)
 			} else {
+				if rootFound {
+					rootSpan = nil
+					break
+				}
 				rootSpan = spanFromOTel
+				rootFound = true
 			}
 		}
 
@@ -134,37 +140,20 @@ func (t OTelStore) GetSpansForTracesFromDB(keys []string) (map[string]*TraceFrom
 		// 4.3 prune the unwanted Spans
 		prune(traceFromOTel.Spans, *rootSpanID)
 
-		// 4.4 find the protocol for each span
-		for _, value := range traceFromOTel.Spans {
-			protocol := value.Protocol
-			traceSetForProtocol, ok := tracesForProtocol[protocol]
-			if !ok {
-				traceSetForProtocol = make(ds.Set[string], 0)
-			}
-			traceSetForProtocol[traceId] = true
-			tracesForProtocol[protocol] = traceSetForProtocol
-		}
-
 		zkLogger.DebugF(LoggerTag, "rootSpanID: %s", *rootSpanID)
 		result[traceId] = traceFromOTel
 	}
 
-	// 5. Convert the tracesForProtocol map to a map of protocol to array of traces
-	traceArrayForProtocol := make(map[string][]string, 0)
-	for protocol, traceSet := range tracesForProtocol {
-		traceArrayForProtocol[protocol] = traceSet.GetAll()
-	}
-
-	return result, &traceArrayForProtocol, nil
+	return result, nil
 }
 
-// prune removes the Spans that are not required - internal Spans and server Spans that are not the root span
-func prune(spans map[string]*SpanFromOTel, currentSpanID string) ([]string, bool) {
+// prune removes the Spans that are not required - typedef Spans and server Spans that are not the root span
+func prune(spans map[typedef.TSpanId]*SpanFromOTel, currentSpanID typedef.TSpanId) ([]typedef.TSpanId, bool) {
 	currentSpan := spans[currentSpanID]
 
 	// call prune on the children
 	newChildSpansArray := make([]SpanFromOTel, 0)
-	newChildIdsArray := make([]string, 0)
+	newChildIdsArray := make([]typedef.TSpanId, 0)
 	for _, child := range currentSpan.Children {
 		newChildIds, pruned := prune(spans, child.SpanID)
 		if pruned {
@@ -191,5 +180,5 @@ func prune(spans map[string]*SpanFromOTel, currentSpanID string) ([]string, bool
 		return newChildIdsArray, true
 	}
 
-	return []string{currentSpanID}, false
+	return []typedef.TSpanId{currentSpanID}, false
 }

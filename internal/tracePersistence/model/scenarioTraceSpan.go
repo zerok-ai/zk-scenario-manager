@@ -27,7 +27,7 @@ type Issue struct {
 
 type Incident struct {
 	TraceId                string    `json:"trace_id"`
-	Spans                  []Span    `json:"spans"`
+	Spans                  []*Span   `json:"spans"`
 	IncidentCollectionTime time.Time `json:"incident_collection_time"`
 }
 

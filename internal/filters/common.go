@@ -9,7 +9,7 @@ const (
 	TTLForTransientSets          = 120 * time.Second
 	TTLForScenarioSets           = 5 * time.Minute
 	batchSizeForRawDataCollector = 20
-	timeRangeForRawDataQuery     = "-15m" // -5m, -10m, -1h etc
+	timeRangeForRawDataQuery     = "-3h" // -5m, -10m, -1h etc
 )
 
 func epochNSToTime(epochNS uint64) time.Time {

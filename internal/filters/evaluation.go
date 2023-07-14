@@ -4,6 +4,8 @@ import (
 	"fmt"
 	zkLogger "github.com/zerok-ai/zk-utils-go/logs"
 	"github.com/zerok-ai/zk-utils-go/scenario/model"
+	typedef "scenario-manager/internal"
+	"scenario-manager/internal/config"
 	"scenario-manager/internal/stores"
 	"sort"
 	"strconv"
@@ -20,9 +22,10 @@ type TraceEvaluator struct {
 	traceStore                 *stores.TraceStore
 	namesOfAllSets             []string
 	ttlForTransientScenarioSet time.Duration
+	cfg                        config.AppConfigs
 }
 
-func NewTraceEvaluator(scenario *model.Scenario, traceStore *stores.TraceStore, namesOfAllSets []string, ttlForTransientScenarioSet time.Duration) *TraceEvaluator {
+func NewTraceEvaluator(cfg config.AppConfigs, scenario *model.Scenario, traceStore *stores.TraceStore, namesOfAllSets []string, ttlForTransientScenarioSet time.Duration) *TraceEvaluator {
 	if scenario == nil {
 		zkLogger.Error(LoggerTagEvaluation, "scenario is nil")
 		return nil
@@ -37,10 +40,11 @@ func NewTraceEvaluator(scenario *model.Scenario, traceStore *stores.TraceStore, 
 		traceStore:                 traceStore,
 		namesOfAllSets:             namesOfAllSets,
 		ttlForTransientScenarioSet: ttlForTransientScenarioSet,
+		cfg:                        cfg,
 	}
 }
 
-func (te TraceEvaluator) EvalScenario() ([]string, error) {
+func (te TraceEvaluator) EvalScenario() ([]typedef.TTraceid, error) {
 	zkLogger.Debug(LoggerTagEvaluation, "Evaluating scenario ", te.scenario.Id)
 	resultKey, err := te.evalFilter(te.scenario.Filter)
 	if err != nil {
@@ -57,7 +61,16 @@ func (te TraceEvaluator) EvalScenario() ([]string, error) {
 		return nil, err
 	}
 	te.traceStore.DeleteSet([]string{*resultKey})
-	return traceIds, err
+
+	result := make([]typedef.TTraceid, len(traceIds))
+	for i, traceId := range traceIds {
+		result[i] = typedef.TTraceid(traceId)
+	}
+
+	// cleanup the old sets
+	te.DeleteOldSets(te.namesOfAllSets, te.cfg.ScenarioConfig.RedisRuleSetCount)
+
+	return result, err
 }
 
 func (te TraceEvaluator) evalFilter(f model.Filter) (*string, error) {
