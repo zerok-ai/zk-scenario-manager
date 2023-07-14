@@ -39,7 +39,7 @@ type Span struct {
 	Destination     string          `json:"destination"`
 	WorkloadIdList  []string        `json:"workload_id_list"`
 	Metadata        Metadata        `json:"metadata"`
-	LatencyMs       *float32        `json:"latency_ms"`
+	LatencyNs       *float32        `json:"latency_ns"`
 	Protocol        string          `json:"protocol"`
 	RequestPayload  RequestPayload  `json:"request_payload"`
 	ResponsePayload ResponsePayload `json:"response_payload"`

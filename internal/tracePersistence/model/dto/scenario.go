@@ -97,7 +97,7 @@ func ConvertScenarioToTraceDto(s model.IncidentWithIssues) ([]IssueTableDto, []I
 		spanMetadataDto.WorkloadIdList = span.WorkloadIdList
 
 		spanMetadataDto.Metadata = string(m)
-		spanMetadataDto.LatencyMs = span.LatencyMs
+		spanMetadataDto.LatencyNs = span.LatencyNs
 		spanMetadataDto.Protocol = span.Protocol
 		spanMetadataDto.ParentSpanId = span.ParentSpanId
 		spanMetadataDto.IssueHashList = span.IssueHashList
@@ -164,8 +164,8 @@ func ValidateIssue(s model.IncidentWithIssues) (bool, *zkerrors.ZkError) {
 	//		return false, common.ToPtr(zkerrors.ZkErrorBuilder{}.Build(zkerrors.ZkErrorBadRequest, "invalid data"))
 	//	}
 	//
-	//	if span.LatencyMs == nil {
-	//		zkLogger.Error(LogTag, "latency_ms empty")
+	//	if span.LatencyNs == nil {
+	//		zkLogger.Error(LogTag, "latency_ns empty")
 	//		return false, common.ToPtr(zkerrors.ZkErrorBuilder{}.Build(zkerrors.ZkErrorBadRequest, "invalid data"))
 	//	}
 	//
