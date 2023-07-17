@@ -233,9 +233,10 @@ func (scenarioManager ScenarioManager) getAllRawSpans(tracesForProtocol map[type
 			spanForBatch = scenarioManager.collectPostgresRawData(traceArray, startTime)
 		}
 
-		for index, sp := range spanForBatch {
-			sp.Protocol = string(protocol)
-			rawSpans = append(rawSpans, &spanForBatch[index])
+		for index, _ := range spanForBatch {
+			span := &spanForBatch[index]
+			span.Protocol = string(protocol)
+			rawSpans = append(rawSpans, span)
 		}
 	}
 	return rawSpans
@@ -291,7 +292,7 @@ func buildIncidentsForPersistence(scenariosWithTraces typedef.ScenarioToScenario
 				scenarioMap[scenarioId] = scenarioWithTraces.Scenario
 			}
 		}
-		
+
 		incidents := evaluateIncidents(scenarioMap, traceId, *spanMapForTrace)
 		incidentsWithIssues = append(incidentsWithIssues, incidents)
 	}
