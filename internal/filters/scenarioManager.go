@@ -251,36 +251,73 @@ func buildIncidentsForPersistence(scenariosWithTraces typedef.ScenarioToScenario
 	}
 
 	// a. iterate through the trace data from OTelStore and build the traceIdToSpansMap
-	traceTreeForPersistence := make(map[typedef.TTraceid]*typedef.TSpanIdToSpanMap, 0)
-	for traceId, traceFromOTel := range tracesFromOTel {
-		spanMapOfPersistentSpans := make(typedef.TSpanIdToSpanMap, 0)
-		for _, spanFromOTel := range traceFromOTel.Spans {
-			spanForPersistence := tracePersistenceModel.Span{
-				TraceId:      string(spanFromOTel.TraceID),
-				SpanId:       string(spanFromOTel.SpanID),
-				ParentSpanId: string(spanFromOTel.ParentSpanID),
-				Protocol:     spanFromOTel.Protocol,
-			}
-			spanMapOfPersistentSpans[spanFromOTel.SpanID] = &spanForPersistence
-		}
-		traceTreeForPersistence[traceId] = &spanMapOfPersistentSpans
-	}
+	//traceTreeForPersistence := make(map[typedef.TTraceid]*typedef.TSpanIdToSpanMap, 0)
+	//for traceId, traceFromOTel := range tracesFromOTel {
+	//	spanMapOfPersistentSpans := make(typedef.TSpanIdToSpanMap, 0)
+	//	for _, spanFromOTel := range traceFromOTel.Spans {
+	//		spanForPersistence := tracePersistenceModel.Span{
+	//			TraceId:      string(spanFromOTel.TraceID),
+	//			SpanId:       string(spanFromOTel.SpanID),
+	//			ParentSpanId: string(spanFromOTel.ParentSpanID),
+	//			Protocol:     spanFromOTel.Protocol,
+	//		}
+	//		spanMapOfPersistentSpans[spanFromOTel.SpanID] = &spanForPersistence
+	//	}
+	//	traceTreeForPersistence[traceId] = &spanMapOfPersistentSpans
+	//}
 
 	// b. enrich `traceTreeForPersistence` through rawSpans
-	for index, fullSpan := range spans {
+	for _, fullSpan := range spans {
 
-		trace, ok := traceTreeForPersistence[typedef.TTraceid(fullSpan.TraceId)]
+		if fullSpan.Protocol == "mysql" {
+			zkLogger.Debug(LoggerTag, "mysql span found")
+		}
+
+		trace, ok := tracesFromOTel[typedef.TTraceid(fullSpan.TraceId)]
 		if !ok || trace == nil {
 			continue
 		}
-		spanFromTree, ok := (*trace)[typedef.TSpanId(fullSpan.SpanId)]
-		if !ok || spanFromTree == nil {
+		spanFromOTelTree, ok := (*trace).Spans[typedef.TSpanId(fullSpan.SpanId)]
+		if !ok || spanFromOTelTree == nil {
 			continue
 		}
 
 		// get the parent relationship from the span of tree and replace that span with the span from rawSpans
-		spans[index].ParentSpanId = spanFromTree.ParentSpanId
-		(*trace)[typedef.TSpanId(fullSpan.SpanId)] = spans[index]
+		//spans[index].ParentSpanId = spanFromOTelTree.ParentSpanId
+		trace.Spans[typedef.TSpanId(fullSpan.SpanId)].RawSpan = fullSpan
+	}
+
+	traceTreeForPersistence := make(map[typedef.TTraceid]*typedef.TSpanIdToSpanMap, 0)
+	for traceId, traceFromOTel := range tracesFromOTel {
+		spanMapOfPersistentSpans := make(typedef.TSpanIdToSpanMap, 0)
+
+		prune(traceFromOTel.Spans, traceFromOTel.RootSpanID)
+
+		for _, spanFromOTel := range traceFromOTel.Spans {
+			//spanForPersistence := tracePersistenceModel.Span{
+			//	TraceId:      string(spanFromOTel.TraceID),
+			//	SpanId:       string(spanFromOTel.SpanID),
+			//	ParentSpanId: string(spanFromOTel.ParentSpanID),
+			//	Protocol:     spanFromOTel.Protocol,
+			//}
+
+			if spanFromOTel.Protocol == "mysql" {
+				zkLogger.Debug(LoggerTag, "mysql span found")
+			}
+
+			spanForPersistence := spanFromOTel.RawSpan
+			if spanForPersistence == nil {
+				spanForPersistence = &tracePersistenceModel.Span{
+					TraceId:      string(spanFromOTel.TraceID),
+					SpanId:       string(spanFromOTel.SpanID),
+					ParentSpanId: string(spanFromOTel.ParentSpanID),
+					Protocol:     spanFromOTel.Protocol,
+				}
+			}
+			spanForPersistence.ParentSpanId = string(spanFromOTel.ParentSpanID)
+			spanMapOfPersistentSpans[spanFromOTel.SpanID] = spanForPersistence
+		}
+		traceTreeForPersistence[traceId] = &spanMapOfPersistentSpans
 	}
 
 	// c. iterate through the trace data and create IncidentWithIssues for each trace
@@ -476,4 +513,50 @@ func (scenarioManager ScenarioManager) collectPostgresRawData(traceIds []string,
 		spans = append(spans, transformPGSpan(span))
 	}
 	return spans
+}
+
+// prune removes the Spans that are not required - typedef Spans and server Spans that are not the root span
+func prune(spans map[typedef.TSpanId]*stores.SpanFromOTel, currentSpanID typedef.TSpanId) ([]typedef.TSpanId, bool) {
+	currentSpan := spans[currentSpanID]
+
+	// call prune on the children
+	newChildSpansArray := make([]stores.SpanFromOTel, 0)
+	newChildIdsArray := make([]typedef.TSpanId, 0)
+	for _, child := range currentSpan.Children {
+		newChildIds, pruned := prune(spans, child.SpanID)
+		if pruned {
+			delete(spans, child.SpanID)
+		}
+		for _, spId := range newChildIds {
+
+			span := spans[spId]
+			span.ParentSpanID = currentSpan.SpanID
+
+			// update the span in the map
+			spans[span.SpanID] = span
+
+			newChildSpansArray = append(newChildSpansArray, *span)
+		}
+
+		newChildIdsArray = append(newChildIdsArray, newChildIds...)
+	}
+	currentSpan.Children = newChildSpansArray
+	spans[currentSpanID] = currentSpan
+
+	parentSpan, isParentSpanPresent := spans[currentSpan.ParentSpanID]
+	if currentSpan.Kind == INTERNAL {
+		if currentSpan.RawSpan == nil {
+			return newChildIdsArray, true
+		}
+	} else if currentSpan.Kind == SERVER {
+		if isParentSpanPresent && parentSpan.Kind == CLIENT && currentSpan.RawSpan == nil {
+			return newChildIdsArray, true
+		}
+	} else if currentSpan.Kind == CLIENT {
+		if currentSpan.RawSpan == nil {
+			return newChildIdsArray, true
+		}
+	}
+
+	return []typedef.TSpanId{currentSpanID}, false
 }
