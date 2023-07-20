@@ -8,6 +8,12 @@ const (
 	CLIENT    = "CLIENT"
 	SERVER    = "SERVER"
 
+	// protocols
+	PHTTP       = "http"
+	PException  = "exception"
+	PMySQL      = "mysql"
+	PPostgresql = "postgresql"
+
 	ScenarioRefreshInterval      = 20 * time.Minute
 	TTLForTransientSets          = 120 * time.Second
 	TTLForScenarioSets           = 5 * time.Minute

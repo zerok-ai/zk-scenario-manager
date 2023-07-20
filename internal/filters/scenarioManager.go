@@ -225,15 +225,15 @@ func (scenarioManager ScenarioManager) getAllRawSpans(tracesForProtocol map[type
 
 		// collect raw data for protocol spans
 		spanForBatch := make([]tracePersistenceModel.Span, 0)
-		if protocol == "http" {
+		if protocol == PHTTP || protocol == PException {
 			spanForBatch = scenarioManager.collectHTTPRawData(traceArray, startTime)
-		} else if protocol == "mysql" {
+		} else if protocol == PMySQL {
 			spanForBatch = scenarioManager.collectMySQLRawData(traceArray, startTime)
-		} else if protocol == "postgresql" {
+		} else if protocol == PPostgresql {
 			spanForBatch = scenarioManager.collectPostgresRawData(traceArray, startTime)
 		}
 
-		for index, _ := range spanForBatch {
+		for index := range spanForBatch {
 			span := &spanForBatch[index]
 			span.Protocol = string(protocol)
 			rawSpans = append(rawSpans, span)
@@ -250,28 +250,8 @@ func buildIncidentsForPersistence(scenariosWithTraces typedef.ScenarioToScenario
 		return nil
 	}
 
-	// a. iterate through the trace data from OTelStore and build the traceIdToSpansMap
-	//traceTreeForPersistence := make(map[typedef.TTraceid]*typedef.TSpanIdToSpanMap, 0)
-	//for traceId, traceFromOTel := range tracesFromOTel {
-	//	spanMapOfPersistentSpans := make(typedef.TSpanIdToSpanMap, 0)
-	//	for _, spanFromOTel := range traceFromOTel.Spans {
-	//		spanForPersistence := tracePersistenceModel.Span{
-	//			TraceId:      string(spanFromOTel.TraceID),
-	//			SpanId:       string(spanFromOTel.SpanID),
-	//			ParentSpanId: string(spanFromOTel.ParentSpanID),
-	//			Protocol:     spanFromOTel.Protocol,
-	//		}
-	//		spanMapOfPersistentSpans[spanFromOTel.SpanID] = &spanForPersistence
-	//	}
-	//	traceTreeForPersistence[traceId] = &spanMapOfPersistentSpans
-	//}
-
-	// b. enrich `traceTreeForPersistence` through rawSpans
+	// a. Add raw spans to `tracesFromOTel`
 	for _, fullSpan := range spans {
-
-		if fullSpan.Protocol == "mysql" {
-			zkLogger.Debug(LoggerTag, "mysql span found")
-		}
 
 		trace, ok := tracesFromOTel[typedef.TTraceid(fullSpan.TraceId)]
 		if !ok || trace == nil {
@@ -287,34 +267,32 @@ func buildIncidentsForPersistence(scenariosWithTraces typedef.ScenarioToScenario
 		trace.Spans[typedef.TSpanId(fullSpan.SpanId)].RawSpan = fullSpan
 	}
 
+	// b. iterate through the trace data from OTelStore and build the structure which can be saved in DB
 	traceTreeForPersistence := make(map[typedef.TTraceid]*typedef.TSpanIdToSpanMap, 0)
 	for traceId, traceFromOTel := range tracesFromOTel {
 		spanMapOfPersistentSpans := make(typedef.TSpanIdToSpanMap, 0)
 
+		// remove spans which are not needed
 		prune(traceFromOTel.Spans, traceFromOTel.RootSpanID)
 
 		for _, spanFromOTel := range traceFromOTel.Spans {
-			//spanForPersistence := tracePersistenceModel.Span{
-			//	TraceId:      string(spanFromOTel.TraceID),
-			//	SpanId:       string(spanFromOTel.SpanID),
-			//	ParentSpanId: string(spanFromOTel.ParentSpanID),
-			//	Protocol:     spanFromOTel.Protocol,
-			//}
 
 			if spanFromOTel.Protocol == "mysql" {
 				zkLogger.Debug(LoggerTag, "mysql span found")
 			}
 
 			spanForPersistence := spanFromOTel.RawSpan
+
+			// if raw span is needed but the raw data is not present (?), then create a new span
 			if spanForPersistence == nil {
 				spanForPersistence = &tracePersistenceModel.Span{
-					TraceId:      string(spanFromOTel.TraceID),
-					SpanId:       string(spanFromOTel.SpanID),
-					ParentSpanId: string(spanFromOTel.ParentSpanID),
-					Protocol:     spanFromOTel.Protocol,
+					TraceId: string(spanFromOTel.TraceID),
+					SpanId:  string(spanFromOTel.SpanID),
 				}
 			}
+			spanForPersistence.Protocol = spanFromOTel.Protocol
 			spanForPersistence.ParentSpanId = string(spanFromOTel.ParentSpanID)
+
 			spanMapOfPersistentSpans[spanFromOTel.SpanID] = spanForPersistence
 		}
 		traceTreeForPersistence[traceId] = &spanMapOfPersistentSpans
@@ -341,7 +319,7 @@ func buildIncidentsForPersistence(scenariosWithTraces typedef.ScenarioToScenario
 func evaluateIncidents(scenarios map[typedef.TScenarioID]*scenarioGeneratorModel.Scenario, traceId typedef.TTraceid, spansOfTrace typedef.TSpanIdToSpanMap) tracePersistenceModel.IncidentWithIssues {
 
 	spans := make([]*tracePersistenceModel.Span, 0)
-	for key, _ := range spansOfTrace {
+	for key := range spansOfTrace {
 		spans = append(spans, spansOfTrace[key])
 	}
 
@@ -544,19 +522,17 @@ func prune(spans map[typedef.TSpanId]*stores.SpanFromOTel, currentSpanID typedef
 	spans[currentSpanID] = currentSpan
 
 	parentSpan, isParentSpanPresent := spans[currentSpan.ParentSpanID]
-	if currentSpan.Kind == INTERNAL {
-		if currentSpan.RawSpan == nil {
-			return newChildIdsArray, true
-		}
-	} else if currentSpan.Kind == SERVER {
-		if isParentSpanPresent && parentSpan.Kind == CLIENT && currentSpan.RawSpan == nil {
-			return newChildIdsArray, true
-		}
-	} else if currentSpan.Kind == CLIENT {
-		if currentSpan.RawSpan == nil {
-			return newChildIdsArray, true
-		}
+	skipCurrentChild := false
+	if currentSpan.Kind == INTERNAL && currentSpan.RawSpan == nil {
+		skipCurrentChild = true
+	} else if currentSpan.Kind == SERVER && isParentSpanPresent && parentSpan.Kind == CLIENT && currentSpan.RawSpan == nil {
+		skipCurrentChild = true
+	} else if currentSpan.Kind == CLIENT && currentSpan.RawSpan == nil {
+		skipCurrentChild = true
 	}
 
+	if skipCurrentChild {
+		return newChildIdsArray, true
+	}
 	return []typedef.TSpanId{currentSpanID}, false
 }
