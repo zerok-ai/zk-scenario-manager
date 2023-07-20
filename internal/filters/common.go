@@ -4,6 +4,9 @@ import "time"
 
 const (
 	LoggerTag = "scenario-manager"
+	INTERNAL  = "INTERNAL"
+	CLIENT    = "CLIENT"
+	SERVER    = "SERVER"
 
 	ScenarioRefreshInterval      = 20 * time.Minute
 	TTLForTransientSets          = 120 * time.Second

@@ -7,6 +7,7 @@ import (
 	zkLogger "github.com/zerok-ai/zk-utils-go/logs"
 	"github.com/zerok-ai/zk-utils-go/storage/redis/config"
 	typedef "scenario-manager/internal"
+	tracePersistenceModel "scenario-manager/internal/tracePersistence/model"
 	"time"
 )
 
@@ -39,6 +40,7 @@ func GetOTelStore(redisConfig *config.RedisConfig) *OTelStore {
 type SpanFromOTel struct {
 	TraceID      typedef.TTraceid
 	SpanID       typedef.TSpanId
+	RawSpan      *tracePersistenceModel.Span
 	Kind         string          `json:"spanKind"`
 	Protocol     string          `json:"protocol"`
 	ParentSpanID typedef.TSpanId `json:"parentSpanID"`
@@ -47,7 +49,8 @@ type SpanFromOTel struct {
 
 type TraceFromOTel struct {
 	// Spans is a map of spanID to span
-	Spans map[typedef.TSpanId]*SpanFromOTel
+	Spans      map[typedef.TSpanId]*SpanFromOTel
+	RootSpanID typedef.TSpanId
 }
 
 // GetSpansForTracesFromDB retrieves the spans for the given traceIds from the database
@@ -133,14 +136,13 @@ func (t OTelStore) GetSpansForTracesFromDB(keys []typedef.TTraceid) (map[typedef
 				Children: []SpanFromOTel{*rootSpan},
 			}
 			traceFromOTel.Spans[rootSpan.ParentSpanID] = &rootClient
-			rootSpan = &rootClient
 		}
-		rootSpanID := &rootSpan.SpanID
+		traceFromOTel.RootSpanID = rootSpan.SpanID
 
 		// 4.3 prune the unwanted Spans
-		prune(traceFromOTel.Spans, *rootSpanID)
+		//prune(traceFromOTel.Spans, rootSpan.SpanID)
 
-		zkLogger.DebugF(LoggerTag, "rootSpanID: %s", *rootSpanID)
+		zkLogger.DebugF(LoggerTag, "rootSpanID: %s", rootSpan.SpanID)
 		result[traceId] = traceFromOTel
 	}
 
