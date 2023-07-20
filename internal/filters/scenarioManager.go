@@ -286,11 +286,11 @@ func buildIncidentsForPersistence(scenariosWithTraces typedef.ScenarioToScenario
 			// if raw span is needed but the raw data is not present (?), then create a new span
 			if spanForPersistence == nil {
 				spanForPersistence = &tracePersistenceModel.Span{
-					TraceId: string(spanFromOTel.TraceID),
-					SpanId:  string(spanFromOTel.SpanID),
+					TraceId:  string(spanFromOTel.TraceID),
+					SpanId:   string(spanFromOTel.SpanID),
+					Protocol: spanFromOTel.Protocol,
 				}
 			}
-			spanForPersistence.Protocol = spanFromOTel.Protocol
 			spanForPersistence.ParentSpanId = string(spanFromOTel.ParentSpanID)
 
 			spanMapOfPersistentSpans[spanFromOTel.SpanID] = spanForPersistence
