@@ -277,19 +277,21 @@ func buildIncidentsForPersistence(scenariosWithTraces typedef.ScenarioToScenario
 
 		for _, spanFromOTel := range traceFromOTel.Spans {
 
-			if spanFromOTel.Protocol == "mysql" {
-				zkLogger.Debug(LoggerTag, "mysql span found")
-			}
-
 			spanForPersistence := spanFromOTel.RawSpan
 
-			// if raw span is needed but the raw data is not present (?), then create a new span
+			// if raw span is not present (possible for unsupported protocols), then create a new span
 			if spanForPersistence == nil {
 				spanForPersistence = &tracePersistenceModel.Span{
 					TraceId:  string(spanFromOTel.TraceID),
 					SpanId:   string(spanFromOTel.SpanID),
 					Protocol: spanFromOTel.Protocol,
 				}
+			}
+
+			// treat the value of `spanFromOTel.Protocol` as the protocol, if exists. `spanFromOTel.Protocol` won't be
+			// available for `INTERNAL` spans
+			if len(spanFromOTel.Protocol) > 0 {
+				spanForPersistence.Protocol = spanFromOTel.Protocol
 			}
 			spanForPersistence.ParentSpanId = string(spanFromOTel.ParentSpanID)
 
