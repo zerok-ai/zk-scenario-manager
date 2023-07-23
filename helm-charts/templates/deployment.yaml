@@ -1,0 +1,42 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: zk-scenario-manager
+  name: zk-scenario-manager
+  namespace: zk-client
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: zk-scenario-manager
+  template:
+    metadata:
+      labels:
+        app: zk-scenario-manager
+    spec:
+      containers:
+      - image: "{{ .Values.image.repo}}:{{ .Values.image.tag}}"
+        imagePullPolicy: {{ .Values.image.imagePullPolicy }}
+        name: zk-scenario-manager
+        ports:
+          - containerPort: 80
+        readinessProbe:
+          httpGet:
+            path: /healthz
+            port: 80
+          successThreshold: 3
+        resources:
+          limits:
+            cpu: 200m
+            memory: 128Mi
+          requests:
+            cpu: 100m
+            memory: 64Mi
+        volumeMounts:
+        - mountPath: /zk/config
+          name: config
+      volumes:
+      - configMap:
+          name: zk-scenario-manager
+        name: config
