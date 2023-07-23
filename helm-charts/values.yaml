@@ -5,7 +5,7 @@
 replicaCount: 1
 
 image:
-  repo: "us-west1-docker.pkg.dev/zerok-dev/zerok-cli/zk-axon"
+  repo: "us-west1-docker.pkg.dev/zerok-dev/zerok-cli/zk-scenario-manager"
   tag: "latest"
   imagePullPolicy: Always
 
