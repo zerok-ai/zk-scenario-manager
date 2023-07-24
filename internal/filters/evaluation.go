@@ -1,6 +1,8 @@
 package filters
 
 import (
+	"crypto/sha1"
+	"encoding/hex"
 	"fmt"
 	zkLogger "github.com/zerok-ai/zk-utils-go/logs"
 	"github.com/zerok-ai/zk-utils-go/scenario/model"
@@ -192,7 +194,7 @@ func uniqueStringFromStringSet(condition model.Condition, set []string) string {
 	if len(copied) > 1 {
 		combined = "(" + combined + ")"
 	}
-	/*/
+	/**/
 	// Hash the combined string using SHA1 calculating hash. avoiding sha256 for performance reasons
 	hash := sha1.Sum([]byte(combined))
 

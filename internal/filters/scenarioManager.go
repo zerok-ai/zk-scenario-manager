@@ -272,8 +272,8 @@ func buildIncidentsForPersistence(scenariosWithTraces typedef.ScenarioToScenario
 	for traceId, traceFromOTel := range tracesFromOTel {
 		spanMapOfPersistentSpans := make(typedef.TSpanIdToSpanMap, 0)
 
-		// remove spans which are not needed
-		prune(traceFromOTel.Spans, traceFromOTel.RootSpanID)
+		// sanitize the trace data
+		sanitizeOTelTrace(traceFromOTel)
 
 		for _, spanFromOTel := range traceFromOTel.Spans {
 
@@ -281,11 +281,7 @@ func buildIncidentsForPersistence(scenariosWithTraces typedef.ScenarioToScenario
 
 			// if raw span is not present (possible for unsupported protocols), then create a new span
 			if spanForPersistence == nil {
-				spanForPersistence = &tracePersistenceModel.Span{
-					TraceId:  string(spanFromOTel.TraceID),
-					SpanId:   string(spanFromOTel.SpanID),
-					Protocol: spanFromOTel.Protocol,
-				}
+				spanForPersistence = createSpanForPersistence(spanFromOTel)
 			}
 
 			// treat the value of `spanFromOTel.Protocol` as the protocol, if exists. `spanFromOTel.Protocol` won't be
@@ -316,6 +312,45 @@ func buildIncidentsForPersistence(scenariosWithTraces typedef.ScenarioToScenario
 
 	zkLogger.DebugF(LoggerTag, "Building incidentsWithIssues for persistence, count: %d", len(incidentsWithIssues))
 	return incidentsWithIssues
+}
+
+func sanitizeOTelTrace(traceFromOTel *stores.TraceFromOTel) {
+
+	// remove spans which are not needed
+	rootSpanIDsTemp, _ := prune(traceFromOTel.Spans, traceFromOTel.RootSpanID, true)
+
+	// if the destination doesn't exist for the root, add it
+	if rootSpanIDsTemp != nil && len(rootSpanIDsTemp) > 0 {
+		setDestinationForRoot(traceFromOTel.Spans[rootSpanIDsTemp[0]])
+	}
+}
+
+func setDestinationForRoot(root *stores.SpanFromOTel) {
+	if root == nil {
+		return
+	}
+
+	for _, child := range root.Children {
+		rawChildSpan := child.RawSpan
+		if rawChildSpan == nil {
+			continue
+		}
+		if destinationChild := rawChildSpan.Source; len(destinationChild) > 0 {
+			if root.RawSpan == nil {
+				root.RawSpan = createSpanForPersistence(root)
+			}
+			root.RawSpan.Destination = destinationChild
+			break
+		}
+	}
+}
+
+func createSpanForPersistence(spanFromOTel *stores.SpanFromOTel) *tracePersistenceModel.Span {
+	return &tracePersistenceModel.Span{
+		TraceId:  string(spanFromOTel.TraceID),
+		SpanId:   string(spanFromOTel.SpanID),
+		Protocol: spanFromOTel.Protocol,
+	}
 }
 
 func evaluateIncidents(scenarios map[typedef.TScenarioID]*scenarioGeneratorModel.Scenario, traceId typedef.TTraceid, spansOfTrace typedef.TSpanIdToSpanMap) tracePersistenceModel.IncidentWithIssues {
@@ -496,14 +531,14 @@ func (scenarioManager ScenarioManager) collectPostgresRawData(traceIds []string,
 }
 
 // prune removes the Spans that are not required - typedef Spans and server Spans that are not the root span
-func prune(spans map[typedef.TSpanId]*stores.SpanFromOTel, currentSpanID typedef.TSpanId) ([]typedef.TSpanId, bool) {
+func prune(spans map[typedef.TSpanId]*stores.SpanFromOTel, currentSpanID typedef.TSpanId, dontPruneCurrentNode bool) ([]typedef.TSpanId, bool) {
 	currentSpan := spans[currentSpanID]
 
 	// call prune on the children
 	newChildSpansArray := make([]stores.SpanFromOTel, 0)
 	newChildIdsArray := make([]typedef.TSpanId, 0)
 	for _, child := range currentSpan.Children {
-		newChildIds, pruned := prune(spans, child.SpanID)
+		newChildIds, pruned := prune(spans, child.SpanID, false)
 		if pruned {
 			delete(spans, child.SpanID)
 		}
@@ -533,7 +568,7 @@ func prune(spans map[typedef.TSpanId]*stores.SpanFromOTel, currentSpanID typedef
 		skipCurrentChild = true
 	}
 
-	if skipCurrentChild {
+	if skipCurrentChild && !dontPruneCurrentNode {
 		return newChildIdsArray, true
 	}
 	return []typedef.TSpanId{currentSpanID}, false
