@@ -268,32 +268,10 @@ func buildIncidentsForPersistence(scenariosWithTraces typedef.ScenarioToScenario
 	}
 
 	// b. iterate through the trace data from OTelStore and build the structure which can be saved in DB
-	traceTreeForPersistence := make(map[typedef.TTraceid]*typedef.TSpanIdToSpanMap, 0)
+	traceTreeForPersistence := make(map[typedef.TTraceid]*typedef.TMapOfSpanIdToSpan, 0)
 	for traceId, traceFromOTel := range tracesFromOTel {
-		spanMapOfPersistentSpans := make(typedef.TSpanIdToSpanMap, 0)
-
 		// sanitize the trace data
-		sanitizeOTelTrace(traceFromOTel)
-
-		for _, spanFromOTel := range traceFromOTel.Spans {
-
-			spanForPersistence := spanFromOTel.RawSpan
-
-			// if raw span is not present (possible for unsupported protocols), then create a new span
-			if spanForPersistence == nil {
-				spanForPersistence = createSpanForPersistence(spanFromOTel)
-			}
-
-			// treat the value of `spanFromOTel.Protocol` as the protocol, if exists. `spanFromOTel.Protocol` won't be
-			// available for `INTERNAL` spans
-			if len(spanFromOTel.Protocol) > 0 {
-				spanForPersistence.Protocol = spanFromOTel.Protocol
-			}
-			spanForPersistence.ParentSpanId = string(spanFromOTel.ParentSpanID)
-
-			spanMapOfPersistentSpans[spanFromOTel.SpanID] = spanForPersistence
-		}
-		traceTreeForPersistence[traceId] = &spanMapOfPersistentSpans
+		traceTreeForPersistence[traceId] = buildTraceForStorage(traceFromOTel)
 	}
 
 	// c. iterate through the trace data and create IncidentWithIssues for each trace
@@ -314,7 +292,7 @@ func buildIncidentsForPersistence(scenariosWithTraces typedef.ScenarioToScenario
 	return incidentsWithIssues
 }
 
-func sanitizeOTelTrace(traceFromOTel *stores.TraceFromOTel) {
+func buildTraceForStorage(traceFromOTel *stores.TraceFromOTel) *typedef.TMapOfSpanIdToSpan {
 
 	// remove spans which are not needed
 	rootSpanIDsTemp, _ := prune(traceFromOTel.Spans, traceFromOTel.RootSpanID, true)
@@ -323,6 +301,28 @@ func sanitizeOTelTrace(traceFromOTel *stores.TraceFromOTel) {
 	if rootSpanIDsTemp != nil && len(rootSpanIDsTemp) > 0 {
 		setDestinationForRoot(traceFromOTel.Spans[rootSpanIDsTemp[0]])
 	}
+
+	spanMapOfPersistentSpans := make(typedef.TMapOfSpanIdToSpan, 0)
+	for _, spanFromOTel := range traceFromOTel.Spans {
+
+		spanForPersistence := spanFromOTel.RawSpan
+
+		// if raw span is not present (possible for unsupported protocols), then create a new span
+		if spanForPersistence == nil {
+			spanForPersistence = createSpanForPersistence(spanFromOTel)
+		}
+
+		// treat the value of `spanFromOTel.Protocol` as the protocol, if exists. `spanFromOTel.Protocol` won't be
+		// available for `INTERNAL` spans
+		if len(spanFromOTel.Protocol) > 0 {
+			spanForPersistence.Protocol = spanFromOTel.Protocol
+		}
+		spanForPersistence.ParentSpanId = string(spanFromOTel.ParentSpanID)
+
+		spanMapOfPersistentSpans[spanFromOTel.SpanID] = spanForPersistence
+	}
+
+	return &spanMapOfPersistentSpans
 }
 
 func setDestinationForRoot(root *stores.SpanFromOTel) {
@@ -353,7 +353,7 @@ func createSpanForPersistence(spanFromOTel *stores.SpanFromOTel) *tracePersisten
 	}
 }
 
-func evaluateIncidents(scenarios map[typedef.TScenarioID]*scenarioGeneratorModel.Scenario, traceId typedef.TTraceid, spansOfTrace typedef.TSpanIdToSpanMap) tracePersistenceModel.IncidentWithIssues {
+func evaluateIncidents(scenarios map[typedef.TScenarioID]*scenarioGeneratorModel.Scenario, traceId typedef.TTraceid, spansOfTrace typedef.TMapOfSpanIdToSpan) tracePersistenceModel.IncidentWithIssues {
 
 	spans := make([]*tracePersistenceModel.Span, 0)
 	for key := range spansOfTrace {
@@ -382,7 +382,7 @@ func evaluateIncidents(scenarios map[typedef.TScenarioID]*scenarioGeneratorModel
 	return incidentWithIssues
 }
 
-func getListOfIssues(scenario *scenarioGeneratorModel.Scenario, spanMap typedef.TSpanIdToSpanMap) []tracePersistenceModel.Issue {
+func getListOfIssues(scenario *scenarioGeneratorModel.Scenario, spanMap typedef.TMapOfSpanIdToSpan) []tracePersistenceModel.Issue {
 
 	// 1. create a set of used workload ids
 	workloadIdListInGroup := make(ds.Set[typedef.TWorkspaceID], 0)

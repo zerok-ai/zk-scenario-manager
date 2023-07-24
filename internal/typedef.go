@@ -8,7 +8,7 @@ import (
 
 type TTraceid string
 type TSpanId string
-type TSpanIdToSpanMap map[TSpanId]*tracePersistenceModel.Span
+type TMapOfSpanIdToSpan map[TSpanId]*tracePersistenceModel.Span
 
 type TWorkspaceID string
 type TIssueHash string
