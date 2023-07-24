@@ -37,22 +37,6 @@ type ScenarioManager struct {
 	tracePersistenceService tracePersistence.TracePersistenceService
 }
 
-func getNewVZReader(cfg config.AppConfigs) (*vzReader.VzReader, error) {
-	reader := vzReader.VzReader{
-		CloudAddr:  cfg.ScenarioConfig.VZCloudAddr,
-		ClusterId:  cfg.ScenarioConfig.VZClusterId,
-		ClusterKey: cfg.ScenarioConfig.VZClusterKey,
-	}
-
-	err := reader.Init()
-	if err != nil {
-		fmt.Printf("Failed to init reader, err: %v\n", err)
-		return nil, err
-	}
-
-	return &reader, nil
-}
-
 func NewScenarioManager(cfg config.AppConfigs, tps tracePersistence.TracePersistenceService) (*ScenarioManager, error) {
 	reader, err := getNewVZReader(cfg)
 	if err != nil {
@@ -73,6 +57,22 @@ func NewScenarioManager(cfg config.AppConfigs, tps tracePersistence.TracePersist
 		cfg:                     cfg,
 	}
 	return &fp, nil
+}
+
+func getNewVZReader(cfg config.AppConfigs) (*vzReader.VzReader, error) {
+	reader := vzReader.VzReader{
+		CloudAddr:  cfg.ScenarioConfig.VZCloudAddr,
+		ClusterId:  cfg.ScenarioConfig.VZClusterId,
+		ClusterKey: cfg.ScenarioConfig.VZClusterKey,
+	}
+
+	err := reader.Init()
+	if err != nil {
+		fmt.Printf("Failed to init reader, err: %v\n", err)
+		return nil, err
+	}
+
+	return &reader, nil
 }
 
 func (scenarioManager ScenarioManager) Init() ScenarioManager {
@@ -125,25 +125,27 @@ func (scenarioManager ScenarioManager) processTraceIDsAgainstScenarios(traceIds 
 	batch := 0
 	traceIdCount := len(traceIds)
 	for startIndex := 0; startIndex < traceIdCount; {
+
+		// a. create the batch
 		endIndex := startIndex + batchSizeForRawDataCollector
 		if endIndex > traceIdCount {
 			endIndex = traceIdCount
 		}
 		traceIdSubSet := traceIds[startIndex:endIndex]
 
-		// a. collect span relation and span raw data for the traceIDs
+		// b. collect span relation and span raw data for the traceIDs
 		tracesFromOTelStore, rawSpans, err1 := scenarioManager.getDataForTraces(traceIdSubSet)
 		if err1 != nil {
 			zkLogger.ErrorF(LoggerTag, "Error processing batch %d of trace ids", batch)
 		}
 
-		// b. Process each trace against all the scenarioWithTraces
+		// c. Process each trace against all the scenarioWithTraces
 		incidents := buildIncidentsForPersistence(scenarioWithTraces, tracesFromOTelStore, rawSpans)
 		if len(incidents) == 0 {
 			zkLogger.ErrorF(LoggerTag, "no incidents to save")
 		}
 
-		// c. store the trace data in the persistence store
+		// d. store the trace data in the persistence store
 		saveError := scenarioManager.tracePersistenceService.SaveIncidents(incidents)
 		if saveError != nil {
 			zkLogger.Error(LoggerTag, "Error saving scenario", saveError)
@@ -257,26 +259,24 @@ func buildIncidentsForPersistence(scenariosWithTraces typedef.ScenarioToScenario
 		if !ok || trace == nil {
 			continue
 		}
-		spanFromOTelTree, ok := (*trace).Spans[typedef.TSpanId(fullSpan.SpanId)]
-		if !ok || spanFromOTelTree == nil {
-			continue
-		}
 
-		// get the parent relationship from the span of tree and replace that span with the span from rawSpans
-		//spans[index].ParentSpanId = spanFromOTelTree.ParentSpanId
-		trace.Spans[typedef.TSpanId(fullSpan.SpanId)].RawSpan = fullSpan
+		spanFromOTelTree, ok := trace.Spans[typedef.TSpanId(fullSpan.SpanId)]
+		if ok && spanFromOTelTree != nil {
+			spanFromOTelTree.RawSpan = fullSpan
+		}
 	}
 
 	// b. iterate through the trace data from OTelStore and build the structure which can be saved in DB
 	traceTreeForPersistence := make(map[typedef.TTraceid]*typedef.TMapOfSpanIdToSpan, 0)
 	for traceId, traceFromOTel := range tracesFromOTel {
-		// sanitize the trace data
 		traceTreeForPersistence[traceId] = buildTraceForStorage(traceFromOTel)
 	}
 
 	// c. iterate through the trace data and create IncidentWithIssues for each trace
 	incidentsWithIssues := make([]tracePersistenceModel.IncidentWithIssues, 0)
 	for traceId, spanMapForTrace := range traceTreeForPersistence {
+
+		// find all the scenarios this trace belongs to
 		scenarioMap := make(map[typedef.TScenarioID]*scenarioGeneratorModel.Scenario, 0)
 		for scenarioId, scenarioWithTraces := range scenariosWithTraces {
 			if scenarioWithTraces.Traces.Contains(traceId) {
@@ -284,7 +284,8 @@ func buildIncidentsForPersistence(scenariosWithTraces typedef.ScenarioToScenario
 			}
 		}
 
-		incidents := evaluateIncidents(scenarioMap, traceId, *spanMapForTrace)
+		// evaluate this trace
+		incidents := evaluateIncidents(traceId, scenarioMap, *spanMapForTrace)
 		incidentsWithIssues = append(incidentsWithIssues, incidents)
 	}
 
@@ -294,13 +295,11 @@ func buildIncidentsForPersistence(scenariosWithTraces typedef.ScenarioToScenario
 
 func buildTraceForStorage(traceFromOTel *stores.TraceFromOTel) *typedef.TMapOfSpanIdToSpan {
 
-	// remove spans which are not needed
-	rootSpanIDsTemp, _ := prune(traceFromOTel.Spans, traceFromOTel.RootSpanID, true)
+	// set the destination doesn't exist for the root, add it
+	setDestinationForRoot(traceFromOTel.Spans[traceFromOTel.RootSpanID])
 
-	// if the destination doesn't exist for the root, add it
-	if rootSpanIDsTemp != nil && len(rootSpanIDsTemp) > 0 {
-		setDestinationForRoot(traceFromOTel.Spans[rootSpanIDsTemp[0]])
-	}
+	// remove spans which are not needed
+	prune(traceFromOTel.Spans, traceFromOTel.RootSpanID, true)
 
 	spanMapOfPersistentSpans := make(typedef.TMapOfSpanIdToSpan, 0)
 	for _, spanFromOTel := range traceFromOTel.Spans {
@@ -326,7 +325,9 @@ func buildTraceForStorage(traceFromOTel *stores.TraceFromOTel) *typedef.TMapOfSp
 }
 
 func setDestinationForRoot(root *stores.SpanFromOTel) {
-	if root == nil {
+
+	// if root is null or destination is already set, return
+	if root == nil || (root.RawSpan != nil && root.RawSpan.Destination != "") {
 		return
 	}
 
@@ -353,7 +354,7 @@ func createSpanForPersistence(spanFromOTel *stores.SpanFromOTel) *tracePersisten
 	}
 }
 
-func evaluateIncidents(scenarios map[typedef.TScenarioID]*scenarioGeneratorModel.Scenario, traceId typedef.TTraceid, spansOfTrace typedef.TMapOfSpanIdToSpan) tracePersistenceModel.IncidentWithIssues {
+func evaluateIncidents(traceId typedef.TTraceid, scenarios map[typedef.TScenarioID]*scenarioGeneratorModel.Scenario, spansOfTrace typedef.TMapOfSpanIdToSpan) tracePersistenceModel.IncidentWithIssues {
 
 	spans := make([]*tracePersistenceModel.Span, 0)
 	for key := range spansOfTrace {
@@ -531,7 +532,7 @@ func (scenarioManager ScenarioManager) collectPostgresRawData(traceIds []string,
 }
 
 // prune removes the Spans that are not required - typedef Spans and server Spans that are not the root span
-func prune(spans map[typedef.TSpanId]*stores.SpanFromOTel, currentSpanID typedef.TSpanId, dontPruneCurrentNode bool) ([]typedef.TSpanId, bool) {
+func prune(spans map[typedef.TSpanId]*stores.SpanFromOTel, currentSpanID typedef.TSpanId, isRootNode bool) ([]typedef.TSpanId, bool) {
 	currentSpan := spans[currentSpanID]
 
 	// call prune on the children
@@ -568,7 +569,7 @@ func prune(spans map[typedef.TSpanId]*stores.SpanFromOTel, currentSpanID typedef
 		skipCurrentChild = true
 	}
 
-	if skipCurrentChild && !dontPruneCurrentNode {
+	if skipCurrentChild && !isRootNode {
 		return newChildIdsArray, true
 	}
 	return []typedef.TSpanId{currentSpanID}, false

@@ -136,6 +136,7 @@ func (t OTelStore) GetSpansForTracesFromDB(keys []typedef.TTraceid) (map[typedef
 				Children: []SpanFromOTel{*rootSpan},
 			}
 			traceFromOTel.Spans[rootSpan.ParentSpanID] = &rootClient
+			rootSpan.SpanID = rootSpan.ParentSpanID
 		}
 		traceFromOTel.RootSpanID = rootSpan.SpanID
 
