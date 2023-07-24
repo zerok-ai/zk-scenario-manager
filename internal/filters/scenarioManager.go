@@ -336,11 +336,11 @@ func setDestinationForRoot(root *stores.SpanFromOTel) {
 		if rawChildSpan == nil {
 			continue
 		}
-		if destinationChild := rawChildSpan.Source; len(destinationChild) > 0 {
+		if sourceOfChild := rawChildSpan.Source; len(sourceOfChild) > 0 {
 			if root.RawSpan == nil {
 				root.RawSpan = createSpanForPersistence(root)
 			}
-			root.RawSpan.Destination = destinationChild
+			root.RawSpan.Destination = sourceOfChild
 			break
 		}
 	}
