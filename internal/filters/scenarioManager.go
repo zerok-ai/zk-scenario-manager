@@ -17,6 +17,9 @@ import (
 	"scenario-manager/internal/stores"
 	tracePersistenceModel "scenario-manager/internal/tracePersistence/model"
 	tracePersistence "scenario-manager/internal/tracePersistence/service"
+	"strconv"
+	"strings"
+	"sync"
 	"time"
 )
 
@@ -24,6 +27,8 @@ const (
 	ScenarioSetPrefix = "scenario:"
 	TitleDelimiter    = "¦"
 )
+
+var issueRateMap typedef.IssueRateMap
 
 type ScenarioManager struct {
 	cfg           config.AppConfigs
@@ -35,6 +40,7 @@ type ScenarioManager struct {
 	traceRawDataCollector *vzReader.VzReader
 
 	tracePersistenceService tracePersistence.TracePersistenceService
+	mutex                   sync.Mutex
 }
 
 func NewScenarioManager(cfg config.AppConfigs, tps tracePersistence.TracePersistenceService) (*ScenarioManager, error) {
@@ -77,6 +83,10 @@ func getNewVZReader(cfg config.AppConfigs) (*vzReader.VzReader, error) {
 
 func (scenarioManager ScenarioManager) Init() ScenarioManager {
 
+	rateLimitTickerDuration := time.Duration(60) * time.Second
+	rateLimitTickerTask := ticker.GetNewTickerTask("rate-limit-processor", rateLimitTickerDuration, scenarioManager.processRateLimit)
+	rateLimitTickerTask.Start()
+
 	duration := time.Duration(scenarioManager.cfg.ScenarioConfig.ProcessingIntervalInSeconds) * time.Second
 
 	// trigger recurring processing of trace data against filters
@@ -97,6 +107,28 @@ func (scenarioManager ScenarioManager) Close() {
 		zkLogger.Error(LoggerTag, "Error closing tracePersistenceService")
 		return
 	}
+}
+
+func (scenarioManager ScenarioManager) processRateLimit() {
+	currTime := time.Now()
+	if issueRateMap == nil {
+		issueRateMap = make(typedef.IssueRateMap, 0)
+	}
+	scenarioManager.mutex.Lock()
+	defer scenarioManager.mutex.Unlock()
+	for k, v := range issueRateMap {
+		for i, issueRate := range v {
+			if currTime.After(issueRate.ExpiryTime) {
+				issueRateMap[k][i] = returnNewRateLimitObject(currTime, issueRate)
+			}
+		}
+	}
+}
+
+func returnNewRateLimitObject(currTime time.Time, issueRate typedef.IssuesCounter) typedef.IssuesCounter {
+	issueRate.IssueCountMap = make(map[typedef.TIssueHash]int, 0)
+	issueRate.ExpiryTime = currTime.Add(issueRate.TickDuration)
+	return issueRate
 }
 
 func (scenarioManager ScenarioManager) processAllScenarios() {
@@ -143,10 +175,21 @@ func (scenarioManager ScenarioManager) processTraceIDsAgainstScenarios(traceIds 
 		incidents := buildIncidentsForPersistence(scenarioWithTraces, tracesFromOTelStore, rawSpans)
 		if len(incidents) == 0 {
 			zkLogger.ErrorF(LoggerTag, "no incidents to save")
+			continue
 		}
 
-		// d. store the trace data in the persistence store
-		saveError := scenarioManager.tracePersistenceService.SaveIncidents(incidents)
+		// d. rate limit issues
+		newIncidentList := make([]tracePersistenceModel.IncidentWithIssues, 0)
+		for _, incident := range incidents {
+			i := rateLimitIssue(scenarioManager, incident, scenarioWithTraces)
+			if len(i.IssueGroupList) == 0 {
+				continue
+			}
+			newIncidentList = append(newIncidentList, i)
+		}
+
+		// e. store the trace data in the persistence store
+		saveError := scenarioManager.tracePersistenceService.SaveIncidents(newIncidentList)
 		if saveError != nil {
 			zkLogger.Error(LoggerTag, "Error saving scenario", saveError)
 		}
@@ -154,6 +197,111 @@ func (scenarioManager ScenarioManager) processTraceIDsAgainstScenarios(traceIds 
 		startIndex = endIndex
 		batch += 1
 	}
+}
+
+func parseTimeString(input string) (time.Duration, error) {
+	var duration time.Duration
+	var multiplier time.Duration
+
+	switch {
+	case strings.HasSuffix(input, "m"):
+		multiplier = time.Minute
+	case strings.HasSuffix(input, "h"):
+		multiplier = time.Hour
+	case strings.HasSuffix(input, "d"):
+		multiplier = 24 * time.Hour
+	default:
+		return 0, fmt.Errorf("unsupported input format")
+	}
+
+	numericPart := strings.TrimSuffix(input, string(input[len(input)-1]))
+	val, err := strconv.Atoi(numericPart)
+	if err != nil {
+		return 0, err
+	}
+
+	duration = time.Duration(val) * multiplier
+	return duration, nil
+}
+
+func rateLimitIssue(scenarioManager ScenarioManager, incident tracePersistenceModel.IncidentWithIssues, scenarioWithTraces typedef.ScenarioToScenarioTracesMap) tracePersistenceModel.IncidentWithIssues {
+	// create a list to store the issues to be removed
+	issuesToRemove := make(map[typedef.TIssueHash]bool, 0)
+
+	// acquire the lock
+	scenarioManager.mutex.Lock()
+	defer scenarioManager.mutex.Unlock()
+
+	// for each issueGroup in the incident, there is a list of issues
+	for _, issue := range incident.IssueGroupList {
+		tScenarioId := typedef.TScenarioID(issue.ScenarioId)
+		// if the scenario is not present in the issueRateMap or if the scenario is updated and a new rate limit is added, then len of previous rate limit and current rate limit will be different
+		if v, ok := issueRateMap[tScenarioId]; !ok || len(v) != len(scenarioWithTraces[tScenarioId].Scenario.RateLimit) {
+			// for every rateLimit object in scenario, create a new entry in the issueRateMap
+			rateLimiters := make([]typedef.IssuesCounter, 0)
+			for _, rateLimit := range scenarioWithTraces[tScenarioId].Scenario.RateLimit {
+				m := make(typedef.IssueBucket, 0)
+				duration, err := parseTimeString(rateLimit.TickDuration)
+				if err != nil {
+					zkLogger.ErrorF(LoggerTag, "Error parsing time string %s", rateLimit.TickDuration)
+					continue
+				}
+				t := typedef.IssuesCounter{
+					IssueCountMap:    m,
+					ExpiryTime:       time.Now().Add(duration),
+					BucketMaxSize:    rateLimit.BucketMaxSize,
+					BucketRefillSize: rateLimit.BucketRefillSize,
+					TickDuration:     duration,
+				}
+				rateLimiters = append(rateLimiters, t)
+			}
+			issueRateMap[tScenarioId] = rateLimiters
+		}
+
+		// update the count of issues in the rateLimitMap only if the value is less than the bucketMaxSize, else add the issue to the issuesToRemove list
+		for _, rateLimiter := range issueRateMap[tScenarioId] {
+			for _, i := range issue.Issues {
+				if _, ok := rateLimiter.IssueCountMap[typedef.TIssueHash(i.IssueHash)]; !ok {
+					rateLimiter.IssueCountMap[typedef.TIssueHash(i.IssueHash)] = 1
+				} else if rateLimiter.IssueCountMap[typedef.TIssueHash(i.IssueHash)] < rateLimiter.BucketMaxSize {
+					rateLimiter.IssueCountMap[typedef.TIssueHash(i.IssueHash)] += 1
+				} else {
+					issuesToRemove[typedef.TIssueHash(i.IssueHash)] = true
+				}
+			}
+		}
+	}
+
+	// if there are issues to be removed, then remove them from the incident
+	if len(issuesToRemove) != 0 {
+		newIssueGroupList := make([]tracePersistenceModel.IssueGroup, 0)
+		for _, issueGroup := range incident.IssueGroupList {
+			newIssuesList := make([]tracePersistenceModel.Issue, 0)
+			for _, issue := range issueGroup.Issues {
+				if _, ok := issuesToRemove[typedef.TIssueHash(issue.IssueHash)]; ok {
+					continue
+				}
+				newIssuesList = append(newIssuesList, issue)
+			}
+			issueGroup.Issues = newIssuesList
+			newIssueGroupList = append(newIssueGroupList, issueGroup)
+		}
+		incident.IssueGroupList = sanitizeIssueGroupList(newIssueGroupList)
+		return incident
+	}
+	return incident
+}
+
+// sanitizeIssueGroupList removes the issueGroup from the list if the issueGroup has no issues
+func sanitizeIssueGroupList(issueGroupList []tracePersistenceModel.IssueGroup) []tracePersistenceModel.IssueGroup {
+	l := make([]tracePersistenceModel.IssueGroup, 0)
+	for _, v := range issueGroupList {
+		if len(v.Issues) == 0 {
+			continue
+		}
+		l = append(l, v)
+	}
+	return l
 }
 
 // getAllTraceIDs gets all the traceIds from the traceStore for all the scenarios
@@ -387,8 +535,16 @@ func getListOfIssues(scenario *scenarioGeneratorModel.Scenario, spanMap typedef.
 
 	// 1. create a set of used workload ids
 	workloadIdListInGroup := make(ds.Set[typedef.TWorkspaceID], 0)
-	for _, group := range scenario.GroupBy {
-		workloadIdListInGroup.Add(typedef.TWorkspaceID(group.WorkloadId))
+
+	// this if condition is for the cases where there is no group by, so we take all the workload ids in the scenario and add it to the list
+	if scenario.GroupBy == nil || len(scenario.GroupBy) == 0 {
+		for k := range *scenario.Workloads {
+			workloadIdListInGroup.Add(typedef.TWorkspaceID(k))
+		}
+	} else {
+		for _, group := range scenario.GroupBy {
+			workloadIdListInGroup.Add(typedef.TWorkspaceID(group.WorkloadId))
+		}
 	}
 
 	// 2. create a set of workspaceIds vs spans
