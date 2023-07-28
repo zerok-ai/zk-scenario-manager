@@ -17,8 +17,6 @@ import (
 	"scenario-manager/internal/stores"
 	tracePersistenceModel "scenario-manager/internal/tracePersistence/model"
 	tracePersistence "scenario-manager/internal/tracePersistence/service"
-	"strconv"
-	"strings"
 	"sync"
 	"time"
 )
@@ -27,8 +25,6 @@ const (
 	ScenarioSetPrefix = "scenario:"
 	TitleDelimiter    = "¦"
 )
-
-var issueRateMap typedef.IssueRateMap
 
 type ScenarioManager struct {
 	cfg           config.AppConfigs
@@ -40,6 +36,7 @@ type ScenarioManager struct {
 	traceRawDataCollector *vzReader.VzReader
 
 	tracePersistenceService tracePersistence.TracePersistenceService
+	issueRateMap            typedef.IssueRateMap
 	mutex                   sync.Mutex
 }
 
@@ -81,10 +78,8 @@ func getNewVZReader(cfg config.AppConfigs) (*vzReader.VzReader, error) {
 	return &reader, nil
 }
 
-func (scenarioManager ScenarioManager) Init() ScenarioManager {
-
-	rateLimitTickerDuration := time.Duration(60) * time.Second
-	rateLimitTickerTask := ticker.GetNewTickerTask("rate-limit-processor", rateLimitTickerDuration, scenarioManager.processRateLimit)
+func (scenarioManager *ScenarioManager) Init() *ScenarioManager {
+	rateLimitTickerTask := ticker.GetNewTickerTask("rate-limit-processor", RateLimitTickerDuration, scenarioManager.processRateLimit)
 	rateLimitTickerTask.Start()
 
 	duration := time.Duration(scenarioManager.cfg.ScenarioConfig.ProcessingIntervalInSeconds) * time.Second
@@ -95,7 +90,7 @@ func (scenarioManager ScenarioManager) Init() ScenarioManager {
 	return scenarioManager
 }
 
-func (scenarioManager ScenarioManager) Close() {
+func (scenarioManager *ScenarioManager) Close() {
 
 	scenarioManager.scenarioStore.Close()
 	scenarioManager.traceStore.Close()
@@ -109,29 +104,7 @@ func (scenarioManager ScenarioManager) Close() {
 	}
 }
 
-func (scenarioManager ScenarioManager) processRateLimit() {
-	currTime := time.Now()
-	if issueRateMap == nil {
-		issueRateMap = make(typedef.IssueRateMap, 0)
-	}
-	scenarioManager.mutex.Lock()
-	defer scenarioManager.mutex.Unlock()
-	for k, v := range issueRateMap {
-		for i, issueRate := range v {
-			if currTime.After(issueRate.ExpiryTime) {
-				issueRateMap[k][i] = returnNewRateLimitObject(currTime, issueRate)
-			}
-		}
-	}
-}
-
-func returnNewRateLimitObject(currTime time.Time, issueRate typedef.IssuesCounter) typedef.IssuesCounter {
-	issueRate.IssueCountMap = make(map[typedef.TIssueHash]int, 0)
-	issueRate.ExpiryTime = currTime.Add(issueRate.TickDuration)
-	return issueRate
-}
-
-func (scenarioManager ScenarioManager) processAllScenarios() {
+func (scenarioManager *ScenarioManager) processAllScenarios() {
 
 	// 1. get all scenarios
 	scenarios := scenarioManager.scenarioStore.GetAllValues()
@@ -153,7 +126,7 @@ func (scenarioManager ScenarioManager) processAllScenarios() {
 
 // processTraceIDsAgainstScenarios processes all the traceIds against all the scenarios and saves the incidents in the persistence store
 // The traces are processed in the batches of size batchSizeForRawDataCollector
-func (scenarioManager ScenarioManager) processTraceIDsAgainstScenarios(traceIds []typedef.TTraceid, scenarioWithTraces typedef.ScenarioToScenarioTracesMap) {
+func (scenarioManager *ScenarioManager) processTraceIDsAgainstScenarios(traceIds []typedef.TTraceid, scenarioWithTraces typedef.ScenarioToScenarioTracesMap) {
 	batch := 0
 	traceIdCount := len(traceIds)
 	for startIndex := 0; startIndex < traceIdCount; {
@@ -181,7 +154,7 @@ func (scenarioManager ScenarioManager) processTraceIDsAgainstScenarios(traceIds 
 		// d. rate limit issues
 		newIncidentList := make([]tracePersistenceModel.IncidentWithIssues, 0)
 		for _, incident := range incidents {
-			i := rateLimitIssue(scenarioManager, incident, scenarioWithTraces)
+			i := scenarioManager.rateLimitIssue(incident, scenarioWithTraces)
 			if len(i.IssueGroupList) == 0 {
 				continue
 			}
@@ -199,113 +172,8 @@ func (scenarioManager ScenarioManager) processTraceIDsAgainstScenarios(traceIds 
 	}
 }
 
-func parseTimeString(input string) (time.Duration, error) {
-	var duration time.Duration
-	var multiplier time.Duration
-
-	switch {
-	case strings.HasSuffix(input, "m"):
-		multiplier = time.Minute
-	case strings.HasSuffix(input, "h"):
-		multiplier = time.Hour
-	case strings.HasSuffix(input, "d"):
-		multiplier = 24 * time.Hour
-	default:
-		return 0, fmt.Errorf("unsupported input format")
-	}
-
-	numericPart := strings.TrimSuffix(input, string(input[len(input)-1]))
-	val, err := strconv.Atoi(numericPart)
-	if err != nil {
-		return 0, err
-	}
-
-	duration = time.Duration(val) * multiplier
-	return duration, nil
-}
-
-func rateLimitIssue(scenarioManager ScenarioManager, incident tracePersistenceModel.IncidentWithIssues, scenarioWithTraces typedef.ScenarioToScenarioTracesMap) tracePersistenceModel.IncidentWithIssues {
-	// create a list to store the issues to be removed
-	issuesToRemove := make(map[typedef.TIssueHash]bool, 0)
-
-	// acquire the lock
-	scenarioManager.mutex.Lock()
-	defer scenarioManager.mutex.Unlock()
-
-	// for each issueGroup in the incident, there is a list of issues
-	for _, issue := range incident.IssueGroupList {
-		tScenarioId := typedef.TScenarioID(issue.ScenarioId)
-		// if the scenario is not present in the issueRateMap or if the scenario is updated and a new rate limit is added, then len of previous rate limit and current rate limit will be different
-		if v, ok := issueRateMap[tScenarioId]; !ok || len(v) != len(scenarioWithTraces[tScenarioId].Scenario.RateLimit) {
-			// for every rateLimit object in scenario, create a new entry in the issueRateMap
-			rateLimiters := make([]typedef.IssuesCounter, 0)
-			for _, rateLimit := range scenarioWithTraces[tScenarioId].Scenario.RateLimit {
-				m := make(typedef.IssueBucket, 0)
-				duration, err := parseTimeString(rateLimit.TickDuration)
-				if err != nil {
-					zkLogger.ErrorF(LoggerTag, "Error parsing time string %s", rateLimit.TickDuration)
-					continue
-				}
-				t := typedef.IssuesCounter{
-					IssueCountMap:    m,
-					ExpiryTime:       time.Now().Add(duration),
-					BucketMaxSize:    rateLimit.BucketMaxSize,
-					BucketRefillSize: rateLimit.BucketRefillSize,
-					TickDuration:     duration,
-				}
-				rateLimiters = append(rateLimiters, t)
-			}
-			issueRateMap[tScenarioId] = rateLimiters
-		}
-
-		// update the count of issues in the rateLimitMap only if the value is less than the bucketMaxSize, else add the issue to the issuesToRemove list
-		for _, rateLimiter := range issueRateMap[tScenarioId] {
-			for _, i := range issue.Issues {
-				if _, ok := rateLimiter.IssueCountMap[typedef.TIssueHash(i.IssueHash)]; !ok {
-					rateLimiter.IssueCountMap[typedef.TIssueHash(i.IssueHash)] = 1
-				} else if rateLimiter.IssueCountMap[typedef.TIssueHash(i.IssueHash)] < rateLimiter.BucketMaxSize {
-					rateLimiter.IssueCountMap[typedef.TIssueHash(i.IssueHash)] += 1
-				} else {
-					issuesToRemove[typedef.TIssueHash(i.IssueHash)] = true
-				}
-			}
-		}
-	}
-
-	// if there are issues to be removed, then remove them from the incident
-	if len(issuesToRemove) != 0 {
-		newIssueGroupList := make([]tracePersistenceModel.IssueGroup, 0)
-		for _, issueGroup := range incident.IssueGroupList {
-			newIssuesList := make([]tracePersistenceModel.Issue, 0)
-			for _, issue := range issueGroup.Issues {
-				if _, ok := issuesToRemove[typedef.TIssueHash(issue.IssueHash)]; ok {
-					continue
-				}
-				newIssuesList = append(newIssuesList, issue)
-			}
-			issueGroup.Issues = newIssuesList
-			newIssueGroupList = append(newIssueGroupList, issueGroup)
-		}
-		incident.IssueGroupList = sanitizeIssueGroupList(newIssueGroupList)
-		return incident
-	}
-	return incident
-}
-
-// sanitizeIssueGroupList removes the issueGroup from the list if the issueGroup has no issues
-func sanitizeIssueGroupList(issueGroupList []tracePersistenceModel.IssueGroup) []tracePersistenceModel.IssueGroup {
-	l := make([]tracePersistenceModel.IssueGroup, 0)
-	for _, v := range issueGroupList {
-		if len(v.Issues) == 0 {
-			continue
-		}
-		l = append(l, v)
-	}
-	return l
-}
-
 // getAllTraceIDs gets all the traceIds from the traceStore for all the scenarios
-func (scenarioManager ScenarioManager) getAllTraceIDs(scenarios map[string]*scenarioGeneratorModel.Scenario, namesOfAllSets []string) ([]typedef.TTraceid, typedef.ScenarioToScenarioTracesMap) {
+func (scenarioManager *ScenarioManager) getAllTraceIDs(scenarios map[string]*scenarioGeneratorModel.Scenario, namesOfAllSets []string) ([]typedef.TTraceid, typedef.ScenarioToScenarioTracesMap) {
 	allTraceIds := make(ds.Set[typedef.TTraceid], 0)
 	scenarioWithTraces := make(typedef.ScenarioToScenarioTracesMap, 0)
 	for _, scenario := range scenarios {
@@ -330,7 +198,7 @@ func (scenarioManager ScenarioManager) getAllTraceIDs(scenarios map[string]*scen
 }
 
 // getDataForTraces collects span relation and span raw data for the traceIDs. The relation is collected from OTel store and raw data is collected from raw data store
-func (scenarioManager ScenarioManager) getDataForTraces(traceIds []typedef.TTraceid) (map[typedef.TTraceid]*stores.TraceFromOTel, []*tracePersistenceModel.Span, error) {
+func (scenarioManager *ScenarioManager) getDataForTraces(traceIds []typedef.TTraceid) (map[typedef.TTraceid]*stores.TraceFromOTel, []*tracePersistenceModel.Span, error) {
 
 	// a. collect trace and span raw data for the traceIDs
 	tracesFromOTelStore, err := scenarioManager.oTelStore.GetSpansForTracesFromDB(traceIds)
@@ -357,7 +225,7 @@ func (scenarioManager ScenarioManager) getDataForTraces(traceIds []typedef.TTrac
 	return tracesFromOTelStore, rawSpans, nil
 }
 
-func (scenarioManager ScenarioManager) getAllRawSpans(tracesForProtocol map[typedef.TProtocol]ds.Set[typedef.TTraceid]) []*tracePersistenceModel.Span {
+func (scenarioManager *ScenarioManager) getAllRawSpans(tracesForProtocol map[typedef.TProtocol]ds.Set[typedef.TTraceid]) []*tracePersistenceModel.Span {
 	rawSpans := make([]*tracePersistenceModel.Span, 0)
 
 	startTime := timeRangeForRawDataQuery
@@ -524,7 +392,7 @@ func evaluateIncidents(traceId typedef.TTraceid, scenarios map[typedef.TScenario
 		Incident: tracePersistenceModel.Incident{
 			TraceId:                string(traceId),
 			Spans:                  spans,
-			IncidentCollectionTime: time.Now(),
+			IncidentCollectionTime: time.Now().UTC(),
 		},
 	}
 
@@ -648,7 +516,7 @@ func getTextFromStructMembers(path string, span interface{}) string {
 	return ""
 }
 
-func (scenarioManager ScenarioManager) collectHTTPRawData(traceIds []string, startTime string) []tracePersistenceModel.Span {
+func (scenarioManager *ScenarioManager) collectHTTPRawData(traceIds []string, startTime string) []tracePersistenceModel.Span {
 	spans := make([]tracePersistenceModel.Span, 0)
 	rawData, err := scenarioManager.traceRawDataCollector.GetHTTPRawData(traceIds, startTime)
 	if err != nil {
@@ -661,7 +529,7 @@ func (scenarioManager ScenarioManager) collectHTTPRawData(traceIds []string, sta
 	return spans
 }
 
-func (scenarioManager ScenarioManager) collectMySQLRawData(traceIds []string, startTime string) []tracePersistenceModel.Span {
+func (scenarioManager *ScenarioManager) collectMySQLRawData(traceIds []string, startTime string) []tracePersistenceModel.Span {
 	spans := make([]tracePersistenceModel.Span, 0)
 	rawData, err := scenarioManager.traceRawDataCollector.GetMySQLRawData(traceIds, startTime)
 	if err != nil {
@@ -674,7 +542,7 @@ func (scenarioManager ScenarioManager) collectMySQLRawData(traceIds []string, st
 	return spans
 }
 
-func (scenarioManager ScenarioManager) collectPostgresRawData(traceIds []string, startTime string) []tracePersistenceModel.Span {
+func (scenarioManager *ScenarioManager) collectPostgresRawData(traceIds []string, startTime string) []tracePersistenceModel.Span {
 	spans := make([]tracePersistenceModel.Span, 0)
 	rawData, err := scenarioManager.traceRawDataCollector.GetPgSQLRawData(traceIds, startTime)
 	if err != nil {
