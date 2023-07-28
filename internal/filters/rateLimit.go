@@ -77,16 +77,10 @@ func (scenarioManager *ScenarioManager) rateLimitIssue(incident model.IncidentWi
 		}
 
 		// update the count of issues in the rateLimitMap only if the value is less than the bucketMaxSize, else add the issue to the issuesToRemove list
-		for _, i := range issue.Issues {
-			// we can have more than 1 rate limit object for a scenario, so we need to check if the issue is over the limit for all the rate limit objects
-			// we initialize the totalRateLimiters to the total number of rate limit objects for a scenario and decrement every time we find an issue over the limit
-			totalRateLimiters := len(scenarioManager.issueRateMap[tScenarioId])
-			for _, rateLimiter := range scenarioManager.issueRateMap[tScenarioId] {
+		for _, rateLimiter := range scenarioManager.issueRateMap[tScenarioId] {
+			for _, i := range issue.Issues {
 				if rateLimiter.IssueCountMap[internal.TIssueHash(i.IssueHash)] > rateLimiter.BucketMaxSize {
-					totalRateLimiters--
-					if totalRateLimiters == 0 {
-						issuesToRemove[internal.TIssueHash(i.IssueHash)] = true
-					}
+					issuesToRemove[internal.TIssueHash(i.IssueHash)] = true
 				}
 				rateLimiter.IssueCountMap[internal.TIssueHash(i.IssueHash)]++
 			}
