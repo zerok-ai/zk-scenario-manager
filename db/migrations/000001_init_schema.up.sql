@@ -19,7 +19,7 @@ CREATE TABLE IF NOT EXISTS incident
     protocol                 VARCHAR(255),
     root_span_time           TIMESTAMP    NOT NULL,
     latency_ns               FLOAT,
-    PRIMARY KEY (trace_id, issue_hash)
+    CONSTRAINT unique_issue  UNIQUE (issue_hash, trace_id)
 );
 
 
