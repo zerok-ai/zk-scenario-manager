@@ -29,6 +29,11 @@ type Incident struct {
 	TraceId                string    `json:"trace_id"`
 	Spans                  []*Span   `json:"spans"`
 	IncidentCollectionTime time.Time `json:"incident_collection_time"`
+	EntryService           string    `json:"entry_service"`
+	EndPoint               string    `json:"end_point"`
+	Protocol               string    `json:"protocol"`
+	RootSpanTime           time.Time `json:"root_span_time"`
+	LatencyNs              *float32  `json:"latency_ns"`
 }
 
 type Span struct {

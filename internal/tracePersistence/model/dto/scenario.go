@@ -13,10 +13,10 @@ import (
 var LogTag = "trace_dto"
 
 type IssuesDetailDto struct {
-	IssueTableDtoList    []IssueTableDto       `json:"issue_table_dto_list"`
-	ScenarioTableDtoList []IncidentTableDto    `json:"scenario_table_dto_list"`
-	SpanTableDtoList     []SpanTableDto        `json:"span_table_dto_list"`
-	SpanRawDataTableList []SpanRawDataTableDto `json:"span_raw_data_table_list"`
+	IssueTableDtoList    []IssueTableDto
+	IncidentTableDtoList []IncidentTableDto
+	SpanTableDtoList     []SpanTableDto
+	SpanRawDataTableList []SpanRawDataTableDto
 }
 
 type IssueTableDto struct {
@@ -34,10 +34,15 @@ type IncidentTableDto struct {
 	TraceId                string    `json:"trace_id"`
 	IssueHash              string    `json:"issue_hash"`
 	IncidentCollectionTime time.Time `json:"incident_collection_time"`
+	EntryService           string    `json:"entry_service"`
+	EndPoint               string    `json:"end_point"`
+	Protocol               string    `json:"protocol"`
+	RootSpanTime           time.Time `json:"root_span_time"`
+	LatencyNs              *float32  `json:"latency_ns"`
 }
 
 func (t IncidentTableDto) GetAllColumns() []any {
-	return []any{t.TraceId, t.IssueHash, t.IncidentCollectionTime}
+	return []any{t.TraceId, t.IssueHash, t.IncidentCollectionTime, t.EntryService, t.EndPoint, t.Protocol, t.RootSpanTime, t.LatencyNs}
 }
 
 func ConvertIncidentIssuesToIssueDto(s model.IncidentWithIssues) (IssuesDetailDto, *error) {
@@ -62,6 +67,11 @@ func ConvertIncidentIssuesToIssueDto(s model.IncidentWithIssues) (IssuesDetailDt
 				TraceId:                traceId,
 				IssueHash:              issue.IssueHash,
 				IncidentCollectionTime: incidentCollectionTime,
+				EntryService:           s.Incident.EntryService,
+				EndPoint:               s.Incident.EndPoint,
+				Protocol:               s.Incident.Protocol,
+				RootSpanTime:           s.Incident.RootSpanTime,
+				LatencyNs:              s.Incident.LatencyNs,
 			}
 			incidentDtoList = append(incidentDtoList, incidentDto)
 		}
@@ -122,7 +132,7 @@ func ConvertIncidentIssuesToIssueDto(s model.IncidentWithIssues) (IssuesDetailDt
 
 	response = IssuesDetailDto{
 		IssueTableDtoList:    issueDtoList,
-		ScenarioTableDtoList: incidentDtoList,
+		IncidentTableDtoList: incidentDtoList,
 		SpanTableDtoList:     spanDtoList,
 		SpanRawDataTableList: spanRawDataDtoList,
 	}

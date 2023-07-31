@@ -21,6 +21,9 @@ const (
 	IssueHash              = "issue_hash"
 	IssueTitle             = "issue_title"
 	IncidentCollectionTime = "incident_collection_time"
+	EntryService           = "entry_service"
+	Endpoint               = "end_point"
+	RootSpanTime           = "root_span_time"
 
 	SpanId          = "span_id"
 	ParentSpanId    = "parent_span_id"
@@ -37,7 +40,7 @@ const (
 	ResponsePayload = "response_payload"
 
 	UpsertIssueQuery       = "INSERT INTO issue (issue_hash, issue_title, scenario_id, scenario_version) VALUES ($1, $2, $3, $4) ON CONFLICT (issue_hash) DO NOTHING"
-	UpsertIncidentQuery    = "INSERT INTO incident (trace_id, issue_hash, incident_collection_time) VALUES ($1, $2, $3) ON CONFLICT (issue_hash, trace_id) DO NOTHING"
+	UpsertIncidentQuery    = "INSERT INTO incident (trace_id, issue_hash, incident_collection_time, entry_service, end_point, protocol, root_span_time, latency_ns) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) ON CONFLICT (issue_hash, trace_id) DO NOTHING"
 	UpsertSpanQuery        = "INSERT INTO span (trace_id, span_id, parent_span_id, source, destination, workload_id_list, status, metadata, latency_ns, protocol, issue_hash_list, time) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) ON CONFLICT (trace_id, span_id) DO NOTHING"
 	UpsertSpanRawDataQuery = "INSERT INTO span_raw_data (trace_id, span_id, request_payload, response_payload) VALUES ($1, $2, $3, $4) ON CONFLICT (trace_id, span_id) DO NOTHING"
 )
@@ -81,7 +84,7 @@ func (z tracePersistenceRepo) SaveTraceList(issuesDetailList []dto.IssuesDetailD
 			}
 		}
 
-		for _, v := range issue.ScenarioTableDtoList {
+		for _, v := range issue.IncidentTableDtoList {
 			key := v.IssueHash + v.TraceId
 			if _, ok := uniqueTraces[key]; !ok {
 				uniqueTraces[key] = true
@@ -143,7 +146,7 @@ func doBulkInsertForTraceList(tx *sql.Tx, dbRepo sqlDB.DatabaseRepo, issueData, 
 		return err
 	}
 
-	err = bulkInsert(tx, dbRepo, IncidentTablePostgres, []string{TraceId, IssueHash, IncidentCollectionTime}, traceData)
+	err = bulkInsert(tx, dbRepo, IncidentTablePostgres, []string{TraceId, IssueHash, IncidentCollectionTime, EntryService, Endpoint, Protocol, RootSpanTime, LatencyNs}, traceData)
 	if err != nil {
 		zkLogger.Info(LogTag, "Error in bulk insert trace table", err)
 		return err

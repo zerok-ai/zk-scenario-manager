@@ -2,3 +2,4 @@ zk-utils-go/vendor
 vendor
 zk-scenario-manager
 .idea
+.run

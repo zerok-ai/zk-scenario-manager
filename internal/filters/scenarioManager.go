@@ -301,7 +301,7 @@ func buildIncidentsForPersistence(scenariosWithTraces typedef.ScenarioToScenario
 		}
 
 		// evaluate this trace
-		incidents := evaluateIncidents(traceId, scenarioMap, *spanMapForTrace)
+		incidents := evaluateIncidents(traceId, tracesFromOTel[traceId].RootSpanID, scenarioMap, *spanMapForTrace)
 		incidentsWithIssues = append(incidentsWithIssues, incidents)
 	}
 
@@ -370,7 +370,7 @@ func createSpanForPersistence(spanFromOTel *stores.SpanFromOTel) *tracePersisten
 	}
 }
 
-func evaluateIncidents(traceId typedef.TTraceid, scenarios map[typedef.TScenarioID]*scenarioGeneratorModel.Scenario, spansOfTrace typedef.TMapOfSpanIdToSpan) tracePersistenceModel.IncidentWithIssues {
+func evaluateIncidents(traceId typedef.TTraceid, rootSpanId typedef.TSpanId, scenarios map[typedef.TScenarioID]*scenarioGeneratorModel.Scenario, spansOfTrace typedef.TMapOfSpanIdToSpan) tracePersistenceModel.IncidentWithIssues {
 
 	spans := make([]*tracePersistenceModel.Span, 0)
 	for key := range spansOfTrace {
@@ -387,12 +387,24 @@ func evaluateIncidents(traceId typedef.TTraceid, scenarios map[typedef.TScenario
 		})
 	}
 
+	rootSpan := spansOfTrace[rootSpanId]
+	var reqPath string
+	if rootSpan.Protocol == PHTTP && rootSpan.RequestPayload != nil {
+		httpRequestPayload := rootSpan.RequestPayload.(tracePersistenceModel.HTTPRequestPayload)
+		reqPath = httpRequestPayload.ReqPath
+	}
+
 	incidentWithIssues := tracePersistenceModel.IncidentWithIssues{
 		IssueGroupList: issueGroupList,
 		Incident: tracePersistenceModel.Incident{
 			TraceId:                string(traceId),
 			Spans:                  spans,
 			IncidentCollectionTime: time.Now().UTC(),
+			EntryService:           rootSpan.Destination,
+			LatencyNs:              rootSpan.LatencyNs,
+			RootSpanTime:           rootSpan.Time,
+			Protocol:               rootSpan.Protocol,
+			EndPoint:               reqPath,
 		},
 	}
 
