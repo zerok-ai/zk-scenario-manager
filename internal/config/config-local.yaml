@@ -1,25 +1,33 @@
-server:
-  host: localhost
-  port: 80
-
-logs:
-  color: true
-  level: DEBUG
-
-http:
-  debug: true
-
 redis:
   host: 127.0.0.1
   port: 6379
   dbs:
     traces: 1
+    otel: 3
     scenarios: 6
   readTimeout: 20
 
 postgres:
-  host: "localhost"
+  host: 127.0.0.1
   port: 5432
+  #  user: "postgres"
+  #  password: "eo1Mgtm6HI"
+  #  dbname: "pl"
   user: "pl"
   password: "pl"
-  dbname: "pl"
+  dbname: "zk"
+
+logs:
+  color: true
+  level: DEBUG
+
+scenarioConfig:
+  redisRuleSetCount: 12
+  processingIntervalInSeconds: 10
+  vzCloudAddr: "px.loadcloud01.getanton.com:443"
+  vzClusterId: "d6ab4cb1-a202-4c48-ae42-f7e480063663"
+  vzClusterKey: "px-api-466ba2de-43d0-4d51-a678-005a5ecfb1d9"
+
+server:
+  host: localhost
+  port: 80

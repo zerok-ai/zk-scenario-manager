@@ -129,6 +129,8 @@ func (scenarioManager *ScenarioManager) processAllScenarios() {
 func (scenarioManager *ScenarioManager) processTraceIDsAgainstScenarios(traceIds []typedef.TTraceid, scenarioWithTraces typedef.ScenarioToScenarioTracesMap) {
 	batch := 0
 	traceIdCount := len(traceIds)
+	scenarioManager.initRateLimit(scenarioWithTraces)
+
 	for startIndex := 0; startIndex < traceIdCount; {
 
 		// a. create the batch
@@ -154,11 +156,11 @@ func (scenarioManager *ScenarioManager) processTraceIDsAgainstScenarios(traceIds
 		// d. rate limit issues
 		newIncidentList := make([]tracePersistenceModel.IncidentWithIssues, 0)
 		for _, incident := range incidents {
-			i := scenarioManager.rateLimitIssue(incident, scenarioWithTraces)
-			if len(i.IssueGroupList) == 0 {
+			rateLimitedIncident := scenarioManager.rateLimitIssue(incident, scenarioWithTraces)
+			if rateLimitedIncident == nil {
 				continue
 			}
-			newIncidentList = append(newIncidentList, i)
+			newIncidentList = append(newIncidentList, *rateLimitedIncident)
 		}
 
 		// e. store the trace data in the persistence store
@@ -402,37 +404,39 @@ func evaluateIncidents(traceId typedef.TTraceid, scenarios map[typedef.TScenario
 func getListOfIssues(scenario *scenarioGeneratorModel.Scenario, spanMap typedef.TMapOfSpanIdToSpan) []tracePersistenceModel.Issue {
 
 	// 1. create a set of used workload ids
-	workloadIdListInGroup := make(ds.Set[typedef.TWorkspaceID], 0)
+	workloadIdListInGroup := make(ds.Set[typedef.TWorkloadId], 0)
 
 	// this if condition is for the cases where there is no group by, so we take all the workload ids in the scenario and add it to the list
 	if scenario.GroupBy == nil || len(scenario.GroupBy) == 0 {
-		for k := range *scenario.Workloads {
-			workloadIdListInGroup.Add(typedef.TWorkspaceID(k))
+		if scenario.Workloads != nil || len(*scenario.Workloads) != 0 {
+			for k := range *scenario.Workloads {
+				workloadIdListInGroup.Add(typedef.TWorkloadId(k))
+			}
 		}
 	} else {
 		for _, group := range scenario.GroupBy {
-			workloadIdListInGroup.Add(typedef.TWorkspaceID(group.WorkloadId))
+			workloadIdListInGroup.Add(typedef.TWorkloadId(group.WorkloadId))
 		}
 	}
 
 	// 2. create a set of workspaceIds vs spans
-	workloadIdToSpansMap := make(map[typedef.TWorkspaceID][]*tracePersistenceModel.Span, 0)
+	workloadIdToSpansMap := make(map[typedef.TWorkloadId][]*tracePersistenceModel.Span, 0)
 	for _, span := range spanMap {
 		workloadIdList := span.WorkloadIdList
 		for _, workloadId := range workloadIdList {
-			spans, ok := workloadIdToSpansMap[typedef.TWorkspaceID(workloadId)]
+			spans, ok := workloadIdToSpansMap[typedef.TWorkloadId(workloadId)]
 			if !ok {
 				spans = make([]*tracePersistenceModel.Span, 0)
 			}
 			newSpans := append(spans, span)
-			workloadIdToSpansMap[typedef.TWorkspaceID(workloadId)] = newSpans
+			workloadIdToSpansMap[typedef.TWorkloadId(workloadId)] = newSpans
 		}
 	}
 
 	// 3. do a cartesian product of all the elements in workloadIdSet
-	spansForGrpBy := make([]map[typedef.TWorkspaceID]*tracePersistenceModel.Span, 0)
+	spansForGrpBy := make([]map[typedef.TWorkloadId]*tracePersistenceModel.Span, 0)
 	for workloadId, _ := range workloadIdListInGroup {
-		arrSpans := workloadIdToSpansMap[typedef.TWorkspaceID(workloadId)]
+		arrSpans := workloadIdToSpansMap[workloadId]
 		spansForGrpBy = getCartesianProductOfSpans(spansForGrpBy, workloadId, arrSpans)
 	}
 
@@ -443,7 +447,7 @@ func getListOfIssues(scenario *scenarioGeneratorModel.Scenario, spanMap typedef.
 		hash := scenario.Id + scenario.Version
 		title := scenario.Title
 		for _, group := range scenario.GroupBy {
-			span, ok := mapOfIssueSpans[typedef.TWorkspaceID(group.WorkloadId)]
+			span, ok := mapOfIssueSpans[typedef.TWorkloadId(group.WorkloadId)]
 			if !ok {
 				continue
 			}
@@ -482,17 +486,17 @@ func getListOfIssues(scenario *scenarioGeneratorModel.Scenario, spanMap typedef.
 	return issues
 }
 
-func getCartesianProductOfSpans(arrOfWorkLoadSpanMap []map[typedef.TWorkspaceID]*tracePersistenceModel.Span, workload typedef.TWorkspaceID, arrOfSpans []*tracePersistenceModel.Span) []map[typedef.TWorkspaceID]*tracePersistenceModel.Span {
+func getCartesianProductOfSpans(arrOfWorkLoadSpanMap []map[typedef.TWorkloadId]*tracePersistenceModel.Span, workload typedef.TWorkloadId, arrOfSpans []*tracePersistenceModel.Span) []map[typedef.TWorkloadId]*tracePersistenceModel.Span {
 
 	if len(arrOfSpans) == 0 {
 		return arrOfWorkLoadSpanMap
 	}
 
 	if len(arrOfWorkLoadSpanMap) == 0 {
-		arrOfWorkLoadSpanMap = append(arrOfWorkLoadSpanMap, make(map[typedef.TWorkspaceID]*tracePersistenceModel.Span, 0))
+		arrOfWorkLoadSpanMap = append(arrOfWorkLoadSpanMap, make(map[typedef.TWorkloadId]*tracePersistenceModel.Span, 0))
 	}
 
-	result := make([]map[typedef.TWorkspaceID]*tracePersistenceModel.Span, 0)
+	result := make([]map[typedef.TWorkloadId]*tracePersistenceModel.Span, 0)
 	for _, s1 := range arrOfWorkLoadSpanMap {
 		for _, s2 := range arrOfSpans {
 			newMap := s1
