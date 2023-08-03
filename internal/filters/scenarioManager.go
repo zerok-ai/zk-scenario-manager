@@ -389,7 +389,7 @@ func evaluateIncidents(traceId typedef.TTraceid, rootSpanId typedef.TSpanId, sce
 
 	rootSpan := spansOfTrace[rootSpanId]
 	var reqPath string
-	if rootSpan.Protocol == PHTTP && rootSpan.RequestPayload != nil {
+	if (rootSpan.Protocol == PHTTP || rootSpan.Protocol == PException) && rootSpan.RequestPayload != nil {
 		httpRequestPayload := rootSpan.RequestPayload.(tracePersistenceModel.HTTPRequestPayload)
 		reqPath = httpRequestPayload.ReqPath
 	}
