@@ -254,6 +254,12 @@ func (scenarioManager *ScenarioManager) getAllRawSpans(tracesForProtocol map[typ
 		for index := range spanForBatch {
 			span := &spanForBatch[index]
 			span.Protocol = string(protocol)
+			if span.Protocol == PHTTP && span.RequestPayload != nil {
+				httpRequestPayload := span.RequestPayload.(tracePersistenceModel.HTTPRequestPayload)
+				span.Metadata["request_path"] = httpRequestPayload.ReqPath
+				span.Metadata["method"] = httpRequestPayload.ReqMethod
+			}
+
 			rawSpans = append(rawSpans, span)
 		}
 	}
