@@ -139,6 +139,8 @@ func (scenarioManager *ScenarioManager) processTraceIDsAgainstScenarios(traceIds
 			endIndex = traceIdCount
 		}
 		traceIdSubSet := traceIds[startIndex:endIndex]
+		startIndex = endIndex
+		batch += 1
 
 		// b. collect span relation and span raw data for the traceIDs
 		tracesFromOTelStore, rawSpans, err1 := scenarioManager.getDataForTraces(traceIdSubSet)
@@ -169,8 +171,6 @@ func (scenarioManager *ScenarioManager) processTraceIDsAgainstScenarios(traceIds
 			zkLogger.Error(LoggerTag, "Error saving scenario", saveError)
 		}
 
-		startIndex = endIndex
-		batch += 1
 	}
 }
 

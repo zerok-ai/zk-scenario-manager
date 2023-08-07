@@ -80,9 +80,9 @@ func (t OTelStore) GetSpansForTracesFromDB(keys []typedef.TTraceid) (map[typedef
 	//tracesForProtocol := make(map[string]ds.Set[string], 0)
 	for i, hashResult := range hashResults {
 		traceId := keys[i]
-		trace, err := hashResult.Result()
+		trace, err1 := hashResult.Result()
 
-		if err != nil {
+		if err1 != nil {
 			zkLogger.Error(LoggerTag, "Error retrieving trace:", err)
 			continue
 		}
