@@ -106,6 +106,8 @@ func (scenarioManager *ScenarioManager) Close() {
 
 func (scenarioManager *ScenarioManager) processAllScenarios() {
 
+	zkLogger.Info(LoggerTag, "\nStarting to process all scenarios")
+
 	// 1. get all scenarios
 	scenarios := scenarioManager.scenarioStore.GetAllValues()
 

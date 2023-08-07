@@ -23,6 +23,13 @@ const (
 	timeRangeForRawDataQuery     = "-15m" // -5m, -10m, -1h etc
 )
 
-func epochNSToTime(epochNS uint64) time.Time {
-	return time.Unix(0, int64(epochNS))
+func epochMilliSecondsToTime(epochNS uint64) time.Time {
+	// Given Unix timestamp in milliseconds
+	timestampMillis := int64(epochNS)
+
+	// Convert to Unix timestamp in seconds by dividing by 1000
+	timestampSeconds := timestampMillis / 1000
+
+	// Convert to time.Time using time.Unix
+	return time.Unix(timestampSeconds, 0)
 }
