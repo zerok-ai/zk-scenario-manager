@@ -20,7 +20,7 @@ const (
 	TTLForScenarioSets           = 5 * time.Minute
 	RateLimitTickerDuration      = time.Duration(60) * time.Second
 	batchSizeForRawDataCollector = 20
-	timeRangeForRawDataQuery     = "-15m" // -5m, -10m, -1h etc
+	timeRangeForRawDataQuery     = "-30m" // -5m, -10m, -1h etc
 )
 
 func epochMilliSecondsToTime(epochNS uint64) time.Time {

@@ -132,6 +132,7 @@ func (scenarioManager *ScenarioManager) processTraceIDsAgainstScenarios(traceIds
 	batch := 0
 	traceIdCount := len(traceIds)
 	for startIndex := 0; startIndex < traceIdCount; {
+		batch += 1
 
 		// a. create the batch
 		endIndex := startIndex + batchSizeForRawDataCollector
@@ -140,7 +141,6 @@ func (scenarioManager *ScenarioManager) processTraceIDsAgainstScenarios(traceIds
 		}
 		traceIdSubSet := traceIds[startIndex:endIndex]
 		startIndex = endIndex
-		batch += 1
 
 		// b. collect span relation and span raw data for the traceIDs
 		tracesFromOTelStore, rawSpans, err1 := scenarioManager.getDataForTraces(traceIdSubSet)
