@@ -22,7 +22,7 @@ const (
 	TTLForScenarioSets           = 5 * time.Minute
 	RateLimitTickerDuration      = time.Duration(60) * time.Second
 	batchSizeForRawDataCollector = 20
-	timeRangeForRawDataQuery     = "-30m" // -5m, -10m, -1h etc
+	timeRangeForRawDataQuery     = "-15m" // -5m, -10m, -1h etc
 )
 
 func epochMilliSecondsToTime(epochNS uint64) time.Time {
@@ -30,7 +30,7 @@ func epochMilliSecondsToTime(epochNS uint64) time.Time {
 	numberOfDigits := getNumDigits(epochNS)
 
 	if numberOfDigits > 13 {
-		return time.Unix(0, int64(epochNS))
+		return time.Unix(0, int64(epochNS)).UTC()
 	}
 
 	// Given Unix timestamp in milliseconds
@@ -40,7 +40,7 @@ func epochMilliSecondsToTime(epochNS uint64) time.Time {
 	timestampSeconds := timestampMillis / 1000
 
 	// Convert to time.Time using time.Unix
-	return time.Unix(timestampSeconds, 0)
+	return time.Unix(timestampSeconds, 0).UTC()
 }
 
 func getNumDigits(timestamp uint64) int {

@@ -16,6 +16,8 @@ type TIssueHash string
 
 type TProtocol string
 
+type TTraceIdSetPerProtocol map[string]ds.Set[string]
+
 type TScenarioID string
 type ScenarioTraces struct {
 	Scenario *scenarioGeneratorModel.Scenario

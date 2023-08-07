@@ -17,6 +17,7 @@ import (
 	"scenario-manager/internal/stores"
 	tracePersistenceModel "scenario-manager/internal/tracePersistence/model"
 	tracePersistence "scenario-manager/internal/tracePersistence/service"
+	"strings"
 	"sync"
 	"time"
 )
@@ -25,6 +26,15 @@ const (
 	ScenarioSetPrefix = "scenario:"
 	TitleDelimiter    = "¦"
 )
+
+var queriesIgnoreList = []string{
+	"commit",
+	"rollback",
+	"SET autocommit=0",
+	"SET autocommit=1",
+	"set session transaction read only",
+	"set session transaction read write",
+}
 
 type ScenarioManager struct {
 	cfg           config.AppConfigs
@@ -125,6 +135,8 @@ func (scenarioManager *ScenarioManager) processAllScenarios() {
 
 	// 4. process all traces against all scenarios
 	scenarioManager.processTraceIDsAgainstScenarios(allTraceIds, scenarioWithTraces)
+
+	zkLogger.Info(LoggerTag, "Finished processing all scenarios \n")
 }
 
 // processTraceIDsAgainstScenarios processes all the traceIds against all the scenarios and saves the incidents in the persistence store
@@ -144,13 +156,13 @@ func (scenarioManager *ScenarioManager) processTraceIDsAgainstScenarios(traceIds
 		startIndex = endIndex
 
 		// b. collect span relation and span raw data for the traceIDs
-		tracesFromOTelStore, rawSpans := scenarioManager.getDataForTraces(traceIdSubSet)
+		tracesFromOTelStore := scenarioManager.getDataForTraces(traceIdSubSet)
 		if tracesFromOTelStore == nil || len(tracesFromOTelStore) == 0 {
 			continue
 		}
 
 		// c. Process each trace against all the scenarioWithTraces
-		incidents := buildIncidentsForPersistence(scenarioWithTraces, tracesFromOTelStore, rawSpans)
+		incidents := buildIncidentsForPersistence(scenarioWithTraces, tracesFromOTelStore)
 		if incidents == nil || len(incidents) == 0 {
 			zkLogger.ErrorF(LoggerTag, "no incidents to save")
 			continue
@@ -171,7 +183,6 @@ func (scenarioManager *ScenarioManager) processTraceIDsAgainstScenarios(traceIds
 		if saveError != nil {
 			zkLogger.Error(LoggerTag, "Error saving scenario", saveError)
 		}
-
 	}
 }
 
@@ -201,7 +212,7 @@ func (scenarioManager *ScenarioManager) getAllTraceIDs(scenarios map[string]*sce
 }
 
 // getDataForTraces collects span relation and span raw data for the traceIDs. The relation is collected from OTel store and raw data is collected from raw data store
-func (scenarioManager *ScenarioManager) getDataForTraces(traceIds []typedef.TTraceid) (map[typedef.TTraceid]*stores.TraceFromOTel, []*tracePersistenceModel.Span) {
+func (scenarioManager *ScenarioManager) getDataForTraces(traceIds []typedef.TTraceid) map[typedef.TTraceid]*stores.TraceFromOTel {
 
 	// a. collect trace and span raw data for the traceIDs
 	tracesFromOTelStore, err := scenarioManager.oTelStore.GetSpansForTracesFromDB(traceIds)
@@ -209,98 +220,123 @@ func (scenarioManager *ScenarioManager) getDataForTraces(traceIds []typedef.TTra
 		zkLogger.Error(LoggerTag, "error in getting data from OTel store", err)
 	}
 	if tracesFromOTelStore == nil || len(tracesFromOTelStore) == 0 {
-		return nil, nil
-	}
-
-	// b. create a map of protocol to set of traceIds
-	tracesPerProtocol := make(map[typedef.TProtocol]ds.Set[typedef.TTraceid], 0)
-	for traceId, trace := range tracesFromOTelStore {
-
-		for _, span := range trace.Spans {
-			protocol := typedef.TProtocol(span.Protocol)
-			traceSet, ok := tracesPerProtocol[protocol]
-			if !ok {
-				traceSet = ds.Set[typedef.TTraceid]{}
-			}
-			tracesPerProtocol[protocol] = traceSet.Add(traceId)
-		}
-	}
-
-	// c. get the raw data for traces from vizier
-	rawSpans := scenarioManager.getAllRawSpans(tracesPerProtocol)
-	return tracesFromOTelStore, rawSpans
-}
-
-func (scenarioManager *ScenarioManager) getAllRawSpans(tracesForProtocol map[typedef.TProtocol]ds.Set[typedef.TTraceid]) []*tracePersistenceModel.Span {
-	rawSpans := make([]*tracePersistenceModel.Span, 0)
-
-	startTime := timeRangeForRawDataQuery
-
-	// get the raw data for traces for each protocol
-	for protocol, traceSet := range tracesForProtocol {
-
-		traceIds := traceSet.GetAll()
-		traceArray := make([]string, 0)
-		for _, traceId := range traceIds {
-			traceArray = append(traceArray, string(traceId))
-		}
-
-		zkLogger.DebugF(LoggerTag, "calling traceRawDataCollector for %d traces", len(traceArray))
-
-		// collect raw data for protocol spans
-		spanForBatch := make([]tracePersistenceModel.Span, 0)
-		if protocol == PHTTP || protocol == PException {
-			spanForBatch = scenarioManager.collectHTTPRawData(traceArray, startTime)
-		} else if protocol == PMySQL {
-			spanForBatch = scenarioManager.collectMySQLRawData(traceArray, startTime)
-		} else if protocol == PPostgresql {
-			spanForBatch = scenarioManager.collectPostgresRawData(traceArray, startTime)
-		}
-
-		for index := range spanForBatch {
-			span := &spanForBatch[index]
-			span.Protocol = string(protocol)
-			if (span.Protocol == PHTTP || span.Protocol == PException) && span.RequestPayload != nil {
-				httpRequestPayload := span.RequestPayload.(tracePersistenceModel.HTTPRequestPayload)
-				span.Metadata["request_path"] = httpRequestPayload.ReqPath
-				span.Metadata["method"] = httpRequestPayload.ReqMethod
-			}
-
-			rawSpans = append(rawSpans, span)
-		}
-	}
-	return rawSpans
-}
-
-func buildIncidentsForPersistence(scenariosWithTraces typedef.ScenarioToScenarioTracesMap, tracesFromOTel map[typedef.TTraceid]*stores.TraceFromOTel, spans []*tracePersistenceModel.Span) []tracePersistenceModel.IncidentWithIssues {
-
-	zkLogger.DebugF(LoggerTag, "Building scenario for persistence, trace_count=%d, span_count=%d", len(tracesFromOTel), len(spans))
-
-	if len(spans) == 0 {
 		return nil
 	}
 
-	// a. Add raw spans to `tracesFromOTel`
-	for _, fullSpan := range spans {
+	// b. get the raw data for traces from vizier
+	scenarioManager.setRawSpans(tracesFromOTelStore)
+	return tracesFromOTelStore
+}
 
-		trace, ok := tracesFromOTel[typedef.TTraceid(fullSpan.TraceId)]
-		if !ok || trace == nil {
-			continue
-		}
+func (scenarioManager *ScenarioManager) setRawSpans(tracesFromOTelStore map[typedef.TTraceid]*stores.TraceFromOTel) {
 
-		spanFromOTelTree, ok := trace.Spans[typedef.TSpanId(fullSpan.SpanId)]
-		if ok && spanFromOTelTree != nil {
-			spanFromOTelTree.RawSpan = fullSpan
+	// b. create a map of protocol to set of traceIds
+	tracesPerProtocol := make(typedef.TTraceIdSetPerProtocol, 0)
+	for traceId, trace := range tracesFromOTelStore {
+
+		for _, span := range trace.Spans {
+			protocol := span.Protocol
+			traceSet, ok := tracesPerProtocol[span.Protocol]
+			if !ok {
+				traceSet = make(ds.Set[string], 0)
+			}
+			tracesPerProtocol[protocol] = traceSet.Add(string(traceId))
 		}
 	}
 
-	// b. iterate through the trace data from OTelStore and build the structure which can be saved in DB
+	startTime := timeRangeForRawDataQuery
+
+	// handle http and exception
+	protocol := PHTTP
+	spanForBatch := scenarioManager.getRawDataForHTTPAndException(tracesPerProtocol, startTime)
+	processRawSpans(protocol, spanForBatch, tracesFromOTelStore)
+
+	// mysql
+	protocol = PMySQL
+	mySqlSet, ok := tracesPerProtocol[protocol]
+	if ok && mySqlSet != nil {
+		spanForBatch = scenarioManager.collectMySQLRawData(mySqlSet.GetAll(), startTime)
+		processRawSpans(protocol, spanForBatch, tracesFromOTelStore)
+	}
+
+	// postgres
+	protocol = PPostgresql
+	postGresSet, ok := tracesPerProtocol[protocol]
+	if ok && postGresSet != nil {
+		spanForBatch = scenarioManager.collectMySQLRawData(postGresSet.GetAll(), startTime)
+		processRawSpans(protocol, spanForBatch, tracesFromOTelStore)
+	}
+
+}
+
+func (scenarioManager *ScenarioManager) getRawDataForHTTPAndException(tracesPerProtocol typedef.TTraceIdSetPerProtocol, startTime string) []tracePersistenceModel.Span {
+	// get the raw data for traces for HTTP and Exception
+	httpSet, ok := tracesPerProtocol[PHTTP]
+	if !ok || httpSet == nil {
+		httpSet = make(ds.Set[string], 0)
+	}
+
+	mySqlSet := tracesPerProtocol[PMySQL]
+	if ok || mySqlSet != nil {
+		httpSet.Union(mySqlSet)
+	}
+
+	return scenarioManager.collectHTTPRawData(httpSet.GetAll(), startTime)
+}
+
+func processRawSpans(protocol string, spanForBatch []tracePersistenceModel.Span, tracesFromOTelStore map[typedef.TTraceid]*stores.TraceFromOTel) {
+	for index := range spanForBatch {
+		span := &spanForBatch[index]
+
+		// 1. set the protocol of the current span if it is not present in otel data
+		traceFromOTel, ok := tracesFromOTelStore[typedef.TTraceid(span.TraceId)]
+		if !ok || traceFromOTel == nil {
+			continue
+		}
+		spanFromOTel, ok := traceFromOTel.Spans[typedef.TSpanId(span.SpanId)]
+		if !ok || spanFromOTel == nil {
+			continue
+		}
+		if spanFromOTel.Protocol == "" {
+			span.Protocol = protocol
+		}
+
+		// 2. do protocol specific validations
+		if (span.Protocol == PHTTP || span.Protocol == PException) && span.RequestPayload != nil {
+			httpRequestPayload := span.RequestPayload.(tracePersistenceModel.HTTPRequestPayload)
+			span.Metadata["request_path"] = httpRequestPayload.ReqPath
+			span.Metadata["method"] = httpRequestPayload.ReqMethod
+		} else if span.Protocol == PMySQL && !isQuerySpan(span) {
+			// don't consider this span if it doesn't contain the actual query
+			continue
+		}
+
+		// 3. set the current span as the raw span of OTel span
+		spanFromOTel.RawSpan = span
+	}
+}
+
+func isQuerySpan(span *tracePersistenceModel.Span) bool {
+	for _, query := range queriesIgnoreList {
+		body := span.RequestPayload.(tracePersistenceModel.HTTPRequestPayload).ReqBody
+		if strings.HasSuffix(body, query) {
+			return false
+		}
+	}
+	return true
+}
+
+func buildIncidentsForPersistence(scenariosWithTraces typedef.ScenarioToScenarioTracesMap, tracesFromOTel map[typedef.TTraceid]*stores.TraceFromOTel) []tracePersistenceModel.IncidentWithIssues {
+
+	zkLogger.DebugF(LoggerTag, "Building scenario for persistence, trace_count=%d, span_count=%d", len(tracesFromOTel))
+
+	// a. iterate through the trace data from OTelStore and build the structure which can be saved in DB
 	traceTreeForPersistence := make(map[typedef.TTraceid]*typedef.TMapOfSpanIdToSpan, 0)
 	for traceId, traceFromOTel := range tracesFromOTel {
 		traceTreeForPersistence[traceId] = buildTraceForStorage(traceFromOTel)
 	}
 
-	// c. iterate through the trace data and create IncidentWithIssues for each trace
+	// b. iterate through the trace data and create IncidentWithIssues for each trace
 	incidentsWithIssues := make([]tracePersistenceModel.IncidentWithIssues, 0)
 	for traceId, spanMapForTrace := range traceTreeForPersistence {
 
