@@ -88,7 +88,7 @@ func (t OTelStore) GetSpansForTracesFromDB(keys []typedef.TTraceid) (map[typedef
 		}
 
 		if len(trace) == 0 {
-			zkLogger.Debug(LoggerTag, "No trace found for traceId:", traceId)
+			zkLogger.DebugF(LoggerTag, "No trace found for traceId: %s in OTel store", traceId)
 			continue
 		}
 
@@ -130,10 +130,6 @@ func (t OTelStore) GetSpansForTracesFromDB(keys []typedef.TTraceid) (map[typedef
 		}
 		traceFromOTel.RootSpanID = rootSpan.SpanID
 
-		// 4.3 prune the unwanted Spans
-		//prune(traceFromOTel.Spans, rootSpan.SpanID)
-
-		zkLogger.DebugF(LoggerTag, "rootSpanID: %s", rootSpan.SpanID)
 		result[traceId] = traceFromOTel
 	}
 

@@ -166,7 +166,6 @@ func ValidateAndSanitiseIssue(s model.IncidentWithIssues) (bool, *zkerrors.ZkErr
 		}
 
 		if issueGroup.Issues == nil || len(issueGroup.Issues) == 0 {
-			zkLogger.Error(LogTag, "issues list empty")
 			continue
 		}
 
@@ -182,7 +181,6 @@ func ValidateAndSanitiseIssue(s model.IncidentWithIssues) (bool, *zkerrors.ZkErr
 		}
 
 		if len(validIssuesList) == 0 {
-			zkLogger.Error(LogTag, "issues list empty")
 			continue
 		}
 

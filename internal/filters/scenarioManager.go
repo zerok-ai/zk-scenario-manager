@@ -113,7 +113,7 @@ func (scenarioManager *ScenarioManager) processAllScenarios() {
 
 	// 2. get all traceId sets from traceStore
 	namesOfAllSets, err := scenarioManager.traceStore.GetAllKeys()
-	zkLogger.DebugF(LoggerTag, "Number of available scenarios: %d, traceStore: %d", len(scenarios), len(namesOfAllSets))
+	zkLogger.DebugF(LoggerTag, "Number of available scenarios: %d, traceSets in db: %d", len(scenarios), len(namesOfAllSets))
 	if err != nil {
 		zkLogger.Error(LoggerTag, "Error getting all keys from traceStore ", err)
 		return
@@ -121,6 +121,7 @@ func (scenarioManager *ScenarioManager) processAllScenarios() {
 
 	// 3. get all the traceIds from the traceStore for all the scenarios
 	allTraceIds, scenarioWithTraces := scenarioManager.getAllTraceIDs(scenarios, namesOfAllSets)
+	zkLogger.DebugF(LoggerTag, "Number of available traceIds: %d", len(allTraceIds))
 
 	// 4. process all traces against all scenarios
 	scenarioManager.processTraceIDsAgainstScenarios(allTraceIds, scenarioWithTraces)
@@ -143,14 +144,14 @@ func (scenarioManager *ScenarioManager) processTraceIDsAgainstScenarios(traceIds
 		startIndex = endIndex
 
 		// b. collect span relation and span raw data for the traceIDs
-		tracesFromOTelStore, rawSpans, err1 := scenarioManager.getDataForTraces(traceIdSubSet)
-		if err1 != nil {
-			zkLogger.ErrorF(LoggerTag, "Error processing batch %d of trace ids", batch)
+		tracesFromOTelStore, rawSpans := scenarioManager.getDataForTraces(traceIdSubSet)
+		if tracesFromOTelStore == nil || len(tracesFromOTelStore) == 0 {
+			continue
 		}
 
 		// c. Process each trace against all the scenarioWithTraces
 		incidents := buildIncidentsForPersistence(scenarioWithTraces, tracesFromOTelStore, rawSpans)
-		if len(incidents) == 0 {
+		if incidents == nil || len(incidents) == 0 {
 			zkLogger.ErrorF(LoggerTag, "no incidents to save")
 			continue
 		}
@@ -200,12 +201,15 @@ func (scenarioManager *ScenarioManager) getAllTraceIDs(scenarios map[string]*sce
 }
 
 // getDataForTraces collects span relation and span raw data for the traceIDs. The relation is collected from OTel store and raw data is collected from raw data store
-func (scenarioManager *ScenarioManager) getDataForTraces(traceIds []typedef.TTraceid) (map[typedef.TTraceid]*stores.TraceFromOTel, []*tracePersistenceModel.Span, error) {
+func (scenarioManager *ScenarioManager) getDataForTraces(traceIds []typedef.TTraceid) (map[typedef.TTraceid]*stores.TraceFromOTel, []*tracePersistenceModel.Span) {
 
 	// a. collect trace and span raw data for the traceIDs
 	tracesFromOTelStore, err := scenarioManager.oTelStore.GetSpansForTracesFromDB(traceIds)
 	if err != nil {
-		return nil, nil, err
+		zkLogger.Error(LoggerTag, "error in getting data from OTel store", err)
+	}
+	if tracesFromOTelStore == nil || len(tracesFromOTelStore) == 0 {
+		return nil, nil
 	}
 
 	// b. create a map of protocol to set of traceIds
@@ -224,7 +228,7 @@ func (scenarioManager *ScenarioManager) getDataForTraces(traceIds []typedef.TTra
 
 	// c. get the raw data for traces from vizier
 	rawSpans := scenarioManager.getAllRawSpans(tracesPerProtocol)
-	return tracesFromOTelStore, rawSpans, nil
+	return tracesFromOTelStore, rawSpans
 }
 
 func (scenarioManager *ScenarioManager) getAllRawSpans(tracesForProtocol map[typedef.TProtocol]ds.Set[typedef.TTraceid]) []*tracePersistenceModel.Span {

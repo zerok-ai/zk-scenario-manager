@@ -47,7 +47,6 @@ func NewTraceEvaluator(cfg config.AppConfigs, scenario *model.Scenario, traceSto
 }
 
 func (te TraceEvaluator) EvalScenario() ([]typedef.TTraceid, error) {
-	zkLogger.Debug(LoggerTagEvaluation, "Evaluating scenario ", te.scenario.Title)
 	resultKey, err := te.evalFilter(te.scenario.Filter)
 	if err != nil {
 		return nil, err

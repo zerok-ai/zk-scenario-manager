@@ -1,6 +1,8 @@
 package filters
 
-import "time"
+import (
+	"time"
+)
 
 const (
 	LoggerTag          = "scenario-manager"
@@ -24,6 +26,13 @@ const (
 )
 
 func epochMilliSecondsToTime(epochNS uint64) time.Time {
+
+	numberOfDigits := getNumDigits(epochNS)
+
+	if numberOfDigits > 13 {
+		return time.Unix(0, int64(epochNS))
+	}
+
 	// Given Unix timestamp in milliseconds
 	timestampMillis := int64(epochNS)
 
@@ -32,4 +41,13 @@ func epochMilliSecondsToTime(epochNS uint64) time.Time {
 
 	// Convert to time.Time using time.Unix
 	return time.Unix(timestampSeconds, 0)
+}
+
+func getNumDigits(timestamp uint64) int {
+	numDigits := 0
+	for timestamp != 0 {
+		timestamp /= 10
+		numDigits++
+	}
+	return numDigits
 }

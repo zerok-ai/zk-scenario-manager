@@ -115,19 +115,12 @@ func (z tracePersistenceRepo) SaveTraceList(issuesDetailList []dto.IssuesDetailD
 		return err
 	}
 
-	err = doBulkInsertForTraceList(tx, z.dbRepo, issueTableData, traceTableData, traceTableMetadata, traceTableRawData)
-	if err == nil {
-		tx.Commit()
-		return nil
-	}
-	tx.Rollback()
-
 	tx, err = z.dbRepo.CreateTransaction()
 	if err != nil {
 		zkLogger.Info(LogTag, "Error Creating transaction")
 		return err
 	}
-	zkLogger.Info(LogTag, "CopyIn failed, starting upsert")
+
 	err = doBulkUpsertForTraceList(tx, z.dbRepo, issueTableData, traceTableData, traceTableMetadata, traceTableRawData)
 	if err == nil {
 		tx.Commit()
