@@ -178,16 +178,20 @@ func (scenarioManager *ScenarioManager) processTraceIDsAgainstScenarios(traceIds
 			}
 			newIncidentList = append(newIncidentList, i)
 		}
+		if len(newIncidentList) == 0 {
+			zkLogger.InfoF(LoggerTag, "processed batch %d. rate limited %d incidents. nothing to save", batch, len(incidents))
+			continue
+		}
 
 		// e. store the trace data in the persistence store
 		zkLogger.DebugF(LoggerTag, "Before sending incidents for persistence, incident count: %d", len(newIncidentList))
 		startTime := time.Now()
 		saveError := scenarioManager.tracePersistenceService.SaveIncidents(newIncidentList)
 		if saveError != nil {
-			zkLogger.Error(LoggerTag, "Error saving scenario", saveError)
+			zkLogger.Error(LoggerTag, "Error saving incidents", saveError)
 		}
 		endTime := time.Now()
-		zkLogger.InfoF(LoggerTag, "Time taken to store data in persistent storage ", endTime.Sub(startTime))
+		zkLogger.Info(LoggerTag, "Time taken to store data in persistent storage ", endTime.Sub(startTime))
 
 		zkLogger.Info(LoggerTag, "processed batch", batch)
 	}
@@ -441,11 +445,14 @@ func evaluateIncidents(traceId typedef.TTraceid, rootSpanId typedef.TSpanId, sce
 	issueGroupList := make([]tracePersistenceModel.IssueGroup, 0)
 
 	for _, scenario := range scenarios {
-		issueGroupList = append(issueGroupList, tracePersistenceModel.IssueGroup{
-			ScenarioId:      scenario.Id,
-			ScenarioVersion: scenario.Version,
-			Issues:          getListOfIssues(scenario, spansOfTrace),
-		})
+		listOfIssues := getListOfIssues(scenario, spansOfTrace)
+		if len(listOfIssues) > 0 {
+			issueGroupList = append(issueGroupList, tracePersistenceModel.IssueGroup{
+				ScenarioId:      scenario.Id,
+				ScenarioVersion: scenario.Version,
+				Issues:          listOfIssues,
+			})
+		}
 	}
 
 	rootSpan := spansOfTrace[rootSpanId]

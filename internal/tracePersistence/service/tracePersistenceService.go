@@ -29,11 +29,6 @@ type tracePersistenceService struct {
 
 func (s tracePersistenceService) SaveIncidents(issuesDetails []model.IncidentWithIssues) *zkErrors.ZkError {
 
-	if issuesDetails == nil || len(issuesDetails) == 0 {
-		zkErr := zkErrors.ZkErrorBuilder{}.Build(zkErrors.ZkErrorBadRequest, nil)
-		return &zkErr
-	}
-
 	issuesDetailsDtoList := make([]dto.IssuesDetailDto, 0)
 
 	for _, issuesDetail := range issuesDetails {
