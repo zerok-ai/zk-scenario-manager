@@ -317,6 +317,8 @@ func processRawSpans(protocol string, spanForBatch []tracePersistenceModel.Span,
 		}
 		if spanFromOTel.Protocol == "" {
 			span.Protocol = protocol
+		} else {
+			span.Protocol = spanFromOTel.Protocol
 		}
 
 		// 2. do protocol specific validations
@@ -324,6 +326,10 @@ func processRawSpans(protocol string, spanForBatch []tracePersistenceModel.Span,
 			httpRequestPayload := span.RequestPayload.(tracePersistenceModel.HTTPRequestPayload)
 			span.Metadata["request_path"] = httpRequestPayload.ReqPath
 			span.Metadata["method"] = httpRequestPayload.ReqMethod
+
+			if span.Source == "" && spanFromOTel.Kind == SERVER {
+				continue
+			}
 		} else if span.Protocol == PMySQL && !isQuerySpan(span) {
 			// don't consider this span if it doesn't contain the actual query
 			continue
