@@ -12,6 +12,7 @@ import (
 	scenarioGeneratorModel "github.com/zerok-ai/zk-utils-go/scenario/model"
 	store "github.com/zerok-ai/zk-utils-go/storage/redis"
 	ticker "github.com/zerok-ai/zk-utils-go/ticker"
+	"regexp"
 	typedef "scenario-manager/internal"
 	"scenario-manager/internal/config"
 	"scenario-manager/internal/stores"
@@ -583,8 +584,57 @@ func getCartesianProductOfSpans(arrOfWorkLoadSpanMap []map[typedef.TWorkspaceID]
 	return result
 }
 
-func getTextFromStructMembers(path string, span interface{}) string {
-	result, err := jmespath.Search(path, span)
+func extractStrings(input string) (string, string) {
+	// Define regular expressions to match the patterns
+	toJSONPattern := `#toJSON\((.*?)\)#`
+	jsonExtractPattern := `#jsonExtract\((.*?)\)`
+
+	// Compile the regular expressions
+	toJSONRegex := regexp.MustCompile(toJSONPattern)
+	jsonExtractRegex := regexp.MustCompile(jsonExtractPattern)
+
+	// Extract response_payload and message using regular expressions
+	responsePayload := toJSONRegex.FindStringSubmatch(input)
+	message := jsonExtractRegex.FindStringSubmatch(input)
+
+	// If the patterns are found, return the matched values
+	if len(responsePayload) > 1 && len(message) > 1 {
+		return responsePayload[1], message[1]
+	}
+
+	// If the patterns are not found, return empty strings
+	return "", ""
+}
+
+func extractFromException(dump string) string {
+	dump = strings.Trim(dump, "{}")
+	parts := strings.Split(dump, "message=")
+	if len(parts) > 1 {
+		return parts[1]
+	}
+	parts = strings.Split(dump, ", stacktrace=")
+	return parts[0]
+
+}
+
+func getTextFromStructMembers(path string, span *tracePersistenceModel.Span) string {
+	var result interface{}
+	var err error
+	if strings.Contains(path, "toJSON") {
+		path, extractValue := extractStrings(path)
+
+		result, err = jmespath.Search("RequestPayload.ReqBody", span)
+		if err == nil {
+			str, ok := result.(string)
+			if ok {
+				return extractFromException(str)
+			}
+		}
+		zkLogger.Error(LoggerTag, "Error evaluating jmespath for span ", path+extractValue)
+
+	} else {
+		result, err = jmespath.Search(path, span)
+	}
 	if err == nil {
 		str, ok := result.(string)
 		if ok {
