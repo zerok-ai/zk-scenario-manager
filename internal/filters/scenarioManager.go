@@ -638,6 +638,9 @@ func getTextFromStructMembers(path string, span *tracePersistenceModel.Span) str
 		}
 		zkLogger.Error(LoggerTag, "Error evaluating jmespath for span ", path+extractValue)
 
+	} else if strings.Contains(path, "response_payload.resp_status") {
+		x := span.ResponsePayload.(tracePersistenceModel.HTTPResponsePayload)
+		return x.RespStatus
 	} else {
 		result, err = jmespath.Search(path, span)
 	}
