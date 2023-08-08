@@ -115,12 +115,6 @@ func (z tracePersistenceRepo) SaveTraceList(issuesDetailList []dto.IssuesDetailD
 		return err
 	}
 
-	tx, err = z.dbRepo.CreateTransaction()
-	if err != nil {
-		zkLogger.Info(LogTag, "Error Creating transaction")
-		return err
-	}
-
 	err = doBulkUpsertForTraceList(tx, z.dbRepo, issueTableData, traceTableData, traceTableMetadata, traceTableRawData)
 	if err == nil {
 		tx.Commit()

@@ -140,16 +140,16 @@ func ConvertIncidentIssuesToIssueDto(s model.IncidentWithIssues) (IssuesDetailDt
 	return response, nil
 }
 
-func ValidateAndSanitiseIssue(s model.IncidentWithIssues) (bool, *zkerrors.ZkError, model.IncidentWithIssues) {
+func ValidateAndSanitiseIssue(s model.IncidentWithIssues) (bool, model.IncidentWithIssues, *zkerrors.ZkError) {
 	var resp model.IncidentWithIssues
 	if s.IssueGroupList == nil || len(s.IssueGroupList) == 0 {
 		zkLogger.Error(LogTag, "issue_group_list empty")
-		return false, common.ToPtr(zkerrors.ZkErrorBuilder{}.Build(zkerrors.ZkErrorBadRequest, "issue_group_list empty")), resp
+		return false, resp, common.ToPtr(zkerrors.ZkErrorBuilder{}.Build(zkerrors.ZkErrorBadRequest, "issue_group_list empty"))
 	}
 
 	if s.Incident.TraceId == "" {
 		zkLogger.Error(LogTag, "traceid empty")
-		return false, common.ToPtr(zkerrors.ZkErrorBuilder{}.Build(zkerrors.ZkErrorBadRequest, "traceId empty")), resp
+		return false, resp, common.ToPtr(zkerrors.ZkErrorBuilder{}.Build(zkerrors.ZkErrorBadRequest, "traceId empty"))
 	}
 
 	validIssueGroupList := make([]model.IssueGroup, 0)
@@ -194,12 +194,12 @@ func ValidateAndSanitiseIssue(s model.IncidentWithIssues) (bool, *zkerrors.ZkErr
 
 	if len(validIssueGroupList) == 0 {
 		zkLogger.Error(LogTag, "issueGroup list empty")
-		return false, common.ToPtr(zkerrors.ZkErrorBuilder{}.Build(zkerrors.ZkErrorBadRequest, "issueGroup list empty")), resp
+		return false, resp, common.ToPtr(zkerrors.ZkErrorBuilder{}.Build(zkerrors.ZkErrorBadRequest, "issueGroup list empty"))
 	}
 
 	resp.IssueGroupList = validIssueGroupList
 	resp.Incident = s.Incident
-	return true, nil, resp
+	return true, resp, nil
 
 	//for _, span := range s.Incident.Spans {
 	//	if span.SpanId == "" {

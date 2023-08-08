@@ -116,7 +116,7 @@ func (scenarioManager *ScenarioManager) Close() {
 
 func (scenarioManager *ScenarioManager) processAllScenarios() {
 
-	zkLogger.Info(LoggerTag, "\nStarting to process all scenarios")
+	zkLogger.Info(LoggerTag, "Starting to process all scenarios")
 
 	// 1. get all scenarios
 	scenarios := scenarioManager.scenarioStore.GetAllValues()
@@ -146,6 +146,7 @@ func (scenarioManager *ScenarioManager) processTraceIDsAgainstScenarios(traceIds
 	traceIdCount := len(traceIds)
 	for startIndex := 0; startIndex < traceIdCount; {
 		batch += 1
+		zkLogger.Info(LoggerTag, "processing batch", batch)
 
 		// a. create the batch
 		endIndex := startIndex + batchSizeForRawDataCollector
@@ -179,10 +180,16 @@ func (scenarioManager *ScenarioManager) processTraceIDsAgainstScenarios(traceIds
 		}
 
 		// e. store the trace data in the persistence store
+		zkLogger.DebugF(LoggerTag, "Before sending incidents for persistence, incident count: %d", len(newIncidentList))
+		startTime := time.Now()
 		saveError := scenarioManager.tracePersistenceService.SaveIncidents(newIncidentList)
 		if saveError != nil {
 			zkLogger.Error(LoggerTag, "Error saving scenario", saveError)
 		}
+		endTime := time.Now()
+		zkLogger.InfoF(LoggerTag, "Time taken to store data in persistent storage ", endTime.Sub(startTime))
+
+		zkLogger.Info(LoggerTag, "processed batch", batch)
 	}
 }
 
@@ -215,6 +222,7 @@ func (scenarioManager *ScenarioManager) getAllTraceIDs(scenarios map[string]*sce
 func (scenarioManager *ScenarioManager) getDataForTraces(traceIds []typedef.TTraceid) map[typedef.TTraceid]*stores.TraceFromOTel {
 
 	// a. collect trace and span raw data for the traceIDs
+	startTime := time.Now()
 	tracesFromOTelStore, err := scenarioManager.oTelStore.GetSpansForTracesFromDB(traceIds)
 	if err != nil {
 		zkLogger.Error(LoggerTag, "error in getting data from OTel store", err)
@@ -222,9 +230,15 @@ func (scenarioManager *ScenarioManager) getDataForTraces(traceIds []typedef.TTra
 	if tracesFromOTelStore == nil || len(tracesFromOTelStore) == 0 {
 		return nil
 	}
+	endTime := time.Now()
+	zkLogger.InfoF(LoggerTag, "Time taken to fetch OTel spans[%v] ", endTime.Sub(startTime))
 
 	// b. get the raw data for traces from vizier
+	startTime = time.Now()
 	scenarioManager.setRawSpans(tracesFromOTelStore)
+	endTime = time.Now()
+	zkLogger.Info(LoggerTag, "Time taken to fetch raw spans ", endTime.Sub(startTime))
+
 	return tracesFromOTelStore
 }
 
@@ -328,7 +342,7 @@ func isQuerySpan(span *tracePersistenceModel.Span) bool {
 
 func buildIncidentsForPersistence(scenariosWithTraces typedef.ScenarioToScenarioTracesMap, tracesFromOTel map[typedef.TTraceid]*stores.TraceFromOTel) []tracePersistenceModel.IncidentWithIssues {
 
-	zkLogger.DebugF(LoggerTag, "Building scenario for persistence, trace_count=%d, span_count=%d", len(tracesFromOTel))
+	zkLogger.DebugF(LoggerTag, "Building scenario for persistence, trace_count=%d", len(tracesFromOTel))
 
 	// a. iterate through the trace data from OTelStore and build the structure which can be saved in DB
 	traceTreeForPersistence := make(map[typedef.TTraceid]*typedef.TMapOfSpanIdToSpan, 0)
@@ -353,7 +367,6 @@ func buildIncidentsForPersistence(scenariosWithTraces typedef.ScenarioToScenario
 		incidentsWithIssues = append(incidentsWithIssues, incidents)
 	}
 
-	zkLogger.DebugF(LoggerTag, "Building incidentsWithIssues for persistence, count: %d", len(incidentsWithIssues))
 	return incidentsWithIssues
 }
 

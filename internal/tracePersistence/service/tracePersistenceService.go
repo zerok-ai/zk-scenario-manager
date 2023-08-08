@@ -37,7 +37,7 @@ func (s tracePersistenceService) SaveIncidents(issuesDetails []model.IncidentWit
 	issuesDetailsDtoList := make([]dto.IssuesDetailDto, 0)
 
 	for _, issuesDetail := range issuesDetails {
-		b, zkErr, validIssueDetail := dto.ValidateAndSanitiseIssue(issuesDetail)
+		b, validIssueDetail, zkErr := dto.ValidateAndSanitiseIssue(issuesDetail)
 		if !b || zkErr != nil {
 			zkLogger.Error("Invalid issuesDetail", zkErr)
 			continue
