@@ -331,11 +331,10 @@ func processRawSpans(protocol string, spanForBatch []tracePersistenceModel.Span,
 			if span.Source == "" && spanFromOTel.Kind == SERVER {
 				continue
 			}
+		} else if span.Protocol == PMySQL && !isQuerySpan(span) {
+			// don't consider this span if it doesn't contain the actual query
+			continue
 		}
-		//else if span.Protocol == PMySQL && !isQuerySpan(span) {
-		//	// don't consider this span if it doesn't contain the actual query
-		//	continue
-		//}
 
 		// 3. set the current span as the raw span of OTel span
 		spanFromOTel.RawSpan = span
@@ -388,7 +387,7 @@ func buildTraceForStorage(traceFromOTel *stores.TraceFromOTel) *typedef.TMapOfSp
 	setDestinationForRoot(traceFromOTel.Spans[traceFromOTel.RootSpanID])
 
 	// remove spans which are not needed
-	//prune(traceFromOTel.Spans, traceFromOTel.RootSpanID, true)
+	prune(traceFromOTel.Spans, traceFromOTel.RootSpanID, true)
 
 	spanMapOfPersistentSpans := make(typedef.TMapOfSpanIdToSpan, 0)
 	for _, spanFromOTel := range traceFromOTel.Spans {
