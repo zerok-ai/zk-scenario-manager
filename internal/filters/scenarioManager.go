@@ -328,7 +328,7 @@ func processRawSpans(protocol string, spanForBatch []tracePersistenceModel.Span,
 			span.Metadata["request_path"] = httpRequestPayload.ReqPath
 			span.Metadata["method"] = httpRequestPayload.ReqMethod
 
-			if span.Source == "" && spanFromOTel.Kind == SERVER {
+			if span.Source == "" {
 				continue
 			}
 		} else if span.Protocol == PMySQL && !isQuerySpan(span) {
