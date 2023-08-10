@@ -295,7 +295,7 @@ func (scenarioManager *ScenarioManager) getRawDataForHTTPAndException(tracesPerP
 		httpSet = make(ds.Set[string], 0)
 	}
 
-	mySqlSet := tracesPerProtocol[PMySQL]
+	mySqlSet := tracesPerProtocol[PException]
 	if ok || mySqlSet != nil {
 		httpSet.Union(mySqlSet)
 	}

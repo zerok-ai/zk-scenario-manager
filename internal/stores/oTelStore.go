@@ -127,6 +127,16 @@ func (t OTelStore) GetSpansForTracesFromDB(keys []typedef.TTraceid) (map[typedef
 		if rootSpan == nil {
 			zkLogger.Debug(LoggerTag, "rootSpanID not found for trace id ", traceId)
 			continue
+		} else if rootSpan.Kind == SERVER {
+			rootClient := SpanFromOTel{
+				TraceID:  rootSpan.TraceID,
+				SpanID:   rootSpan.ParentSpanID,
+				Kind:     CLIENT,
+				Protocol: rootSpan.Protocol,
+				Children: []SpanFromOTel{*rootSpan},
+			}
+			traceFromOTel.Spans[rootSpan.ParentSpanID] = &rootClient
+			rootSpan = &rootClient
 		}
 		traceFromOTel.RootSpanID = rootSpan.SpanID
 
