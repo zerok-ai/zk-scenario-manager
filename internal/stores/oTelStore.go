@@ -80,15 +80,15 @@ func (t OTelStore) GetSpansForTracesFromDB(keys []typedef.TTraceid) (map[typedef
 	//tracesForProtocol := make(map[string]ds.Set[string], 0)
 	for i, hashResult := range hashResults {
 		traceId := keys[i]
-		trace, err := hashResult.Result()
+		trace, err1 := hashResult.Result()
 
-		if err != nil {
+		if err1 != nil {
 			zkLogger.Error(LoggerTag, "Error retrieving trace:", err)
 			continue
 		}
 
 		if len(trace) == 0 {
-			zkLogger.Debug(LoggerTag, "No trace found for traceId:", traceId)
+			zkLogger.DebugF(LoggerTag, "No trace found for traceId: %s in OTel store", traceId)
 			continue
 		}
 
@@ -125,7 +125,7 @@ func (t OTelStore) GetSpansForTracesFromDB(keys []typedef.TTraceid) (map[typedef
 		}
 
 		if rootSpan == nil {
-			zkLogger.Debug(LoggerTag, "rootSpanID not found")
+			zkLogger.Debug(LoggerTag, "rootSpanID not found for trace id ", traceId)
 			continue
 		} else if rootSpan.Kind == SERVER {
 			rootClient := SpanFromOTel{
@@ -136,51 +136,12 @@ func (t OTelStore) GetSpansForTracesFromDB(keys []typedef.TTraceid) (map[typedef
 				Children: []SpanFromOTel{*rootSpan},
 			}
 			traceFromOTel.Spans[rootSpan.ParentSpanID] = &rootClient
+			rootSpan = &rootClient
 		}
 		traceFromOTel.RootSpanID = rootSpan.SpanID
 
-		// 4.3 prune the unwanted Spans
-		//prune(traceFromOTel.Spans, rootSpan.SpanID)
-
-		zkLogger.DebugF(LoggerTag, "rootSpanID: %s", rootSpan.SpanID)
 		result[traceId] = traceFromOTel
 	}
 
 	return result, nil
-}
-
-// prune removes the Spans that are not required - typedef Spans and server Spans that are not the root span
-func prune(spans map[typedef.TSpanId]*SpanFromOTel, currentSpanID typedef.TSpanId) ([]typedef.TSpanId, bool) {
-	currentSpan := spans[currentSpanID]
-
-	// call prune on the children
-	newChildSpansArray := make([]SpanFromOTel, 0)
-	newChildIdsArray := make([]typedef.TSpanId, 0)
-	for _, child := range currentSpan.Children {
-		newChildIds, pruned := prune(spans, child.SpanID)
-		if pruned {
-			delete(spans, child.SpanID)
-		}
-		for _, spId := range newChildIds {
-
-			span := spans[spId]
-			span.ParentSpanID = currentSpan.SpanID
-
-			// update the span in the map
-			spans[span.SpanID] = span
-
-			newChildSpansArray = append(newChildSpansArray, *span)
-		}
-
-		newChildIdsArray = append(newChildIdsArray, newChildIds...)
-	}
-	currentSpan.Children = newChildSpansArray
-	spans[currentSpanID] = currentSpan
-
-	parentSpan, isParentSpanPresent := spans[currentSpan.ParentSpanID]
-	if currentSpan.Kind == INTERNAL || (currentSpan.Kind == SERVER && isParentSpanPresent && parentSpan.Kind == CLIENT) {
-		return newChildIdsArray, true
-	}
-
-	return []typedef.TSpanId{currentSpanID}, false
 }

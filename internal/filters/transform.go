@@ -69,7 +69,7 @@ func transformHTTPSpan(fullSpan models.HttpRawDataModel) tracePersistenceModel.S
 		LatencyNs:       &fullSpan.Latency,
 		RequestPayload:  getHttpRequestData(fullSpan),
 		ResponsePayload: getHttpResponseData(fullSpan),
-		Time:            epochNSToTime(fullSpan.Time),
+		Time:            epochMilliSecondsToTime(fullSpan.Time),
 	}
 	return spanForStorage
 }
@@ -85,7 +85,7 @@ func transformMySQLSpan(fullSpan models.MySQLRawDataModel) tracePersistenceModel
 		LatencyNs:       &fullSpan.Latency,
 		RequestPayload:  getMySQLRequestData(fullSpan),
 		ResponsePayload: getMySQLResponseData(fullSpan),
-		Time:            epochNSToTime(fullSpan.Time),
+		Time:            epochMilliSecondsToTime(fullSpan.Time),
 	}
 	return spanForStorage
 }
@@ -101,7 +101,7 @@ func transformPGSpan(fullSpan models.PgSQLRawDataModel) tracePersistenceModel.Sp
 		LatencyNs:       &fullSpan.Latency,
 		RequestPayload:  getPgSQLRequestData(fullSpan),
 		ResponsePayload: getPgSQLResponseData(fullSpan),
-		Time:            epochNSToTime(fullSpan.Time),
+		Time:            epochMilliSecondsToTime(fullSpan.Time),
 	}
 	return spanForStorage
 }
