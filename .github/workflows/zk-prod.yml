@@ -62,6 +62,6 @@ jobs:
       ENVIRONMENT: ${{ needs.init.outputs.ENVIRONMENT }}
       DOCKER_IDENTIFIER: ${{ needs.init.outputs.ENVIRONMENT }}
     secrets:
-      GKE_SA_KEY: ${{ env.GKE_SA_KEY }}
+      GKE_SA_KEY: ${{ GKE_SA_KEY }}
     needs: init
 
