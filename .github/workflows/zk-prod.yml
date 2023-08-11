@@ -1,8 +1,8 @@
-name: build-push
+name: prod
 on:
   push:
     tags: #r/<ENVIRONMENT>/<DOCKER-TAG-OR-VERSION>
-      - 'r/**'
+      - 'prod/**'
   workflow_dispatch:
     inputs:
       DOCKER_TAG:
@@ -13,6 +13,17 @@ on:
         description: 'ENV'
         required: true
         default: 'poc'
+  workflow_call:
+    inputs:
+      VERSION:
+        type: string
+        default: 'latest'
+      ENVIRONMENT:
+        type: string
+        default: 'poc'
+    secrets:
+      GKE_SA_KEY:
+        required: true
 env:
   ENV: ${{ github.event.inputs.ENV }}
   DOCKER_TAG: ${{ github.event.inputs.DOCKER_TAG }}
@@ -43,13 +54,11 @@ jobs:
         run: |
           if [ "$DOCKER_TAG" == "" ]; then
             part1=$(echo "$GIT_TAG" | cut -d'/' -f2)
-            part2=$(echo "$GIT_TAG" | cut -d'/' -f3)
-            echo "TAG_ENV=$part1" >> $GITHUB_OUTPUT
-            echo "TAG_VERSION=$part2" >> $GITHUB_OUTPUT
+            echo "TAG_VERSION=$part1" >> $GITHUB_OUTPUT
           else
-            echo "TAG_ENV=$ENV" >> $GITHUB_OUTPUT
             echo "TAG_VERSION=$DOCKER_TAG" >> $GITHUB_OUTPUT
           fi
+          echo "TAG_ENV=prod" >> $GITHUB_OUTPUT
 
       - name: Dump steps context
         env:
@@ -61,5 +70,8 @@ jobs:
     with:
       VERSION: ${{ needs.init.outputs.VERSION }}
       ENVIRONMENT: ${{ needs.init.outputs.ENVIRONMENT }}
+      DOCKER_IDENTIFIER: ${{ needs.init.outputs.ENVIRONMENT }}
+    secrets:
+      GKE_SA_KEY: ${{ env.GKE_SA_KEY }}
     needs: init
 
