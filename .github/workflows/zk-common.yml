@@ -27,7 +27,6 @@ env:
 jobs:
 
   print-envs:
-    needs: init
     runs-on: zk-self-hosted
     environment:
       name: ${{ inputs.ENVIRONMENT }}
@@ -41,7 +40,6 @@ jobs:
 
   ##############
   app-build:
-    needs: init
     runs-on: zk-self-hosted
     environment:
       name: ${{ inputs.ENVIRONMENT }}
@@ -71,7 +69,7 @@ jobs:
             Dockerfile
 
   docker-build:
-    needs: [ init,app-build ]
+    needs: app-build
     env:
       VERSION: ${{ needs.init.outputs.VERSION }}
       ENVIRONMENT: ${{ inputs.ENVIRONMENT }}
