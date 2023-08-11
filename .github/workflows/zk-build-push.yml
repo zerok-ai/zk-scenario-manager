@@ -62,5 +62,4 @@ jobs:
       VERSION: ${{ needs.init.outputs.VERSION }}
       ENVIRONMENT: ${{ needs.init.outputs.ENVIRONMENT }}
     needs: init
-    runs-on: zk-self-hosted
 
