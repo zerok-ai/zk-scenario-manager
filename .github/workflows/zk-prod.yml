@@ -56,7 +56,7 @@ jobs:
         run: echo "$STEPS_CONTEXT"
 
   build-push:
-    uses: zerok-ai/zk-scenario-manager/.github/workflows/zk-common.yml@helmChart
+    uses: zerok-ai/zk-scenario-manager/.github/workflows/zk-common.yml@test-gitaction
     with:
       VERSION: ${{ needs.init.outputs.VERSION }}
       ENVIRONMENT: ${{ needs.init.outputs.ENVIRONMENT }}
