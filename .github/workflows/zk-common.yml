@@ -42,6 +42,7 @@ jobs:
         run: |
           echo "GIT_TAG=$GIT_TAG"
           echo "DOCKER_TAG=$VERSION"
+          echo "GITHUB_SHA=$GITHUB_SHA"
           echo "DOCKER_REPO=$DOCKER_REPO"
           echo "ENVIRONMENT=$ENVIRONMENT"
 
@@ -93,6 +94,7 @@ jobs:
       - name: login to docker registry
         run: |
           gcloud auth configure-docker $DOCKER_REG --quiet
+          
 
       - uses: actions/download-artifact@v3
         with:
@@ -100,13 +102,16 @@ jobs:
 
       - name: Docker build
         run: |-
+          echo "DOCKER_TAG=$VERSION"
           docker build  --tag "$DOCKER_REG/$PROJECT_ID/$DOCKER_REPO/$DOCKER_IDENTIFIER/$APP_NAME:$GITHUB_SHA" .
 
       - name: Docker Tag
         run: |-
+          echo "DOCKER_TAG=$VERSION"
           docker tag "$DOCKER_REG/$PROJECT_ID/$DOCKER_REPO/$DOCKER_IDENTIFIER/$APP_NAME:$GITHUB_SHA" "$DOCKER_REG/$PROJECT_ID/$DOCKER_REPO/$DOCKER_IDENTIFIER/$APP_NAME:$VERSION"
 
       - name: Docker push
         run: |-
+          echo "DOCKER_TAG=$VERSION"
           docker push "$DOCKER_REG/$PROJECT_ID/$DOCKER_REPO/$DOCKER_IDENTIFIER/$APP_NAME:$GITHUB_SHA"
           docker push "$DOCKER_REG/$PROJECT_ID/$DOCKER_REPO/$DOCKER_IDENTIFIER/$APP_NAME:$VERSION"
