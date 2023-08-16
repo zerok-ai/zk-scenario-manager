@@ -81,51 +81,51 @@ jobs:
           STEPS_CONTEXT: ${{ toJson(steps) }}
         run: echo "$STEPS_CONTEXT"
 
-  build-push:
-    uses: zerok-ai/zk-scenario-manager/.github/workflows/zk-common.yml@test-gitaction
-    with:
-      VERSION: ${{ needs.init.outputs.VERSION }}
-      ENVIRONMENT: ${{ needs.init.outputs.ENVIRONMENT }}
-      DOCKER_IDENTIFIER: ${{ needs.init.outputs.CLUSTERNAME }}
-    secrets:
-      GKE_SA_KEY: ${{ secrets.GKE_SA_KEY }}
-    needs: init
-
-  deploy:
-    needs: [ init,build-push ]
-    env:
-      CLUSTERNAME: ${{ needs.init.outputs.CLUSTERNAME }}
-      VERSION: ${{ needs.init.outputs.VERSION }}
-      ENVIRONMENT: ${{ needs.init.outputs.ENVIRONMENT }}
-    environment:
-      name: ${{ needs.init.outputs.ENVIRONMENT }}
-    runs-on: zk-self-hosted
-    steps:
-
-      - id: 'auth'
-        name: 'Authenticate to Google Cloud'
-        uses: 'google-github-actions/auth@v0'
-        with:
-          credentials_json: '${{ env.GKE_SA_KEY }}'
-
-      - id: 'get-credentials'
-        uses: 'google-github-actions/get-gke-credentials@v1'
-        with:
-          cluster_name: '${{ env.CLUSTERNAME }}'
-          location: '${{ env.GKE_ZONE }}'
-
-      - uses: actions/download-artifact@v3
-        with:
-          name: helm-charts
-
-      - name: Deploy
-        run: |-
-          helm --install  \
-          --set=image.repo=$DOCKER_REG/$PROJECT_ID/$DOCKER_REPO/$CLUSTERNAME/$APP_NAME \
-          --set=image.tag=$VERSION \
-          --set=postgres.host=$POSTGRES_HOST \
-          --set=postgres.dbname=$POSTGRES_DB \
-          upgrade $APP_NAME \
-           -f ./helm-charts/$ENVIRONMENT.yaml ./helm-charts/ \
-           --create-namespace \
-           --namespace $NS
+#  build-push:
+#    uses: zerok-ai/zk-scenario-manager/.github/workflows/zk-common.yml@test-gitaction
+#    with:
+#      VERSION: ${{ needs.init.outputs.VERSION }}
+#      ENVIRONMENT: ${{ needs.init.outputs.ENVIRONMENT }}
+#      DOCKER_IDENTIFIER: ${{ needs.init.outputs.CLUSTERNAME }}
+#    secrets:
+#      GKE_SA_KEY: ${{ secrets.GKE_SA_KEY }}
+#    needs: init
+#
+#  deploy:
+#    needs: [ init,build-push ]
+#    env:
+#      CLUSTERNAME: ${{ needs.init.outputs.CLUSTERNAME }}
+#      VERSION: ${{ needs.init.outputs.VERSION }}
+#      ENVIRONMENT: ${{ needs.init.outputs.ENVIRONMENT }}
+#    environment:
+#      name: ${{ needs.init.outputs.ENVIRONMENT }}
+#    runs-on: zk-self-hosted
+#    steps:
+#
+#      - id: 'auth'
+#        name: 'Authenticate to Google Cloud'
+#        uses: 'google-github-actions/auth@v0'
+#        with:
+#          credentials_json: '${{ env.GKE_SA_KEY }}'
+#
+#      - id: 'get-credentials'
+#        uses: 'google-github-actions/get-gke-credentials@v1'
+#        with:
+#          cluster_name: '${{ env.CLUSTERNAME }}'
+#          location: '${{ env.GKE_ZONE }}'
+#
+#      - uses: actions/download-artifact@v3
+#        with:
+#          name: helm-charts
+#
+#      - name: Deploy
+#        run: |-
+#          helm --install  \
+#          --set=image.repo=$DOCKER_REG/$PROJECT_ID/$DOCKER_REPO/$CLUSTERNAME/$APP_NAME \
+#          --set=image.tag=$VERSION \
+#          --set=postgres.host=$POSTGRES_HOST \
+#          --set=postgres.dbname=$POSTGRES_DB \
+#          upgrade $APP_NAME \
+#           -f ./helm-charts/$ENVIRONMENT.yaml ./helm-charts/ \
+#           --create-namespace \
+#           --namespace $NS
