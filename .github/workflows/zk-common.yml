@@ -78,9 +78,9 @@ jobs:
 
   docker-build:
     needs: app-build
-    env:
-      VERSION: ${{ needs.init.outputs.VERSION }}
-      ENVIRONMENT: ${{ inputs.ENVIRONMENT }}
+#    env:
+#      VERSION: ${{ needs.init.outputs.VERSION }}
+#      ENVIRONMENT: ${{ inputs.ENVIRONMENT }}
     environment:
       name: ${{ inputs.ENVIRONMENT }}
     runs-on: zk-self-hosted
