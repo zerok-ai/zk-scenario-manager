@@ -71,8 +71,8 @@ jobs:
       - name: Extract environment
         id: extractEnvironment
         env:
-          ORG_VARIABLE_NAME: ${{ format('{0}_ENV', steps.extractClusterInfo.outputs.TAG_CLUSTERNAME_CAPITAL) }}
-          ORG_VARIABLE: ${{ vars[format('{0}_ENV', steps.extractClusterInfo.outputs.TAG_CLUSTERNAME_CAPITAL)] }}
+          ORG_VARIABLE_NAME: ${{ format('{0}_ENV', steps.extractClusterAndVersion.outputs.TAG_CLUSTERNAME_CAPITAL) }}
+          ORG_VARIABLE: ${{ vars[format('{0}_ENV', steps.extractClusterAndVersion.outputs.TAG_CLUSTERNAME_CAPITAL)] }}
         run: |
           echo "EXTRACTED_ENVIRONMENT=$ORG_VARIABLE" >> $GITHUB_OUTPUT
           echo "$ORG_VARIABLE_NAME"
