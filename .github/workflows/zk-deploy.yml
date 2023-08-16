@@ -36,6 +36,7 @@ env:
   NS: ${{ vars.NS }}
   DOCKER_REPO: ${{ vars.DOCKER_REPO }}
   APP_NAME: ${{ vars.APP_NAME }}
+  GKE_ZONE: ${{ vars.GKE_ZONE }}
   GOPRIVATE: ${{ vars.GOPRIVATE }}
   TOKEN: ${{ secrets.GITPAT }}
 
