@@ -104,6 +104,15 @@ jobs:
     runs-on: zk-self-hosted
     steps:
 
+      - name: Check output
+        run: |
+          echo "GIT_TAG=$GIT_TAG"
+          echo "DOCKER_TAG=$VERSION"
+          echo "GITHUB_SHA=$GITHUB_SHA"
+          echo "DOCKER_REPO=$DOCKER_REPO"
+          echo "ENVIRONMENT=$ENVIRONMENT"
+          echo "GKE_ZONE=$GKE_ZONE"
+
       - id: 'auth'
         name: 'Authenticate to Google Cloud'
         uses: 'google-github-actions/auth@v0'
