@@ -113,7 +113,7 @@ jobs:
       - id: 'get-credentials'
         uses: 'google-github-actions/get-gke-credentials@v1'
         with:
-          cluster_name: '${{ CLUSTERNAME }}'
+          cluster_name: '${{ needs.init.outputs.CLUSTERNAME }}'
           location: '${{ env.GKE_ZONE }}'
 
       - uses: actions/download-artifact@v3
