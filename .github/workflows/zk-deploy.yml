@@ -36,8 +36,12 @@ env:
   NS: ${{ vars.NS }}
   DOCKER_REPO: ${{ vars.DOCKER_REPO }}
   APP_NAME: ${{ vars.APP_NAME }}
+  GKE_ZONE: ${{ vars.GKE_ZONE }}
   GOPRIVATE: ${{ vars.GOPRIVATE }}
   TOKEN: ${{ secrets.GITPAT }}
+  POSTGRES_DB: ${{ vars.POSTGRES_DB }}
+  POSTGRES_HOST: ${{ vars.POSTGRES_HOST }}
+  POSTGRES_USER: ${{ secrets.POSTGRES_USER }}
 
 jobs:
   init:
@@ -71,9 +75,11 @@ jobs:
       - name: Extract environment
         id: extractEnvironment
         env:
-          ORG_VARIABLE: ${{ vars[format('{0}_ENV', steps.extractClusterInfo.outputs.TAG_CLUSTERNAME_CAPITAL)] }}
+          ORG_VARIABLE_NAME: ${{ format('{0}_ENV', steps.extractClusterAndVersion.outputs.TAG_CLUSTERNAME_CAPITAL) }}
+          ORG_VARIABLE: ${{ vars[format('{0}_ENV', steps.extractClusterAndVersion.outputs.TAG_CLUSTERNAME_CAPITAL)] }}
         run: |
           echo "EXTRACTED_ENVIRONMENT=$ORG_VARIABLE" >> $GITHUB_OUTPUT
+          echo "$ORG_VARIABLE_NAME"
           echo "$ORG_VARIABLE"
 
       - name: Dump steps context
@@ -82,13 +88,13 @@ jobs:
         run: echo "$STEPS_CONTEXT"
 
   build-push:
-    uses: zerok-ai/zk-scenario-manager/.github/workflows/zk-common.yml@helmChart
+    uses: zerok-ai/zk-scenario-manager/.github/workflows/zk-common.yml@main
     with:
       VERSION: ${{ needs.init.outputs.VERSION }}
       ENVIRONMENT: ${{ needs.init.outputs.ENVIRONMENT }}
       DOCKER_IDENTIFIER: ${{ needs.init.outputs.CLUSTERNAME }}
     secrets:
-      GKE_SA_KEY: ${{ env.GKE_SA_KEY }}
+      GKE_SA_KEY: ${{ secrets.GKE_SA_KEY }}
     needs: init
 
   deploy:
@@ -102,6 +108,15 @@ jobs:
     runs-on: zk-self-hosted
     steps:
 
+      - name: Check output
+        run: |
+          echo "GIT_TAG=$GIT_TAG"
+          echo "DOCKER_TAG=$VERSION"
+          echo "GITHUB_SHA=$GITHUB_SHA"
+          echo "DOCKER_REPO=$DOCKER_REPO"
+          echo "ENVIRONMENT=$ENVIRONMENT"
+          echo "GKE_ZONE=$GKE_ZONE"
+
       - id: 'auth'
         name: 'Authenticate to Google Cloud'
         uses: 'google-github-actions/auth@v0'
@@ -111,7 +126,7 @@ jobs:
       - id: 'get-credentials'
         uses: 'google-github-actions/get-gke-credentials@v1'
         with:
-          cluster_name: '${{ env.CLUSTERNAME }}'
+          cluster_name: '${{ needs.init.outputs.CLUSTERNAME }}'
           location: '${{ env.GKE_ZONE }}'
 
       - uses: actions/download-artifact@v3
@@ -124,6 +139,7 @@ jobs:
           --set=image.repo=$DOCKER_REG/$PROJECT_ID/$DOCKER_REPO/$CLUSTERNAME/$APP_NAME \
           --set=image.tag=$VERSION \
           --set=postgres.host=$POSTGRES_HOST \
+          --set=postgres.user=$POSTGRES_USER \
           --set=postgres.dbname=$POSTGRES_DB \
           upgrade $APP_NAME \
            -f ./helm-charts/$ENVIRONMENT.yaml ./helm-charts/ \
