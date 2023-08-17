@@ -18,9 +18,9 @@ logs:
 scenarioConfig:
   redisRuleSetCount: 12
   processingIntervalInSeconds: 10
-  vzCloudAddr: "px.loadcloud01.getanton.com:443"
-  vzClusterId: "21ca2d0c-d775-49b7-8eeb-02bb6d7c9166"
-  vzClusterKey: "px-api-b5dd5d79-549e-4d65-bf4f-5a7f8840ced1"
+  vzCloudAddr: "px.devcloud01.getanton.com:443"
+  vzClusterId: "6c213fb3-a773-4d8b-b0ad-d6e1b720da6f"
+  vzClusterKey: "px-api-e0593597-de51-44cd-bc72-6cbdb881b2be"
 server:
   host: localhost
   port: 80
