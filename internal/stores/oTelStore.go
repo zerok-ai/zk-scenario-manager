@@ -38,13 +38,114 @@ func GetOTelStore(redisConfig *config.RedisConfig) *OTelStore {
 }
 
 type SpanFromOTel struct {
-	TraceID      typedef.TTraceid
-	SpanID       typedef.TSpanId
-	RawSpan      *tracePersistenceModel.Span
-	Kind         string          `json:"spanKind"`
-	Protocol     string          `json:"protocol"`
-	ParentSpanID typedef.TSpanId `json:"parentSpanID"`
-	Children     []SpanFromOTel
+	TraceID typedef.TTraceid
+	SpanID  typedef.TSpanId
+	//ParentSpanID typedef.TSpanId `json:"parentSpanID"`
+	Kind string `json:"spanKind"`
+
+	StartTime uint64 `json:"start_ns"`
+	EndTime   uint64 `json:"end_ns"`
+
+	attributes         map[string]string
+	SpanForPersistence *tracePersistenceModel.Span
+	Children           []SpanFromOTel
+}
+
+func (spanFromOTel SpanFromOTel) createAndPopulateSpanForPersistence() {
+
+	spanFromOTel.SpanForPersistence = &tracePersistenceModel.Span{
+		TraceID:   string(spanFromOTel.TraceID),
+		SpanID:    string(spanFromOTel.SpanID),
+		Kind:      spanFromOTel.Kind,
+		StartTime: epochMilliSecondsToTime(spanFromOTel.StartTime),
+		Latency:   latencyInMilliSeconds(spanFromOTel.StartTime, spanFromOTel.EndTime),
+	}
+
+	// set protocol
+	if protocol, ok := spanFromOTel.attributes[OTelAttrProtocol]; ok {
+		spanFromOTel.SpanForPersistence.Protocol = protocol
+	}
+
+	if !populateThroughDBAttributeMap(spanFromOTel) {
+		populateThroughHttpAttributeMap(spanFromOTel)
+	}
+}
+
+func populateThroughHttpAttributeMap(spanFromOTel SpanFromOTel) {
+
+	spanForPersistence := spanFromOTel.SpanForPersistence
+	// set protocol for exception
+	if httpMethod, methodExists := spanFromOTel.attributes[OTelAttrHttpMethod]; methodExists {
+		if url, urlExists := spanFromOTel.attributes[OTelAttrHttpUrl]; urlExists {
+			if url == OTelExceptionUrl && httpMethod == HTTPPost {
+				spanForPersistence.Protocol = PException
+			}
+		}
+	}
+
+	//	set route
+	if spanFromOTel.Kind == SERVER {
+		if route, ok := spanFromOTel.attributes[OTelHttpAttrRoute]; ok {
+			spanForPersistence.Route = route
+		}
+
+		if scheme, ok := spanFromOTel.attributes[OTelHttpAttrScheme]; ok {
+			spanForPersistence.Scheme = scheme
+		}
+
+		if route, ok := spanFromOTel.attributes[OTelHttpAttrQuery]; ok {
+			spanForPersistence.Query = route
+		}
+
+	} else if spanFromOTel.Kind == CLIENT {
+		if route, ok := spanFromOTel.attributes[OTelHttpAttrServerAddress]; ok {
+			spanForPersistence.Route += route
+		}
+		if route, ok := spanFromOTel.attributes[OTelHttpAttrServerPort]; ok {
+			spanForPersistence.Route += ":" + route
+		}
+	}
+}
+
+func populateThroughDBAttributeMap(spanFromOTel SpanFromOTel) bool {
+
+	spanForPersistence := spanFromOTel.SpanForPersistence
+	if db, exists := spanFromOTel.attributes[OTelAttrDBSystem]; exists {
+		spanForPersistence.Protocol = db
+		spanForPersistence.Scheme = db
+	} else {
+		return false
+	}
+
+	// set route
+	spanForPersistence.Route = ""
+	if dbName, ok := spanFromOTel.attributes[OTelDBAttrDBName]; ok {
+		spanForPersistence.Route += dbName
+	}
+	if dbTableName, ok := spanFromOTel.attributes[OTelDBAttrDBSqlTable]; ok {
+		spanForPersistence.Route += dbTableName
+	}
+
+	// path
+	if path, ok := spanFromOTel.attributes[OTelDBAttrConnectionString]; ok {
+		spanForPersistence.Path = path
+	}
+
+	// query
+	if query, ok := spanFromOTel.attributes[OTelDBStatement]; ok {
+		spanForPersistence.Query = query
+	}
+
+	//username
+	if userName, ok := spanFromOTel.attributes[OTelDBAttrUserName]; ok {
+		spanForPersistence.Username = userName
+	}
+
+	return true
+}
+
+type SpanAttributes interface {
+	populateThroughAttributeMap()
 }
 
 type TraceFromOTel struct {
@@ -97,13 +198,15 @@ func (t OTelStore) GetSpansForTracesFromDB(keys []typedef.TTraceid) (map[typedef
 		// 4.1 Unmarshal the Spans
 		for spanId, spanData := range trace {
 			var sp SpanFromOTel
-			err1 := json.Unmarshal([]byte(spanData), &sp)
-			if err1 != nil {
+			err2 := json.Unmarshal([]byte(spanData), &sp)
+			if err2 != nil {
 				zkLogger.ErrorF(LoggerTag, "Error retrieving span:", err)
 				continue
 			}
 			sp.TraceID = traceId
 			sp.SpanID = typedef.TSpanId(spanId)
+			sp.createAndPopulateSpanForPersistence()
+
 			traceFromOTel.Spans[typedef.TSpanId(spanId)] = &sp
 		}
 
@@ -111,7 +214,7 @@ func (t OTelStore) GetSpansForTracesFromDB(keys []typedef.TTraceid) (map[typedef
 		var rootSpan *SpanFromOTel
 		rootFound := false
 		for _, spanFromOTel := range traceFromOTel.Spans {
-			parentSpan, ok := traceFromOTel.Spans[spanFromOTel.ParentSpanID]
+			parentSpan, ok := traceFromOTel.Spans[typedef.TSpanId(spanFromOTel.SpanForPersistence.ParentSpanID)]
 			if ok {
 				parentSpan.Children = append(parentSpan.Children, *spanFromOTel)
 			} else {
@@ -127,17 +230,19 @@ func (t OTelStore) GetSpansForTracesFromDB(keys []typedef.TTraceid) (map[typedef
 		if rootSpan == nil {
 			zkLogger.Debug(LoggerTag, "rootSpanID not found for trace id ", traceId)
 			continue
-		} else if rootSpan.Kind == SERVER {
-			rootClient := SpanFromOTel{
-				TraceID:  rootSpan.TraceID,
-				SpanID:   rootSpan.ParentSpanID,
-				Kind:     CLIENT,
-				Protocol: rootSpan.Protocol,
-				Children: []SpanFromOTel{*rootSpan},
-			}
-			traceFromOTel.Spans[rootSpan.ParentSpanID] = &rootClient
-			rootSpan = &rootClient
 		}
+		//else if rootSpan.Kind == SERVER {
+		//	rootClient := SpanFromOTel{
+		//		TraceID:  rootSpan.TraceID,
+		//		SpanID:   rootSpan.ParentSpanID,
+		//		Kind:     CLIENT,
+		//		Protocol: rootSpan.Protocol,
+		//		Children: []SpanFromOTel{*rootSpan},
+		//	}
+		//	traceFromOTel.Spans[rootSpan.ParentSpanID] = &rootClient
+		//	rootSpan = &rootClient
+		//}
+		rootSpan.SpanForPersistence.IsRoot = true
 		traceFromOTel.RootSpanID = rootSpan.SpanID
 
 		result[traceId] = traceFromOTel

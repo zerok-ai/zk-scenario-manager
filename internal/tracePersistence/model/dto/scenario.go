@@ -1,9 +1,7 @@
 package dto
 
 import (
-	"encoding/json"
 	"github.com/zerok-ai/zk-utils-go/common"
-	zkCrypto "github.com/zerok-ai/zk-utils-go/crypto"
 	zkLogger "github.com/zerok-ai/zk-utils-go/logs"
 	"github.com/zerok-ai/zk-utils-go/zkerrors"
 	"scenario-manager/internal/tracePersistence/model"
@@ -34,15 +32,10 @@ type IncidentTableDto struct {
 	TraceId                string    `json:"trace_id"`
 	IssueHash              string    `json:"issue_hash"`
 	IncidentCollectionTime time.Time `json:"incident_collection_time"`
-	EntryService           string    `json:"entry_service"`
-	EndPoint               string    `json:"end_point"`
-	Protocol               string    `json:"protocol"`
-	RootSpanTime           time.Time `json:"root_span_time"`
-	LatencyNs              *float32  `json:"latency_ns"`
 }
 
 func (t IncidentTableDto) GetAllColumns() []any {
-	return []any{t.TraceId, t.IssueHash, t.IncidentCollectionTime, t.EntryService, t.EndPoint, t.Protocol, t.RootSpanTime, t.LatencyNs}
+	return []any{t.TraceId, t.IssueHash, t.IncidentCollectionTime}
 }
 
 func ConvertIncidentIssuesToIssueDto(s model.IncidentWithIssues) (IssuesDetailDto, *error) {
@@ -67,11 +60,6 @@ func ConvertIncidentIssuesToIssueDto(s model.IncidentWithIssues) (IssuesDetailDt
 				TraceId:                traceId,
 				IssueHash:              issue.IssueHash,
 				IncidentCollectionTime: incidentCollectionTime,
-				EntryService:           s.Incident.EntryService,
-				EndPoint:               s.Incident.EndPoint,
-				Protocol:               s.Incident.Protocol,
-				RootSpanTime:           s.Incident.RootSpanTime,
-				LatencyNs:              s.Incident.LatencyNs,
 			}
 			incidentDtoList = append(incidentDtoList, incidentDto)
 		}
@@ -82,41 +70,41 @@ func ConvertIncidentIssuesToIssueDto(s model.IncidentWithIssues) (IssuesDetailDt
 		var spanRawDataDto SpanRawDataTableDto
 
 		var requestCompressedStr, responseCompressedStr []byte
-		var err error
-		if span.RequestPayload != nil {
-			requestCompressedStr, err = zkCrypto.CompressStringGzip(span.RequestPayload.GetString())
-			if err != nil {
-				return response, &err
-			}
-		}
+		//var err error
+		//if span.RequestPayload != nil {
+		//	requestCompressedStr, err = zkCrypto.CompressStringGzip(span.RequestPayload.GetString())
+		//	if err != nil {
+		//		return response, &err
+		//	}
+		//}
 
-		if span.ResponsePayload != nil {
-			responseCompressedStr, err = zkCrypto.CompressStringGzip(span.ResponsePayload.GetString())
-			if err != nil {
-				return response, &err
-			}
-			spanMetadataDto.Status = span.ResponsePayload.GetStatus()
-		}
-		m, err := json.Marshal(span.Metadata)
-		if err != nil {
-			return response, &err
-		}
+		//if span.ResponsePayload != nil {
+		//	responseCompressedStr, err = zkCrypto.CompressStringGzip(span.ResponsePayload.GetString())
+		//	if err != nil {
+		//		return response, &err
+		//	}
+		//	spanMetadataDto.Status = span.ResponsePayload.GetStatus()
+		//}
+		//m, err := json.Marshal(span.Metadata)
+		//if err != nil {
+		//	return response, &err
+		//}
 
 		spanMetadataDto.TraceId = traceId
-		spanMetadataDto.SpanId = span.SpanId
+		//spanMetadataDto.SpanId = span.SpanId
 		spanMetadataDto.Source = span.Source
 		spanMetadataDto.Destination = span.Destination
-		spanMetadataDto.WorkloadIdList = span.WorkloadIdList
+		//spanMetadataDto.WorkloadIdList = span.WorkloadIdList
 
-		spanMetadataDto.Metadata = string(m)
-		spanMetadataDto.LatencyNs = span.LatencyNs
-		spanMetadataDto.Protocol = span.Protocol
-		spanMetadataDto.ParentSpanId = span.ParentSpanId
-		spanMetadataDto.IssueHashList = span.IssueHashList
-		spanMetadataDto.Time = span.Time
-
-		spanRawDataDto.TraceId = traceId
-		spanRawDataDto.SpanId = span.SpanId
+		//spanMetadataDto.Metadata = string(m)
+		//spanMetadataDto.LatencyNs = span.LatencyNs
+		//spanMetadataDto.Protocol = span.Protocol
+		//spanMetadataDto.ParentSpanId = span.ParentSpanId
+		//spanMetadataDto.IssueHashList = span.IssueHashList
+		//spanMetadataDto.Time = span.Time
+		//
+		//spanRawDataDto.TraceId = traceId
+		//spanRawDataDto.SpanId = span.SpanId
 		spanRawDataDto.RequestPayload = requestCompressedStr
 		spanRawDataDto.ResponsePayload = responseCompressedStr
 
