@@ -38,10 +38,10 @@ func GetOTelStore(redisConfig *config.RedisConfig) *OTelStore {
 }
 
 type SpanFromOTel struct {
-	TraceID typedef.TTraceid
-	SpanID  typedef.TSpanId
-	//ParentSpanID typedef.TSpanId `json:"parentSpanID"`
-	Kind string `json:"spanKind"`
+	TraceID      typedef.TTraceid
+	SpanID       typedef.TSpanId
+	ParentSpanID typedef.TSpanId `json:"parentSpanID"`
+	Kind         string          `json:"spanKind"`
 
 	StartTime uint64 `json:"start_ns"`
 	EndTime   uint64 `json:"end_ns"`
@@ -54,11 +54,12 @@ type SpanFromOTel struct {
 func (spanFromOTel *SpanFromOTel) createAndPopulateSpanForPersistence() {
 
 	spanFromOTel.SpanForPersistence = &tracePersistenceModel.Span{
-		TraceID:   string(spanFromOTel.TraceID),
-		SpanID:    string(spanFromOTel.SpanID),
-		Kind:      spanFromOTel.Kind,
-		StartTime: epochMilliSecondsToTime(spanFromOTel.StartTime),
-		Latency:   latencyInMilliSeconds(spanFromOTel.StartTime, spanFromOTel.EndTime),
+		TraceID:      string(spanFromOTel.TraceID),
+		SpanID:       string(spanFromOTel.SpanID),
+		Kind:         spanFromOTel.Kind,
+		ParentSpanID: string(spanFromOTel.ParentSpanID),
+		StartTime:    epochMilliSecondsToTime(spanFromOTel.StartTime),
+		Latency:      latencyInMilliSeconds(spanFromOTel.StartTime, spanFromOTel.EndTime),
 	}
 
 	// set protocol
@@ -214,7 +215,7 @@ func (t OTelStore) GetSpansForTracesFromDB(keys []typedef.TTraceid) (map[typedef
 		var rootSpan *SpanFromOTel
 		rootFound := false
 		for _, spanFromOTel := range traceFromOTel.Spans {
-			parentSpan, ok := traceFromOTel.Spans[typedef.TSpanId(spanFromOTel.SpanForPersistence.ParentSpanID)]
+			parentSpan, ok := traceFromOTel.Spans[spanFromOTel.ParentSpanID]
 			if ok {
 				parentSpan.Children = append(parentSpan.Children, *spanFromOTel)
 			} else {
