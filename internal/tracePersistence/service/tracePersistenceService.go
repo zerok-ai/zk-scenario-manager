@@ -29,15 +29,10 @@ type tracePersistenceService struct {
 
 func (s tracePersistenceService) SaveIncidents(issuesDetails []model.IncidentWithIssues) *zkErrors.ZkError {
 
-	if issuesDetails == nil || len(issuesDetails) == 0 {
-		zkErr := zkErrors.ZkErrorBuilder{}.Build(zkErrors.ZkErrorBadRequest, nil)
-		return &zkErr
-	}
-
 	issuesDetailsDtoList := make([]dto.IssuesDetailDto, 0)
 
 	for _, issuesDetail := range issuesDetails {
-		b, zkErr, validIssueDetail := dto.ValidateAndSanitiseIssue(issuesDetail)
+		b, validIssueDetail, zkErr := dto.ValidateAndSanitiseIssue(issuesDetail)
 		if !b || zkErr != nil {
 			zkLogger.Error("Invalid issuesDetail", zkErr)
 			continue

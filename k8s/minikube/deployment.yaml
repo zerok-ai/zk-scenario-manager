@@ -44,6 +44,6 @@ spec:
             - name: PL_POSTGRES_PASSWORD # Setting Database password from Secret
               valueFrom:
                 secretKeyRef:
-                  name: postgres-postgresql
+                  name: postgres
                   key: postgres-password
 
