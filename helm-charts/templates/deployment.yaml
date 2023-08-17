@@ -36,6 +36,12 @@ spec:
         volumeMounts:
         - mountPath: /zk/config
           name: config
+        env: # Setting Enviornmental Variables
+          - name: PL_POSTGRES_PASSWORD # Setting Database password from Secret
+            valueFrom:
+              secretKeyRef:
+                name: postgres
+                key: postgres-password
       volumes:
       - configMap:
           name: zk-scenario-manager
