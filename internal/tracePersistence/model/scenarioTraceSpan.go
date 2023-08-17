@@ -33,7 +33,6 @@ type Incident struct {
 }
 
 type Span struct {
-	ID                  int       `json:"id"`
 	TraceID             string    `json:"trace_id"`
 	ParentSpanID        string    `json:"parent_span_id"`
 	SpanID              string    `json:"span_id"`
@@ -60,7 +59,6 @@ type Span struct {
 }
 
 type SpanRawData struct {
-	ID          int    `json:"id"`
 	TraceID     string `json:"trace_id"`
 	SpanID      string `json:"span_id"`
 	ReqHeaders  string `json:"req_headers"`

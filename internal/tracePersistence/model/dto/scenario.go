@@ -1,7 +1,9 @@
 package dto
 
 import (
+	"github.com/zerok-ai/zk-rawdata-reader/vzReader/utils"
 	"github.com/zerok-ai/zk-utils-go/common"
+	zkCrypto "github.com/zerok-ai/zk-utils-go/crypto"
 	zkLogger "github.com/zerok-ai/zk-utils-go/logs"
 	"github.com/zerok-ai/zk-utils-go/zkerrors"
 	"scenario-manager/internal/tracePersistence/model"
@@ -66,49 +68,57 @@ func ConvertIncidentIssuesToIssueDto(s model.IncidentWithIssues) (IssuesDetailDt
 	}
 
 	for _, span := range s.Incident.Spans {
-		var spanMetadataDto SpanTableDto
-		var spanRawDataDto SpanRawDataTableDto
-
 		var requestCompressedStr, responseCompressedStr []byte
-		//var err error
-		//if span.RequestPayload != nil {
-		//	requestCompressedStr, err = zkCrypto.CompressStringGzip(span.RequestPayload.GetString())
-		//	if err != nil {
-		//		return response, &err
-		//	}
-		//}
+		var err error
+		if !utils.IsEmpty(span.ReqBody) {
+			requestCompressedStr, err = zkCrypto.CompressStringGzip(span.ReqBody)
+			if err != nil {
+				return response, &err
+			}
+		}
 
-		//if span.ResponsePayload != nil {
-		//	responseCompressedStr, err = zkCrypto.CompressStringGzip(span.ResponsePayload.GetString())
-		//	if err != nil {
-		//		return response, &err
-		//	}
-		//	spanMetadataDto.Status = span.ResponsePayload.GetStatus()
-		//}
-		//m, err := json.Marshal(span.Metadata)
-		//if err != nil {
-		//	return response, &err
-		//}
+		if !utils.IsEmpty(span.RespBody) {
+			responseCompressedStr, err = zkCrypto.CompressStringGzip(span.RespBody)
+			if err != nil {
+				return response, &err
+			}
+		}
 
-		spanMetadataDto.TraceId = traceId
-		//spanMetadataDto.SpanId = span.SpanId
-		spanMetadataDto.Source = span.Source
-		spanMetadataDto.Destination = span.Destination
-		//spanMetadataDto.WorkloadIdList = span.WorkloadIdList
+		spanDataDto := SpanTableDto{
+			TraceID:             traceId,
+			SpanID:              span.SpanID,
+			ParentSpanID:        span.ParentSpanID,
+			IsRoot:              span.IsRoot,
+			Kind:                span.Kind,
+			StartTime:           span.StartTime,
+			Latency:             span.Latency,
+			Source:              span.Source,
+			Destination:         span.Destination,
+			WorkloadIDList:      span.WorkloadIDList,
+			Protocol:            span.Protocol,
+			IssueHashList:       span.IssueHashList,
+			RequestPayloadSize:  span.RequestPayloadSize,
+			ResponsePayloadSize: span.ResponsePayloadSize,
+			Method:              span.Method,
+			Route:               span.Route,
+			Scheme:              span.Scheme,
+			Path:                span.Path,
+			Query:               span.Query,
+			Status:              span.Status,
+			Username:            span.Username,
+		}
 
-		//spanMetadataDto.Metadata = string(m)
-		//spanMetadataDto.LatencyNs = span.LatencyNs
-		//spanMetadataDto.Protocol = span.Protocol
-		//spanMetadataDto.ParentSpanId = span.ParentSpanId
-		//spanMetadataDto.IssueHashList = span.IssueHashList
-		//spanMetadataDto.Time = span.Time
-		//
-		//spanRawDataDto.TraceId = traceId
-		//spanRawDataDto.SpanId = span.SpanId
-		spanRawDataDto.RequestPayload = requestCompressedStr
-		spanRawDataDto.ResponsePayload = responseCompressedStr
+		spanRawDataDto := SpanRawDataTableDto{
+			TraceID:     traceId,
+			SpanID:      span.SpanID,
+			ReqHeaders:  span.ReqHeaders,
+			RespHeaders: span.RespHeaders,
+			IsTruncated: span.IsTruncated,
+			ReqBody:     requestCompressedStr,
+			RespBody:    responseCompressedStr,
+		}
 
-		spanDtoList = append(spanDtoList, spanMetadataDto)
+		spanDtoList = append(spanDtoList, spanDataDto)
 		spanRawDataDtoList = append(spanRawDataDtoList, spanRawDataDto)
 
 	}

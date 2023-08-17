@@ -40,9 +40,9 @@ const (
 	ResponsePayload = "response_payload"
 
 	UpsertIssueQuery       = "INSERT INTO issue (issue_hash, issue_title, scenario_id, scenario_version) VALUES ($1, $2, $3, $4) ON CONFLICT (issue_hash) DO NOTHING"
-	UpsertIncidentQuery    = "INSERT INTO incident (trace_id, issue_hash, incident_collection_time, entry_service, end_point, protocol, root_span_time, latency_ns) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) ON CONFLICT (issue_hash, trace_id) DO NOTHING"
-	UpsertSpanQuery        = "INSERT INTO span (trace_id, span_id, parent_span_id, source, destination, workload_id_list, status, metadata, latency_ns, protocol, issue_hash_list, time) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) ON CONFLICT (trace_id, span_id) DO NOTHING"
-	UpsertSpanRawDataQuery = "INSERT INTO span_raw_data (trace_id, span_id, request_payload, response_payload) VALUES ($1, $2, $3, $4) ON CONFLICT (trace_id, span_id) DO NOTHING"
+	UpsertIncidentQuery    = "INSERT INTO incident (trace_id, issue_hash, incident_collection_time) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) ON CONFLICT (issue_hash, trace_id) DO NOTHING"
+	UpsertSpanQuery        = "INSERT INTO span (trace_id, parent_span_id, span_id, is_root, kind, start_time, latency, source, destination, workload_id_list, protocol, issue_hash_list, request_payload_size, response_payload_size, method, route, scheme, path, query, status, username) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21) ON CONFLICT (trace_id, span_id) DO NOTHING"
+	UpsertSpanRawDataQuery = "INSERT INTO span_raw_data (trace_id, span_id, req_headers, resp_headers, is_truncated, req_body, resp_body) VALUES ($1, $2, $3, $4, $5, $6, $7) ON CONFLICT (trace_id, span_id) DO NOTHING"
 )
 
 var LogTag = "zk_trace_persistence_repo"
@@ -93,7 +93,7 @@ func (z tracePersistenceRepo) SaveTraceList(issuesDetailList []dto.IssuesDetailD
 		}
 
 		for _, v := range issue.SpanTableDtoList {
-			key := v.TraceId + v.SpanId
+			key := v.TraceID + v.SpanID
 			if _, ok := uniqueSpans[key]; !ok {
 				uniqueSpans[key] = true
 				traceTableMetadata = append(traceTableMetadata, v)
@@ -101,7 +101,7 @@ func (z tracePersistenceRepo) SaveTraceList(issuesDetailList []dto.IssuesDetailD
 		}
 
 		for _, v := range issue.SpanRawDataTableList {
-			key := v.TraceId + v.SpanId
+			key := v.TraceID + v.SpanID
 			if _, ok := uniqueRawSpans[key]; !ok {
 				uniqueRawSpans[key] = true
 				traceTableRawData = append(traceTableRawData, v)
@@ -125,36 +125,36 @@ func (z tracePersistenceRepo) SaveTraceList(issuesDetailList []dto.IssuesDetailD
 	return err
 }
 
-func doBulkInsertForTraceList(tx *sql.Tx, dbRepo sqlDB.DatabaseRepo, issueData, traceData, span, spanRawData []interfaces.DbArgs) error {
-
-	err := bulkInsert(tx, dbRepo, IssueTablePostgres, []string{IssueHash, IssueTitle, ScenarioId, ScenarioVersion}, issueData)
-	if err != nil {
-		zkLogger.Info(LogTag, "Error in bulk insert trace table", err)
-		return err
-	}
-
-	err = bulkInsert(tx, dbRepo, IncidentTablePostgres, []string{TraceId, IssueHash, IncidentCollectionTime, EntryService, Endpoint, Protocol, RootSpanTime, LatencyNs}, traceData)
-	if err != nil {
-		zkLogger.Info(LogTag, "Error in bulk insert trace table", err)
-		return err
-	}
-
-	cols := []string{TraceId, SpanId, ParentSpanId, Source, Destination, WorkloadIdList, Status, Metadata, LatencyNs, Protocol, IssueHashList, Time}
-
-	err = bulkInsert(tx, dbRepo, SpanTablePostgres, cols, span)
-	if err != nil {
-		zkLogger.Info(LogTag, "Error in bulk insert span table", err)
-		return err
-	}
-
-	err = bulkInsert(tx, dbRepo, SpanRawDataTablePostgres, []string{TraceId, SpanId, RequestPayload, ResponsePayload}, spanRawData)
-	if err != nil {
-		zkLogger.Info(LogTag, "Error in bulk insert spanRawData table", err)
-		return err
-	}
-
-	return nil
-}
+//func doBulkInsertForTraceList(tx *sql.Tx, dbRepo sqlDB.DatabaseRepo, issueData, traceData, span, spanRawData []interfaces.DbArgs) error {
+//
+//	err := bulkInsert(tx, dbRepo, IssueTablePostgres, []string{IssueHash, IssueTitle, ScenarioId, ScenarioVersion}, issueData)
+//	if err != nil {
+//		zkLogger.Info(LogTag, "Error in bulk insert trace table", err)
+//		return err
+//	}
+//
+//	err = bulkInsert(tx, dbRepo, IncidentTablePostgres, []string{TraceId, IssueHash, IncidentCollectionTime, EntryService, Endpoint, Protocol, RootSpanTime, LatencyNs}, traceData)
+//	if err != nil {
+//		zkLogger.Info(LogTag, "Error in bulk insert trace table", err)
+//		return err
+//	}
+//
+//	cols := []string{TraceId, SpanId, ParentSpanId, Source, Destination, WorkloadIdList, Status, Metadata, LatencyNs, Protocol, IssueHashList, Time}
+//
+//	err = bulkInsert(tx, dbRepo, SpanTablePostgres, cols, span)
+//	if err != nil {
+//		zkLogger.Info(LogTag, "Error in bulk insert span table", err)
+//		return err
+//	}
+//
+//	err = bulkInsert(tx, dbRepo, SpanRawDataTablePostgres, []string{TraceId, SpanId, RequestPayload, ResponsePayload}, spanRawData)
+//	if err != nil {
+//		zkLogger.Info(LogTag, "Error in bulk insert spanRawData table", err)
+//		return err
+//	}
+//
+//	return nil
+//}
 
 func bulkInsert(tx *sql.Tx, dbRepo sqlDB.DatabaseRepo, table string, columns []string, data []interfaces.DbArgs) error {
 
