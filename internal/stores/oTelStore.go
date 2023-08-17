@@ -51,7 +51,7 @@ type SpanFromOTel struct {
 	Children           []SpanFromOTel
 }
 
-func (spanFromOTel SpanFromOTel) createAndPopulateSpanForPersistence() {
+func (spanFromOTel *SpanFromOTel) createAndPopulateSpanForPersistence() {
 
 	spanFromOTel.SpanForPersistence = &tracePersistenceModel.Span{
 		TraceID:   string(spanFromOTel.TraceID),
@@ -66,12 +66,12 @@ func (spanFromOTel SpanFromOTel) createAndPopulateSpanForPersistence() {
 		spanFromOTel.SpanForPersistence.Protocol = protocol
 	}
 
-	if !populateThroughDBAttributeMap(spanFromOTel) {
-		populateThroughHttpAttributeMap(spanFromOTel)
+	if !spanFromOTel.populateThroughDBAttributeMap() {
+		spanFromOTel.populateThroughHttpAttributeMap()
 	}
 }
 
-func populateThroughHttpAttributeMap(spanFromOTel SpanFromOTel) {
+func (spanFromOTel *SpanFromOTel) populateThroughHttpAttributeMap() {
 
 	spanForPersistence := spanFromOTel.SpanForPersistence
 	// set protocol for exception
@@ -107,7 +107,7 @@ func populateThroughHttpAttributeMap(spanFromOTel SpanFromOTel) {
 	}
 }
 
-func populateThroughDBAttributeMap(spanFromOTel SpanFromOTel) bool {
+func (spanFromOTel *SpanFromOTel) populateThroughDBAttributeMap() bool {
 
 	spanForPersistence := spanFromOTel.SpanForPersistence
 	if db, exists := spanFromOTel.attributes[OTelAttrDBSystem]; exists {
