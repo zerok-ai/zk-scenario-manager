@@ -2,7 +2,7 @@ name: build-push-old
 on:
   push:
     tags: #r/<ENVIRONMENT>/<DOCKER-TAG-OR-VERSION>
-      - 'r/**'
+      - 'old/**'
   workflow_dispatch:
     inputs:
       DOCKER_TAG:
