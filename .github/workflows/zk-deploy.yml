@@ -39,6 +39,9 @@ env:
   GKE_ZONE: ${{ vars.GKE_ZONE }}
   GOPRIVATE: ${{ vars.GOPRIVATE }}
   TOKEN: ${{ secrets.GITPAT }}
+  POSTGRES_DB: ${{ vars.POSTGRES_DB }}
+  POSTGRES_HOST: ${{ vars.POSTGRES_HOST }}
+  POSTGRES_USER: ${{ secrets.POSTGRES_USER }}
 
 jobs:
   init:
@@ -136,6 +139,7 @@ jobs:
           --set=image.repo=$DOCKER_REG/$PROJECT_ID/$DOCKER_REPO/$CLUSTERNAME/$APP_NAME \
           --set=image.tag=$VERSION \
           --set=postgres.host=$POSTGRES_HOST \
+          --set=postgres.user=$POSTGRES_USER \
           --set=postgres.dbname=$POSTGRES_DB \
           upgrade $APP_NAME \
            -f ./helm-charts/$ENVIRONMENT.yaml ./helm-charts/ \
