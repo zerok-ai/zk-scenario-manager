@@ -518,6 +518,7 @@ func extractStrings(input string) (string, string) {
 	return "", ""
 }
 
+// currently this is hardcoded to extract just message out of the req body
 func extractFromException(dump string) string {
 	dump = strings.Trim(dump, "{}")
 	parts := strings.Split(dump, "message=")
@@ -535,7 +536,7 @@ func getTextFromStructMembers(path string, span *tracePersistenceModel.Span) str
 	if strings.Contains(path, "toJSON") {
 		path, extractValue := extractStrings(path)
 
-		result, err = jmespath.Search("RequestPayload.ReqBody", span)
+		result, err = jmespath.Search("ReqBody", span)
 		if err == nil {
 			str, ok := result.(string)
 			if ok {
