@@ -16,7 +16,7 @@ func getHttpRawData(value models.HttpRawDataModel) tracePersistenceModel.SpanRaw
 		SpanID:      value.SpanId,
 		ReqHeaders:  value.ReqHeaders,
 		RespHeaders: value.RespHeaders,
-		IsTruncated: false,
+		IsTruncated: value.IsTruncated,
 		ReqBody:     value.ReqBody,
 		RespBody:    value.RespBody,
 	}
@@ -39,8 +39,9 @@ func enrichSpanFromHTTPRawData(span *tracePersistenceModel.Span, fullSpan *model
 
 func getMySqlRawData(mySqlSpan models.MySQLRawDataModel) tracePersistenceModel.SpanRawData {
 	raw := tracePersistenceModel.SpanRawData{
-		ReqBody:  mySqlSpan.ReqBody,
-		RespBody: mySqlSpan.RespBody,
+		ReqBody:     mySqlSpan.ReqBody,
+		RespBody:    mySqlSpan.RespBody,
+		IsTruncated: mySqlSpan.IsTruncated,
 	}
 	return raw
 }
@@ -59,9 +60,11 @@ func enrichSpanFromMySQLRawData(span *tracePersistenceModel.Span, mySqlSpan *mod
 
 func getPgSqlRawData(pgSpan models.PgSQLRawDataModel) tracePersistenceModel.SpanRawData {
 	raw := tracePersistenceModel.SpanRawData{
-		ReqBody:  pgSpan.Req,
-		RespBody: pgSpan.Resp,
+		ReqBody:     pgSpan.Req,
+		RespBody:    pgSpan.Resp,
+		IsTruncated: pgSpan.IsTruncated,
 	}
+
 	return raw
 }
 
