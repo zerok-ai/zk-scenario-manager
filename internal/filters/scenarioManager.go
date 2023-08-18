@@ -294,12 +294,20 @@ func (scenarioManager *ScenarioManager) addRawDataToSpans(tracesFromOTelStore ma
 	}
 
 	// postgre
-	//protocol = stores.PPostgresql
-	//postGreSet, ok := tracesPerProtocol[protocol]
-	//if ok && postGreSet != nil {
-	//	spansWithRawData = scenarioManager.collectMySQLRawData(postGreSet.GetAll(), timeRange)
-	//	processRawSpans(protocol, spansWithRawData, tracesFromOTelStore)
-	//}
+	protocol = stores.PPostgresql
+	postGreSet, ok := tracesPerProtocol[protocol]
+	if ok && postGreSet != nil {
+		spansWithPostgresRawData := scenarioManager.collectPostgresRawData(timeRange, postGreSet.GetAll())
+		for index := range spansWithPostgresRawData {
+			spanWithRawData := &spansWithPostgresRawData[index]
+			spanFromOTel := getSpanFromOTel(spanWithRawData.TraceId, spanWithRawData.SpanId, tracesFromOTelStore)
+			if spanFromOTel == nil {
+				continue
+			}
+			spanFromOTel.SpanForPersistence = enrichSpanFromPostgresRawData(spanFromOTel.SpanForPersistence, spanWithRawData)
+		}
+
+	}
 
 }
 
@@ -573,9 +581,6 @@ func (scenarioManager *ScenarioManager) collectMySQLRawData(timeRange string, tr
 		zkLogger.Error(LoggerTag, "Error getting raw spans for mysql traces ", traceIds, err)
 		return make([]models.MySQLRawDataModel, 0)
 	}
-	//for _, span := range rawData.Results {
-	//	spans = append(spans, transformMySQLSpan(span))
-	//}
 	return rawData.Results
 }
 
@@ -587,47 +592,3 @@ func (scenarioManager *ScenarioManager) collectPostgresRawData(timeRange string,
 	}
 	return rawData.Results
 }
-
-// prune removes the Spans that are not required - typedef Spans and server Spans that are not the root span
-//func prune(spans map[typedef.TSpanId]*stores.SpanFromOTel, currentSpanID typedef.TSpanId, isRootNode bool) ([]typedef.TSpanId, bool) {
-//	currentSpan := spans[currentSpanID]
-//
-//	// call prune on the children
-//	newChildSpansArray := make([]stores.SpanFromOTel, 0)
-//	newChildIdsArray := make([]typedef.TSpanId, 0)
-//	for _, child := range currentSpan.Children {
-//		newChildIds, pruned := prune(spans, child.SpanID, false)
-//		if pruned {
-//			delete(spans, child.SpanID)
-//		}
-//		for _, spId := range newChildIds {
-//
-//			span := spans[spId]
-//			span.ParentSpaan = currentSpan.SpanID
-//
-//			// update the span in the map
-//			spans[span.SpanID] = span
-//
-//			newChildSpansArray = append(newChildSpansArray, *span)
-//		}
-//
-//		newChildIdsArray = append(newChildIdsArray, newChildIds...)
-//	}
-//	currentSpan.Children = newChildSpansArray
-//	spans[currentSpanID] = currentSpan
-//
-//	parentSpan, isParentSpanPresent := spans[currentSpan.ParentSpanID]
-//	skipCurrentChild := false
-//	if currentSpan.Kind == INTERNAL && currentSpan.SpanForPersistence == nil {
-//		skipCurrentChild = true
-//	} else if currentSpan.Kind == SERVER && isParentSpanPresent && parentSpan.Kind == CLIENT && currentSpan.SpanForPersistence == nil {
-//		skipCurrentChild = true
-//	} else if currentSpan.Kind == CLIENT && currentSpan.SpanForPersistence == nil {
-//		skipCurrentChild = true
-//	}
-//
-//	if skipCurrentChild && !isRootNode {
-//		return newChildIdsArray, true
-//	}
-//	return []typedef.TSpanId{currentSpanID}, false
-//}

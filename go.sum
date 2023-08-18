@@ -191,6 +191,10 @@ github.com/zerok-ai/zk-rawdata-reader v0.0.0-20230817051936-58a236c5cab5 h1:sCI9
 github.com/zerok-ai/zk-rawdata-reader v0.0.0-20230817051936-58a236c5cab5/go.mod h1:GNFYev1p4/t9IoHMCX43/Yexc6K4j93to/kkcytIsFc=
 github.com/zerok-ai/zk-rawdata-reader v0.0.0-20230817055302-22d0062da405 h1:mQs09vq83KlE4mB5Oxf1RRg/0HxLeLFWL9PNwwoPH/k=
 github.com/zerok-ai/zk-rawdata-reader v0.0.0-20230817055302-22d0062da405/go.mod h1:GNFYev1p4/t9IoHMCX43/Yexc6K4j93to/kkcytIsFc=
+github.com/zerok-ai/zk-rawdata-reader v0.0.0-20230818034946-9619e23b98f7 h1:ghBkybwMzHWj8wTHvefK0IrmVXMlXZtKBlwCMVZU9rw=
+github.com/zerok-ai/zk-rawdata-reader v0.0.0-20230818034946-9619e23b98f7/go.mod h1:GNFYev1p4/t9IoHMCX43/Yexc6K4j93to/kkcytIsFc=
+github.com/zerok-ai/zk-rawdata-reader v0.0.0-20230818041035-930c19ed0718 h1:qJ2TyaVKA2oaYQW9MI6QB4UYxEb5eLGCTLjwDfMA000=
+github.com/zerok-ai/zk-rawdata-reader v0.0.0-20230818041035-930c19ed0718/go.mod h1:GNFYev1p4/t9IoHMCX43/Yexc6K4j93to/kkcytIsFc=
 github.com/zerok-ai/zk-utils-go v0.4.7-0.20230713090937-e7c93e137640 h1:63z9h2CeCxZS4z3jdI0SLRI1WDuEoznIE0temmTaVVo=
 github.com/zerok-ai/zk-utils-go v0.4.7-0.20230713090937-e7c93e137640/go.mod h1:LNXMma0iQ0V9K4H/bNKbBIOquLp4TLJDjjTyQ4OiEZk=
 github.com/zerok-ai/zk-utils-go v0.4.7-0.20230720072801-f8a934d8e227 h1:9g/Nkv40Dzk1hg1fJ3G/5cUQ+0KESgI1/GfnfrzKn/Q=

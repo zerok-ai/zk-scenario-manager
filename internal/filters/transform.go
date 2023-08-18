@@ -6,7 +6,9 @@ import (
 	"strings"
 )
 
-var sqlMethod = []string{"Sleep", "Quit", "InitDB", "Query", "FieldList", "CreateDB", "DropDB", "Refresh", "Shutdown", "Statistics", "ProcessInfo", "Connect", "ProcessKill", "Debug", "Ping", "Time", "DelayedInsert", "ChangeUser", "BinlogDump", "TableDump", "ConnectOut", "RegisterSlave", "StmtPrepare", "StmtExecute", "StmtSendLongData", "StmtClose", "StmtReset", "SetOption", "StmtFetch", "Daemon", "BinlogDumpGTID", "ResetConnection"}
+var (
+	mySqlMethod = []string{"Sleep", "Quit", "InitDB", "Query", "FieldList", "CreateDB", "DropDB", "Refresh", "Shutdown", "Statistics", "ProcessInfo", "Connect", "ProcessKill", "Debug", "Ping", "Time", "DelayedInsert", "ChangeUser", "BinlogDump", "TableDump", "ConnectOut", "RegisterSlave", "StmtPrepare", "StmtExecute", "StmtSendLongData", "StmtClose", "StmtReset", "SetOption", "StmtFetch", "Daemon", "BinlogDumpGTID", "ResetConnection"}
+)
 
 func getHttpRawData(value models.HttpRawDataModel) tracePersistenceModel.SpanRawData {
 	raw := tracePersistenceModel.SpanRawData{
@@ -17,14 +19,6 @@ func getHttpRawData(value models.HttpRawDataModel) tracePersistenceModel.SpanRaw
 		IsTruncated: false,
 		ReqBody:     value.ReqBody,
 		RespBody:    value.RespBody,
-	}
-	return raw
-}
-
-func getMySqlRawData(value models.MySQLRawDataModel) tracePersistenceModel.SpanRawData {
-	raw := tracePersistenceModel.SpanRawData{
-		ReqBody:  value.ReqBody,
-		RespBody: value.RespBody,
 	}
 	return raw
 }
@@ -43,28 +37,40 @@ func enrichSpanFromHTTPRawData(span *tracePersistenceModel.Span, fullSpan *model
 	return span
 }
 
-func enrichSpanFromMySQLRawData(span *tracePersistenceModel.Span, fullSpan *models.MySQLRawDataModel) *tracePersistenceModel.Span {
-	span.Source = fullSpan.Source
-	span.Destination = fullSpan.Destination
-	span.WorkloadIDList = strings.Split(fullSpan.WorkloadIds, ",")
-	span.ResponsePayloadSize = fullSpan.Rows
-	span.Method = sqlMethod[fullSpan.ReqCmd]
-	span.Status = fullSpan.RespStatus
+func getMySqlRawData(mySqlSpan models.MySQLRawDataModel) tracePersistenceModel.SpanRawData {
+	raw := tracePersistenceModel.SpanRawData{
+		ReqBody:  mySqlSpan.ReqBody,
+		RespBody: mySqlSpan.RespBody,
+	}
+	return raw
+}
 
-	span.SpanRawData = getMySqlRawData(*fullSpan)
+func enrichSpanFromMySQLRawData(span *tracePersistenceModel.Span, mySqlSpan *models.MySQLRawDataModel) *tracePersistenceModel.Span {
+	span.Source = mySqlSpan.Source
+	span.Destination = mySqlSpan.Destination
+	span.WorkloadIDList = strings.Split(mySqlSpan.WorkloadIds, ",")
+	span.ResponsePayloadSize = mySqlSpan.Rows
+	span.Method = mySqlMethod[mySqlSpan.ReqCmd]
+	span.Status = mySqlSpan.RespStatus
+
+	span.SpanRawData = getMySqlRawData(*mySqlSpan)
 	return span
 }
 
-//func transformPGSpan(fullSpan models.PgSQLRawDataModel) tracePersistenceModel.Span {
-//	spanForStorage := tracePersistenceModel.Span{
-//		SpanID:         fullSpan.SpanId,
-//		TraceID:        fullSpan.TraceId,
-//		Source:         fullSpan.Source,
-//		Destination:    fullSpan.Destination,
-//		WorkloadIDList: strings.Split(fullSpan.WorkloadIds, ","),
-//
-//		Status:      fullSpan.RespStatus,
-//		SpanRawData: getPgSQLRawData(fullSpan),
-//	}
-//	return spanForStorage
-//}
+func getPgSqlRawData(pgSpan models.PgSQLRawDataModel) tracePersistenceModel.SpanRawData {
+	raw := tracePersistenceModel.SpanRawData{
+		ReqBody:  pgSpan.Req,
+		RespBody: pgSpan.Resp,
+	}
+	return raw
+}
+
+func enrichSpanFromPostgresRawData(span *tracePersistenceModel.Span, pgSpan *models.PgSQLRawDataModel) *tracePersistenceModel.Span {
+	span.Source = pgSpan.Source
+	span.Destination = pgSpan.Destination
+	span.WorkloadIDList = strings.Split(pgSpan.WorkloadIds, ",")
+	span.Method = pgSpan.ReqCmd
+
+	span.SpanRawData = getPgSqlRawData(*pgSpan)
+	return span
+}
