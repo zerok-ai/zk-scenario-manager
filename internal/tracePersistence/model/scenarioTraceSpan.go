@@ -28,23 +28,46 @@ type Issue struct {
 type Incident struct {
 	TraceId                string    `json:"trace_id"`
 	Spans                  []*Span   `json:"spans"`
+	IssueHash              string    `json:"issue_hash"`
 	IncidentCollectionTime time.Time `json:"incident_collection_time"`
 }
 
 type Span struct {
-	SpanId          string          `json:"span_id"`
-	TraceId         string          `json:"trace_id"`
-	ParentSpanId    string          `json:"parent_span_id"`
-	Source          string          `json:"source"`
-	Destination     string          `json:"destination"`
-	WorkloadIdList  []string        `json:"workload_id_list"`
-	Metadata        Metadata        `json:"metadata"`
-	LatencyNs       *float32        `json:"latency_ns"`
-	Protocol        string          `json:"protocol"`
-	RequestPayload  RequestPayload  `json:"request_payload"`
-	ResponsePayload ResponsePayload `json:"response_payload"`
-	IssueHashList   []string        `json:"issue_hash_list"`
-	Time            time.Time       `json:"time"`
+	ID                  int       `json:"id"`
+	TraceID             string    `json:"trace_id"`
+	ParentSpanID        string    `json:"parent_span_id"`
+	SpanID              string    `json:"span_id"`
+	IsRoot              bool      `json:"is_root"`
+	Kind                string    `json:"kind"`
+	StartTime           time.Time `json:"start_time"`
+	Latency             float64   `json:"latency"`
+	Source              string    `json:"source"`
+	Destination         string    `json:"destination"`
+	WorkloadIDList      []string  `json:"workload_id_list"`
+	Protocol            string    `json:"protocol"`
+	IssueHashList       []string  `json:"issue_hash_list"`
+	RequestPayloadSize  uint64    `json:"request_payload_size"`
+	ResponsePayloadSize uint64    `json:"response_payload_size"`
+	Method              string    `json:"method"`
+	Route               string    `json:"route"`
+	Scheme              string    `json:"scheme"`
+	Path                string    `json:"path"`
+	Query               string    `json:"query"`
+	Status              int       `json:"status"`
+	Username            string    `json:"username"`
+
+	SpanRawData
+}
+
+type SpanRawData struct {
+	ID          int    `json:"id"`
+	TraceID     string `json:"trace_id"`
+	SpanID      string `json:"span_id"`
+	ReqHeaders  string `json:"req_headers"`
+	RespHeaders string `json:"resp_headers"`
+	IsTruncated bool   `json:"is_truncated"`
+	ReqBody     string `json:"req_body"`
+	RespBody    string `json:"resp_body"`
 }
 
 type ResponsePayload interface {
@@ -54,34 +77,6 @@ type ResponsePayload interface {
 
 type RequestPayload interface {
 	GetString() string
-}
-
-type HTTPResponsePayload struct {
-	RespStatus  string `json:"resp_status"`
-	RespMessage string `json:"resp_message"`
-	RespHeaders string `json:"resp_headers"`
-	RespBody    string `json:"resp_body"`
-}
-
-type HTTPRequestPayload struct {
-	ReqPath    string `json:"req_path"`
-	ReqMethod  string `json:"req_method"`
-	ReqHeaders string `json:"req_headers"`
-	ReqBody    string `json:"req_body"`
-}
-
-func (res HTTPResponsePayload) GetStatus() string {
-	return res.RespStatus
-}
-
-func (res HTTPRequestPayload) GetString() string {
-	x, _ := json.Marshal(res)
-	return string(x)
-}
-
-func (res HTTPResponsePayload) GetString() string {
-	x, _ := json.Marshal(res)
-	return string(x)
 }
 
 type Metadata map[string]interface{}

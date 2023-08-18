@@ -1,9 +1,7 @@
 package dto
 
 import (
-	"encoding/json"
 	"github.com/zerok-ai/zk-utils-go/common"
-	zkCrypto "github.com/zerok-ai/zk-utils-go/crypto"
 	zkLogger "github.com/zerok-ai/zk-utils-go/logs"
 	"github.com/zerok-ai/zk-utils-go/zkerrors"
 	"scenario-manager/internal/tracePersistence/model"
@@ -13,10 +11,10 @@ import (
 var LogTag = "trace_dto"
 
 type IssuesDetailDto struct {
-	IssueTableDtoList    []IssueTableDto       `json:"issue_table_dto_list"`
-	ScenarioTableDtoList []IncidentTableDto    `json:"scenario_table_dto_list"`
-	SpanTableDtoList     []SpanTableDto        `json:"span_table_dto_list"`
-	SpanRawDataTableList []SpanRawDataTableDto `json:"span_raw_data_table_list"`
+	IssueTableDtoList    []IssueTableDto
+	IncidentTableDtoList []IncidentTableDto
+	SpanTableDtoList     []SpanTableDto
+	SpanRawDataTableList []SpanRawDataTableDto
 }
 
 type IssueTableDto struct {
@@ -72,41 +70,41 @@ func ConvertIncidentIssuesToIssueDto(s model.IncidentWithIssues) (IssuesDetailDt
 		var spanRawDataDto SpanRawDataTableDto
 
 		var requestCompressedStr, responseCompressedStr []byte
-		var err error
-		if span.RequestPayload != nil {
-			requestCompressedStr, err = zkCrypto.CompressStringGzip(span.RequestPayload.GetString())
-			if err != nil {
-				return response, &err
-			}
-		}
+		//var err error
+		//if span.RequestPayload != nil {
+		//	requestCompressedStr, err = zkCrypto.CompressStringGzip(span.RequestPayload.GetString())
+		//	if err != nil {
+		//		return response, &err
+		//	}
+		//}
 
-		if span.ResponsePayload != nil {
-			responseCompressedStr, err = zkCrypto.CompressStringGzip(span.ResponsePayload.GetString())
-			if err != nil {
-				return response, &err
-			}
-			spanMetadataDto.Status = span.ResponsePayload.GetStatus()
-		}
-		m, err := json.Marshal(span.Metadata)
-		if err != nil {
-			return response, &err
-		}
+		//if span.ResponsePayload != nil {
+		//	responseCompressedStr, err = zkCrypto.CompressStringGzip(span.ResponsePayload.GetString())
+		//	if err != nil {
+		//		return response, &err
+		//	}
+		//	spanMetadataDto.Status = span.ResponsePayload.GetStatus()
+		//}
+		//m, err := json.Marshal(span.Metadata)
+		//if err != nil {
+		//	return response, &err
+		//}
 
 		spanMetadataDto.TraceId = traceId
-		spanMetadataDto.SpanId = span.SpanId
+		//spanMetadataDto.SpanId = span.SpanId
 		spanMetadataDto.Source = span.Source
 		spanMetadataDto.Destination = span.Destination
-		spanMetadataDto.WorkloadIdList = span.WorkloadIdList
+		//spanMetadataDto.WorkloadIdList = span.WorkloadIdList
 
-		spanMetadataDto.Metadata = string(m)
-		spanMetadataDto.LatencyNs = span.LatencyNs
-		spanMetadataDto.Protocol = span.Protocol
-		spanMetadataDto.ParentSpanId = span.ParentSpanId
-		spanMetadataDto.IssueHashList = span.IssueHashList
-		spanMetadataDto.Time = span.Time
-
-		spanRawDataDto.TraceId = traceId
-		spanRawDataDto.SpanId = span.SpanId
+		//spanMetadataDto.Metadata = string(m)
+		//spanMetadataDto.LatencyNs = span.LatencyNs
+		//spanMetadataDto.Protocol = span.Protocol
+		//spanMetadataDto.ParentSpanId = span.ParentSpanId
+		//spanMetadataDto.IssueHashList = span.IssueHashList
+		//spanMetadataDto.Time = span.Time
+		//
+		//spanRawDataDto.TraceId = traceId
+		//spanRawDataDto.SpanId = span.SpanId
 		spanRawDataDto.RequestPayload = requestCompressedStr
 		spanRawDataDto.ResponsePayload = responseCompressedStr
 
@@ -122,7 +120,7 @@ func ConvertIncidentIssuesToIssueDto(s model.IncidentWithIssues) (IssuesDetailDt
 
 	response = IssuesDetailDto{
 		IssueTableDtoList:    issueDtoList,
-		ScenarioTableDtoList: incidentDtoList,
+		IncidentTableDtoList: incidentDtoList,
 		SpanTableDtoList:     spanDtoList,
 		SpanRawDataTableList: spanRawDataDtoList,
 	}
@@ -130,16 +128,16 @@ func ConvertIncidentIssuesToIssueDto(s model.IncidentWithIssues) (IssuesDetailDt
 	return response, nil
 }
 
-func ValidateAndSanitiseIssue(s model.IncidentWithIssues) (bool, *zkerrors.ZkError, model.IncidentWithIssues) {
+func ValidateAndSanitiseIssue(s model.IncidentWithIssues) (bool, model.IncidentWithIssues, *zkerrors.ZkError) {
 	var resp model.IncidentWithIssues
 	if s.IssueGroupList == nil || len(s.IssueGroupList) == 0 {
 		zkLogger.Error(LogTag, "issue_group_list empty")
-		return false, common.ToPtr(zkerrors.ZkErrorBuilder{}.Build(zkerrors.ZkErrorBadRequest, "issue_group_list empty")), resp
+		return false, resp, common.ToPtr(zkerrors.ZkErrorBuilder{}.Build(zkerrors.ZkErrorBadRequest, "issue_group_list empty"))
 	}
 
 	if s.Incident.TraceId == "" {
 		zkLogger.Error(LogTag, "traceid empty")
-		return false, common.ToPtr(zkerrors.ZkErrorBuilder{}.Build(zkerrors.ZkErrorBadRequest, "traceId empty")), resp
+		return false, resp, common.ToPtr(zkerrors.ZkErrorBuilder{}.Build(zkerrors.ZkErrorBadRequest, "traceId empty"))
 	}
 
 	validIssueGroupList := make([]model.IssueGroup, 0)
@@ -156,7 +154,6 @@ func ValidateAndSanitiseIssue(s model.IncidentWithIssues) (bool, *zkerrors.ZkErr
 		}
 
 		if issueGroup.Issues == nil || len(issueGroup.Issues) == 0 {
-			zkLogger.Error(LogTag, "issues list empty")
 			continue
 		}
 
@@ -172,7 +169,6 @@ func ValidateAndSanitiseIssue(s model.IncidentWithIssues) (bool, *zkerrors.ZkErr
 		}
 
 		if len(validIssuesList) == 0 {
-			zkLogger.Error(LogTag, "issues list empty")
 			continue
 		}
 
@@ -186,12 +182,12 @@ func ValidateAndSanitiseIssue(s model.IncidentWithIssues) (bool, *zkerrors.ZkErr
 
 	if len(validIssueGroupList) == 0 {
 		zkLogger.Error(LogTag, "issueGroup list empty")
-		return false, common.ToPtr(zkerrors.ZkErrorBuilder{}.Build(zkerrors.ZkErrorBadRequest, "issueGroup list empty")), resp
+		return false, resp, common.ToPtr(zkerrors.ZkErrorBuilder{}.Build(zkerrors.ZkErrorBadRequest, "issueGroup list empty"))
 	}
 
 	resp.IssueGroupList = validIssueGroupList
 	resp.Incident = s.Incident
-	return true, nil, resp
+	return true, resp, nil
 
 	//for _, span := range s.Incident.Spans {
 	//	if span.SpanId == "" {
