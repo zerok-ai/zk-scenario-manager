@@ -5,11 +5,17 @@ on:
       HELM_VERSION:
         type: string
         required: true
+      ENVIRONMENT:
+        type: string
+        default: 'poc'
   workflow_dispatch:
     inputs:
       HELM_VERSION:
         description: 'Helm version'
         required: true
+      ENVIRONMENT:
+        type: string
+        default: 'poc'
 env:
   HELM_VERSION: ${{ github.event.inputs.HELM_VERSION }}
 
@@ -18,29 +24,31 @@ jobs:
     runs-on: zk-self-hosted
     environment: poc
     steps:
-      - name: Checkout
-        uses: actions/checkout@v3
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v1
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_KEY }}
-          aws-region: ${{ vars.AWS_REGION }}
-
-      - name: s3 sync repo
-        run: aws s3 sync ${{ vars.PUBLIC_HELM_S3_BUCKET }}/zk-client/zk-scenario-manager .
-      - name: helm package
-        run: |-  
-              helm dependency update helm-charts
-              helm package --version $HELM_VERSION helm-charts
-      - name: helm index
-        run: |-  
-              helm repo index ./ --url https://helm.zerok.ai/zk-client/zk-scenario-manager/
-      - name: s3 sync
-        run: |-
-             aws s3 cp . ${{ vars.PUBLIC_HELM_S3_BUCKET }}/zk-client/zk-scenario-manager  --recursive --exclude "*" --include "index.yaml"  --include "*.tgz" --exclude "*/*"
-
-      - name: Clear CF Cache
-        run: aws cloudfront create-invalidation --distribution-id ${{ vars.CF_DIST_ID }} --paths "/*"
+      - name: print-test
+        run: echo "$HELM_VERSION"
+#      - name: Checkout
+#        uses: actions/checkout@v3
+#      - name: Configure AWS credentials
+#        uses: aws-actions/configure-aws-credentials@v1
+#        with:
+#          aws-access-key-id: ${{ secrets.AWS_ACCESS_ID }}
+#          aws-secret-access-key: ${{ secrets.AWS_SECRET_KEY }}
+#          aws-region: ${{ vars.AWS_REGION }}
+#
+#      - name: s3 sync repo
+#        run: aws s3 sync ${{ vars.PUBLIC_HELM_S3_BUCKET }}/zk-client/zk-scenario-manager .
+#      - name: helm package
+#        run: |-
+#              helm dependency update helm-charts
+#              helm package --version $HELM_VERSION helm-charts
+#      - name: helm index
+#        run: |-
+#              helm repo index ./ --url https://helm.zerok.ai/zk-client/zk-scenario-manager/
+#      - name: s3 sync
+#        run: |-
+#             aws s3 cp . ${{ vars.PUBLIC_HELM_S3_BUCKET }}/zk-client/zk-scenario-manager  --recursive --exclude "*" --include "index.yaml"  --include "*.tgz" --exclude "*/*"
+#
+#      - name: Clear CF Cache
+#        run: aws cloudfront create-invalidation --distribution-id ${{ vars.CF_DIST_ID }} --paths "/*"
           
      

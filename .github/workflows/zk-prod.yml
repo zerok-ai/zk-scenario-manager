@@ -55,15 +55,23 @@ jobs:
           STEPS_CONTEXT: ${{ toJson(steps) }}
         run: echo "$STEPS_CONTEXT"
 
-  build-push:
-    uses: zerok-ai/zk-scenario-manager/.github/workflows/zk-common.yml@main
+#  build-push:
+#    uses: zerok-ai/zk-scenario-manager/.github/workflows/zk-common.yml@main
+#    with:
+#      VERSION: ${{ needs.init.outputs.VERSION }}
+#      ENVIRONMENT: ${{ needs.init.outputs.ENVIRONMENT }}
+#      DOCKER_IDENTIFIER: ${{ needs.init.outputs.ENVIRONMENT }}
+#    secrets:
+#      GKE_SA_KEY: ${{ secrets.GKE_SA_KEY }}
+#    needs: init
+
+  helm-push:
+    uses: zerok-ai/zk-scenario-manager/.github/workflows/main.yml@helmPushTag
     with:
-      VERSION: ${{ needs.init.outputs.VERSION }}
+      HELM_VERSION: ${{ needs.init.outputs.VERSION }}
       ENVIRONMENT: ${{ needs.init.outputs.ENVIRONMENT }}
-      DOCKER_IDENTIFIER: ${{ needs.init.outputs.ENVIRONMENT }}
-    secrets:
-      GKE_SA_KEY: ${{ secrets.GKE_SA_KEY }}
-    needs: init
+    needs: [ init ]
+#    needs: [ init,build-push ]
 
 #  helm-push:
 #    needs: [ init,build-push ]
