@@ -1,7 +1,19 @@
 name: helm-publish
 on:
+  workflow_call:
+    inputs:
+      HELM_VERSION:
+        type: string
+        required: true
   workflow_dispatch:
-jobs:          
+    inputs:
+      HELM_VERSION:
+        description: 'Helm version'
+        required: true
+env:
+  HELM_VERSION: ${{ github.event.inputs.HELM_VERSION }}
+
+jobs:
   helm-publish:
     runs-on: zk-self-hosted
     environment: poc
@@ -20,7 +32,7 @@ jobs:
       - name: helm package
         run: |-  
               helm dependency update helm-charts
-              helm package helm-charts
+              helm package --version ${{ HELM_VERSION }} helm-charts
       - name: helm index
         run: |-  
               helm repo index ./ --url https://helm.zerok.ai/zk-client/zk-scenario-manager/
