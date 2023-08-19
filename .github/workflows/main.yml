@@ -3,7 +3,7 @@ on:
   workflow_dispatch:
 jobs:          
   helm-publish:
-    runs-on: self-hosted
+    runs-on: zk-self-hosted
     environment: poc
     steps:
       - name: Checkout
