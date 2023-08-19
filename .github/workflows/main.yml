@@ -10,9 +10,9 @@ on:
         default: 'poc'
     secrets:
       AWS_ACCESS_ID:
-        type: string
+        required: true
       AWS_SECRET_KEY:
-        type: string
+        required: true
 env:
   HELM_VERSION: ${{ inputs.HELM_VERSION }}
   ENVIRONMENT: ${{ inputs.ENVIRONMENT }}
