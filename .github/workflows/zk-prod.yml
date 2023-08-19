@@ -55,15 +55,15 @@ jobs:
           STEPS_CONTEXT: ${{ toJson(steps) }}
         run: echo "$STEPS_CONTEXT"
 
-#  build-push:
-#    uses: zerok-ai/zk-scenario-manager/.github/workflows/zk-common.yml@main
-#    with:
-#      VERSION: ${{ needs.init.outputs.VERSION }}
-#      ENVIRONMENT: ${{ needs.init.outputs.ENVIRONMENT }}
-#      DOCKER_IDENTIFIER: ${{ needs.init.outputs.ENVIRONMENT }}
-#    secrets:
-#      GKE_SA_KEY: ${{ secrets.GKE_SA_KEY }}
-#    needs: init
+  build-push:
+    uses: zerok-ai/zk-scenario-manager/.github/workflows/zk-common.yml@main
+    with:
+      VERSION: ${{ needs.init.outputs.VERSION }}
+      ENVIRONMENT: ${{ needs.init.outputs.ENVIRONMENT }}
+      DOCKER_IDENTIFIER: ${{ needs.init.outputs.ENVIRONMENT }}
+    secrets:
+      GKE_SA_KEY: ${{ secrets.GKE_SA_KEY }}
+    needs: init
 
   helm-push:
     uses: zerok-ai/zk-scenario-manager/.github/workflows/main.yml@helm-push
@@ -73,44 +73,4 @@ jobs:
     secrets:
       AWS_ACCESS_ID: ${{ secrets.AWS_ACCESS_ID }}
       AWS_SECRET_KEY: ${{ secrets.AWS_SECRET_KEY }}
-    needs: [ init ]
-#    needs: [ init,build-push ]
-
-#  helm-push:
-#    needs: [ init,build-push ]
-#    runs-on: zk-self-hosted
-#    with:
-#      VERSION: ${{ needs.init.outputs.VERSION }}
-#      ENVIRONMENT: ${{ needs.init.outputs.ENVIRONMENT }}
-#      DOCKER_IDENTIFIER: ${{ needs.init.outputs.ENVIRONMENT }}
-#    environment:
-#      name: ${{ needs.init.outputs.ENVIRONMENT }}
-#    steps:
-#      - name: Checkout
-#        uses: actions/checkout@v3
-#      - name: Configure AWS credentials
-#        uses: aws-actions/configure-aws-credentials@v1
-#        with:
-#          aws-access-key-id: ${{ secrets.AWS_ACCESS_ID }}
-#          aws-secret-access-key: ${{ secrets.AWS_SECRET_KEY }}
-#          aws-region: ${{ vars.AWS_REGION }}
-#
-#      - name: s3 sync repo
-#        run: aws s3 sync ${{ vars.PUBLIC_HELM_S3_BUCKET }}/zk-client/zk-scenario-manager .
-#      - name: helm package
-#        run: |-
-#          helm dependency update helm-charts
-#          helm package helm-charts
-#      - name: helm index
-#        run: |-
-#          helm repo index ./ --url https://helm.zerok.ai/zk-client/zk-scenario-manager/
-#      - name: s3 sync
-#        run: |-
-#          aws s3 cp . ${{ vars.PUBLIC_HELM_S3_BUCKET }}/zk-client/zk-scenario-manager  --recursive --exclude "*" --include "index.yaml"  --include "*.tgz" --exclude "*/*"
-#
-#      - name: Clear CF Cache
-#        run: aws cloudfront create-invalidation --distribution-id ${{ vars.CF_DIST_ID }} --paths "/*"
-#
-
-
-
+    needs: [ init,build-push ]
