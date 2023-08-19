@@ -14,11 +14,6 @@ CREATE TABLE IF NOT EXISTS incident
     trace_id                 VARCHAR(255) NOT NULL,
     issue_hash               VARCHAR(255) NOT NULL,
     incident_collection_time TIMESTAMP    NOT NULL,
-    entry_service            VARCHAR(255),
-    end_point                VARCHAR(255),
-    protocol                 VARCHAR(255),
-    root_span_time           TIMESTAMP,
-    latency_ns               FLOAT,
     CONSTRAINT unique_issue UNIQUE (issue_hash, trace_id)
 );
 
