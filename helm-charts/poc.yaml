@@ -5,16 +5,19 @@
 replicaCount: 1
 
 postgres:
-  host:  ""
+  host: "postgres.zk-client.svc.cluster.local"
   port: 5432
-  user:  ""
-  password:  ""
-  dbname:  ""
+  password: ""
+  database: "pl"
+  user: "postgres"
 
 image:
   repo: "us-west1-docker.pkg.dev/zerok-dev/zerok-cli/zk-scenario-manager"
   tag: "latest"
   imagePullPolicy: Always
+  migrationRestartPolicy: Never
+  migrationRepo: "us-west1-docker.pkg.dev/zerok-dev/zk-client/zk-scenario-manager-migration"
+  migrationTag: "latest"
 
 imagePullSecrets: []
 nameOverride: ""
