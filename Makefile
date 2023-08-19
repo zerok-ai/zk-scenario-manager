@@ -1,6 +1,7 @@
 NAME = zk-scenario-manager
 IMAGE_NAME = zk-scenario-manager
-IMAGE_VERSION = 1.0
+IMAGE_NAME_MIGRATION_SUFFIX = -migration
+IMAGE_VERSION = latest
 
 LOCATION ?= us-west1
 PROJECT_ID ?= zerok-dev
@@ -15,49 +16,43 @@ sync:
 build: sync
 	go build -v -o $(NAME) cmd/main.go
 
-docker-build: sync
-	CGO_ENABLED=0 GOOS=linux $(ARCH) go build -v -o $(NAME) cmd/main.go
-	docker build --no-cache -t $(IMAGE_PREFIX)$(IMAGE_NAME):$(IMAGE_VERSION) .
-
-docker-build-gke: IMAGE_PREFIX := $(LOCATION)-docker.pkg.dev/$(PROJECT_ID)/$(REPOSITORY)/
-docker-build-gke: ARCH := GOARCH=amd64
-docker-build-gke: docker-build
-
-docker-push-gke: IMAGE_PREFIX := $(LOCATION)-docker.pkg.dev/$(PROJECT_ID)/$(REPOSITORY)/
-docker-push-gke:
-	docker push $(IMAGE_PREFIX)$(IMAGE_NAME):$(IMAGE_VERSION)
-
-docker-build-push-gke: docker-build-gke docker-push-gke
-
 run: build
 	go run cmd/main.go -c ./config/config.yaml 2>&1 | grep -v '^(0x'
 
-create-user:
-	psql -U postgres "CREATE ROLE pl LOGIN password 'pl'"
+docker-build: sync
+	CGO_ENABLED=0 GOOS=linux $(ARCH) go build -v -o $(NAME) cmd/main.go
+	docker build --no-cache $(DockerFile) -t $(IMAGE_PREFIX)$(IMAGE_NAME)$(IMAGE_NAME_SUFFIX):$(IMAGE_VERSION) .
 
-create-db:
-	psql -U pl -h localhost -c "CREATE DATABASE zk"
+docker-push:
+	docker push $(IMAGE_PREFIX)$(IMAGE_NAME)$(IMAGE_NAME_SUFFIX):$(IMAGE_VERSION)
 
-drop-db:
-	psql -U pl -h localhost -c "DROP DATABASE zk"
 
-create-migration-file:
-	migrate create -ext sql -dir db/migrations -seq $(name)
+# ------- GKE ------------
 
-local-migrate-up:
-	migrate -path db/migrations -database "postgres://pl:pl=@localhost:5432/zk?sslmode=disable&x-migrations-table=zk_schema_migrations" -verbose up $(count)
+# build app image
+docker-build-gke: IMAGE_PREFIX := $(LOCATION)-docker.pkg.dev/$(PROJECT_ID)/$(REPOSITORY)/
+docker-build-gke: ARCH := GOARCH=amd64
+docker-build-gke: DockerFile := -f DockerFile
+docker-build-gke: docker-build
 
-local-migrate-down:
-	migrate -path db/migrations -database "postgres://pl:pl=@localhost:5432/zk?sslmode=disable&x-migrations-table=zk_schema_migrations" -verbose down $(count)
+# build migration image
+docker-build-migration-gke: IMAGE_PREFIX := $(LOCATION)-docker.pkg.dev/$(PROJECT_ID)/$(REPOSITORY)/
+docker-build-migration-gke: ARCH := GOARCH=amd64
+docker-build-migration-gke: DockerFile := -f Dockerfile-Migration
+docker-build-migration-gke: IMAGE_NAME_SUFFIX := $(IMAGE_NAME_MIGRATION_SUFFIX)
+docker-build-migration-gke: docker-build
 
-local-fix-migration:
-	migrate -path db/migrations -database "postgres://pl:pl=@localhost:5432/zk?sslmode=disable&x-migrations-table=zk_schema_migrations" force $(version)
+# push app image
+docker-push-gke: IMAGE_PREFIX := $(LOCATION)-docker.pkg.dev/$(PROJECT_ID)/$(REPOSITORY)/
+docker-push-gke: docker-push
 
-migrate-up:
-	migrate -path db/migrations -database "postgres://$$PL_POSTGRES_USERNAME:$$PL_POSTGRES_PASSWORD=@localhost:5432/zk?sslmode=disable&x-migrations-table=$$ZK_SCHEMA_MIGRATIONS_TABLE_NAME" -verbose up $(count)
+# push migration image
+docker-push-migration-gke: IMAGE_PREFIX := $(LOCATION)-docker.pkg.dev/$(PROJECT_ID)/$(REPOSITORY)/
+docker-push-migration-gke: IMAGE_NAME_SUFFIX := $(IMAGE_NAME_MIGRATION_SUFFIX)
+docker-push-migration-gke: docker-push
 
-migrate-down:
-	migrate -path db/migrations -database "postgres://$$PL_POSTGRES_USERNAME:$$PL_POSTGRES_PASSWORD@localhost:5432/zk?sslmode=disable&x-migrations-table=$$ZK_SCHEMA_MIGRATIONS_TABLE_NAME" -verbose down $(count)
+# build and push
+docker-build-push-gke: docker-build-gke docker-push-gke
+docker-build-push-migration-gke: docker-build-migration-gke docker-push-migration-gke
 
-fix-migration:
-	migrate -path db/migrations -database "postgres://$$PL_POSTGRES_USERNAME:$$PL_POSTGRES_PASSWORD@localhost:5432/zk?sslmode=disable&x-migrations-table=$$ZK_SCHEMA_MIGRATIONS_TABLE_NAME" force $(version)
+

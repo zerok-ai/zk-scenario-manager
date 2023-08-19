@@ -1,0 +1,5 @@
+FROM --platform=linux/amd64 migrate/migrate
+WORKDIR /zk
+COPY db/migrations ./migrations
+CMD ["/zk/zk-scenario-manager", "-c", "/zk/config/config.yaml"]
+
