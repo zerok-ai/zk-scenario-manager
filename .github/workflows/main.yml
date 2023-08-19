@@ -18,9 +18,9 @@ on:
 #        default: 'poc'
 env:
 #  HELM_VERSION_INPUT: ${{ github.event.inputs.HELM_VERSION }}
-  HELM_VERSION_DISPATCH: ${{ inputs.HELM_VERSION }}
+  HELM_VERSION: ${{ inputs.HELM_VERSION }}
 #  ENVIRONMENT_INPUT: ${{ github.event.inputs.ENVIRONMENT }}
-  ENVIRONMENT_DISPATCH: ${{ inputs.ENVIRONMENT }}
+  ENVIRONMENT: ${{ inputs.ENVIRONMENT }}
 
 jobs:
   helm-publish:
