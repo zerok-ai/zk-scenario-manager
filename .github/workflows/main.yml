@@ -8,6 +8,11 @@ on:
       ENVIRONMENT:
         type: string
         default: 'poc'
+    secrets:
+      AWS_ACCESS_ID:
+        type: string
+      AWS_SECRET_KEY:
+        type: string
 env:
   HELM_VERSION: ${{ inputs.HELM_VERSION }}
   ENVIRONMENT: ${{ inputs.ENVIRONMENT }}
