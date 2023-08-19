@@ -8,18 +8,8 @@ on:
       ENVIRONMENT:
         type: string
         default: 'poc'
-#  workflow_dispatch:
-#    inputs:
-#      HELM_VERSION:
-#        description: 'Helm version'
-#        required: true
-#      ENVIRONMENT:
-#        type: string
-#        default: 'poc'
 env:
-#  HELM_VERSION_INPUT: ${{ github.event.inputs.HELM_VERSION }}
   HELM_VERSION: ${{ inputs.HELM_VERSION }}
-#  ENVIRONMENT_INPUT: ${{ github.event.inputs.ENVIRONMENT }}
   ENVIRONMENT: ${{ inputs.ENVIRONMENT }}
 
 jobs:
@@ -28,26 +18,11 @@ jobs:
     environment:
       name: ${{ inputs.ENVIRONMENT }}
     steps:
-#      - name: Set up environment
-#        run: |
-#          if [ -n "$HELM_VERSION_DISPATCH" ]; then
-#            echo "Using HELM_VERSION from workflow_call: $HELM_VERSION_DISPATCH"
-#            echo "HELM_VERSION=$HELM_VERSION_DISPATCH" >> $GITHUB_ENV
-#            echo "ENVIRONMENT_DISPATCH=$ENVIRONMENT_DISPATCH" >> $GITHUB_ENV
-#          elif [ -n "$HELM_VERSION_INPUT" ]; then
-#            echo "Using HELM_VERSION from workflow_dispatch: $HELM_VERSION_INPUT"
-#            echo "HELM_VERSION=$HELM_VERSION_INPUT" >> $GITHUB_ENV
-#            echo "ENVIRONMENT=$ENVIRONMENT_INPUT" >> $GITHUB_ENV
-#          else
-#            echo "No HELM_VERSION provided!"
-#            exit 1
-#          fi
-#
-#          # Set ENVIRONMENT variable
-#          echo "ENVIRONMENT=${{ github.event.inputs.ENVIRONMENT }}" >> $GITHUB_ENV
-
       - name: print-test
-        run: echo "$HELM_VERSION"
+        run: |-
+          echo "$HELM_VERSION"
+          echo "${{ vars.PUBLIC_HELM_S3_BUCKET }}"
+
 #      - name: Checkout
 #        uses: actions/checkout@v3
 #      - name: Configure AWS credentials
@@ -72,5 +47,5 @@ jobs:
 #
 #      - name: Clear CF Cache
 #        run: aws cloudfront create-invalidation --distribution-id ${{ vars.CF_DIST_ID }} --paths "/*"
-          
+
      
