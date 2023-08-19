@@ -32,7 +32,7 @@ jobs:
       - name: helm package
         run: |-  
               helm dependency update helm-charts
-              helm package --version ${{ HELM_VERSION }} helm-charts
+              helm package --version $HELM_VERSION helm-charts
       - name: helm index
         run: |-  
               helm repo index ./ --url https://helm.zerok.ai/zk-client/zk-scenario-manager/
