@@ -67,6 +67,8 @@ jobs:
 
   helm-push:
     uses: zerok-ai/zk-scenario-manager/.github/workflows/main.yml@helm-push
+    environment:
+      name: ${{ needs.init.outputs.ENVIRONMENT }}
     with:
       HELM_VERSION: ${{ needs.init.outputs.VERSION }}
       ENVIRONMENT: ${{ needs.init.outputs.ENVIRONMENT }}
