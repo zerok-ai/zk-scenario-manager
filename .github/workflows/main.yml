@@ -38,6 +38,12 @@ jobs:
 
       - name: s3 sync repo
         run: aws s3 sync ${{ vars.PUBLIC_HELM_S3_BUCKET }}/zk-client/${{ inputs.APP_NAME }} .
+
+      - name: docker-tag
+        run: |-
+          chmod +x helm-charts/rename-docker-tag.sh
+          helm-charts/rename-docker-tag.sh $HELM_VERSION
+
       - name: helm package
         run: |-
               helm dependency update helm-charts
