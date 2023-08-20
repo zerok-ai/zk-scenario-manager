@@ -5,6 +5,9 @@ on:
       HELM_VERSION:
         type: string
         required: true
+      APP_NAME:
+        type: string
+        required: true
       ENVIRONMENT:
         type: string
         default: 'poc'
@@ -16,6 +19,7 @@ on:
 env:
   HELM_VERSION: ${{ inputs.HELM_VERSION }}
   ENVIRONMENT: ${{ inputs.ENVIRONMENT }}
+  APP_NAME: ${{ inputs.APP_NAME }}
 
 jobs:
   helm-publish:
@@ -33,17 +37,17 @@ jobs:
           aws-region: ${{ vars.AWS_REGION }}
 
       - name: s3 sync repo
-        run: aws s3 sync ${{ vars.PUBLIC_HELM_S3_BUCKET }}/zk-client/zk-scenario-manager .
+        run: aws s3 sync ${{ vars.PUBLIC_HELM_S3_BUCKET }}/zk-client/${{ inputs.APP_NAME }} .
       - name: helm package
         run: |-
               helm dependency update helm-charts
               helm package --version $HELM_VERSION helm-charts
       - name: helm index
         run: |-
-              helm repo index ./ --url https://helm.zerok.ai/zk-client/zk-scenario-manager/
+              helm repo index ./ --url https://helm.zerok.ai/zk-client/${{ inputs.APP_NAME }}/
       - name: s3 sync
         run: |-
-             aws s3 cp . ${{ vars.PUBLIC_HELM_S3_BUCKET }}/zk-client/zk-scenario-manager  --recursive --exclude "*" --include "index.yaml"  --include "*.tgz" --exclude "*/*"
+             aws s3 cp . ${{ vars.PUBLIC_HELM_S3_BUCKET }}/zk-client/${{ inputs.APP_NAME }}  --recursive --exclude "*" --include "index.yaml"  --include "*.tgz" --exclude "*/*"
 
       - name: Clear CF Cache
         run: aws cloudfront create-invalidation --distribution-id ${{ vars.CF_DIST_ID }} --paths "/*"
