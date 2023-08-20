@@ -16,30 +16,8 @@ on:
 env:
   HELM_VERSION: ${{ inputs.HELM_VERSION }}
   ENVIRONMENT: ${{ inputs.ENVIRONMENT }}
-  APP_NAME: ${{ vars.APP_NAME }}
 
 jobs:
-#  init:
-#    runs-on: zk-self-hosted
-#    outputs:
-#      APP_NAME: ${{ steps.extractAppName.outputs.EXTRACTED_APPNAME }}
-#    environment:
-#      name: ${{ inputs.ENVIRONMENT }}
-#    steps:
-#      - name: Extract app name
-#        id: extractAppName
-#        env:
-#          ORG_VARIABLE_NAME: ${{ format('{0}_ENV', steps.extractClusterAndVersion.outputs.TAG_CLUSTERNAME_CAPITAL) }}
-#          ORG_VARIABLE: ${{ vars[format('{0}_ENV', steps.extractClusterAndVersion.outputs.TAG_CLUSTERNAME_CAPITAL)] }}
-#        run: |
-#          echo "EXTRACTED_APPNAME=$APP_NAME" >> $GITHUB_OUTPUT
-#          echo "$EXTRACTED_APPNAME"
-#
-#      - name: Dump steps context
-#        env:
-#          STEPS_CONTEXT: ${{ toJson(steps) }}
-#        run: echo "$STEPS_CONTEXT"
-
   helm-publish:
     runs-on: zk-self-hosted
     environment:
@@ -59,23 +37,21 @@ jobs:
 
       - name: docker-tag
         run: |-
-          echo "${{ vars.APP_NAME }}"
-          echo "$APP_NAME"
           chmod +x helm-charts/rename-docker-tag.sh
           helm-charts/rename-docker-tag.sh $HELM_VERSION
 
-#      - name: helm package
-#        run: |-
-#              helm dependency update helm-charts
-#              helm package --version $HELM_VERSION helm-charts
-#      - name: helm index
-#        run: |-
-#              helm repo index ./ --url https://helm.zerok.ai/zk-client/${{ inputs.APP_NAME }}/
-#      - name: s3 sync
-#        run: |-
-#             aws s3 cp . ${{ vars.PUBLIC_HELM_S3_BUCKET }}/zk-client/${{ inputs.APP_NAME }}  --recursive --exclude "*" --include "index.yaml"  --include "*.tgz" --exclude "*/*"
-#
-#      - name: Clear CF Cache
-#        run: aws cloudfront create-invalidation --distribution-id ${{ vars.CF_DIST_ID }} --paths "/*"
+      - name: helm package
+        run: |-
+              helm dependency update helm-charts
+              helm package --version $HELM_VERSION helm-charts
+      - name: helm index
+        run: |-
+              helm repo index ./ --url https://helm.zerok.ai/zk-client/${{ vars.APP_NAME }}/
+      - name: s3 sync
+        run: |-
+             aws s3 cp . ${{ vars.PUBLIC_HELM_S3_BUCKET }}/zk-client/${{ vars.APP_NAME }}  --recursive --exclude "*" --include "index.yaml"  --include "*.tgz" --exclude "*/*"
+
+      - name: Clear CF Cache
+        run: aws cloudfront create-invalidation --distribution-id ${{ vars.CF_DIST_ID }} --paths "/*"
 
      
