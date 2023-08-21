@@ -65,6 +65,16 @@ jobs:
       GKE_SA_KEY: ${{ secrets.GKE_SA_KEY }}
     needs: init
 
+  migration-build-push:
+    uses: zerok-ai/zk-scenario-manager/.github/workflows/zk-migrations.yml@main
+    with:
+      VERSION: ${{ needs.init.outputs.VERSION }}
+      ENVIRONMENT: ${{ needs.init.outputs.ENVIRONMENT }}
+      DOCKER_IDENTIFIER: ${{ needs.init.outputs.ENVIRONMENT }}
+    secrets:
+      GKE_SA_KEY: ${{ secrets.GKE_SA_KEY }}
+    needs: init
+
   helm-push:
     uses: zerok-ai/zk-scenario-manager/.github/workflows/main.yml@helm-push
     with:
