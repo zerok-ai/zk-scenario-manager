@@ -26,7 +26,9 @@ func getHttpRawData(value models.HttpRawDataModel) tracePersistenceModel.SpanRaw
 func enrichSpanFromHTTPRawData(span *tracePersistenceModel.Span, fullSpan *models.HttpRawDataModel) *tracePersistenceModel.Span {
 	span.Source = fullSpan.Source
 	span.Destination = fullSpan.Destination
-	span.WorkloadIDList = strings.Split(fullSpan.WorkloadIds, ",")
+	if fullSpan.WorkloadIds != "" {
+		span.WorkloadIDList = strings.Split(fullSpan.WorkloadIds, ",")
+	}
 	span.RequestPayloadSize = fullSpan.ReqBodySize
 	span.ResponsePayloadSize = fullSpan.RespBodySize
 	span.Method = fullSpan.ReqMethod
@@ -49,7 +51,9 @@ func getMySqlRawData(mySqlSpan models.MySQLRawDataModel) tracePersistenceModel.S
 func enrichSpanFromMySQLRawData(span *tracePersistenceModel.Span, mySqlSpan *models.MySQLRawDataModel) *tracePersistenceModel.Span {
 	span.Source = mySqlSpan.Source
 	span.Destination = mySqlSpan.Destination
-	span.WorkloadIDList = strings.Split(mySqlSpan.WorkloadIds, ",")
+	if mySqlSpan.WorkloadIds != "" {
+		span.WorkloadIDList = strings.Split(mySqlSpan.WorkloadIds, ",")
+	}
 	span.ResponsePayloadSize = mySqlSpan.Rows
 	span.Method = mySqlMethod[mySqlSpan.ReqCmd]
 	span.Status = mySqlSpan.RespStatus
@@ -71,7 +75,9 @@ func getPgSqlRawData(pgSpan models.PgSQLRawDataModel) tracePersistenceModel.Span
 func enrichSpanFromPostgresRawData(span *tracePersistenceModel.Span, pgSpan *models.PgSQLRawDataModel) *tracePersistenceModel.Span {
 	span.Source = pgSpan.Source
 	span.Destination = pgSpan.Destination
-	span.WorkloadIDList = strings.Split(pgSpan.WorkloadIds, ",")
+	if pgSpan.WorkloadIds != "" {
+		span.WorkloadIDList = strings.Split(pgSpan.WorkloadIds, ",")
+	}
 	span.Method = pgSpan.ReqCmd
 
 	span.SpanRawData = getPgSqlRawData(*pgSpan)
