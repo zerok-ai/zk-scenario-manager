@@ -56,7 +56,7 @@ jobs:
         run: echo "$STEPS_CONTEXT"
 
   build-push:
-    uses: zerok-ai/zk-scenario-manager/.github/workflows/zk-common.yml@main
+    uses: zerok-ai/zk-scenario-manager/.github/workflows/zk-build-push.yml@helm-push
     with:
       VERSION: ${{ needs.init.outputs.VERSION }}
       ENVIRONMENT: ${{ needs.init.outputs.ENVIRONMENT }}
@@ -65,3 +65,22 @@ jobs:
       GKE_SA_KEY: ${{ secrets.GKE_SA_KEY }}
     needs: init
 
+  migration-build-push:
+    uses: zerok-ai/zk-scenario-manager/.github/workflows/zk-migrations.yml@helm-push
+    with:
+      VERSION: ${{ needs.init.outputs.VERSION }}
+      ENVIRONMENT: ${{ needs.init.outputs.ENVIRONMENT }}
+      DOCKER_IDENTIFIER: ${{ needs.init.outputs.ENVIRONMENT }}
+    secrets:
+      GKE_SA_KEY: ${{ secrets.GKE_SA_KEY }}
+    needs: init
+
+  helm-push:
+    uses: zerok-ai/zk-scenario-manager/.github/workflows/zk-helm-publish.yml@helm-push
+    with:
+      HELM_VERSION: ${{ needs.init.outputs.VERSION }}
+      ENVIRONMENT: ${{ needs.init.outputs.ENVIRONMENT }}
+    secrets:
+      AWS_ACCESS_ID: ${{ secrets.AWS_ACCESS_ID }}
+      AWS_SECRET_KEY: ${{ secrets.AWS_SECRET_KEY }}
+    needs: [ init,build-push ]

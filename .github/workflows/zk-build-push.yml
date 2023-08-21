@@ -1,4 +1,4 @@
-name: common-build-push
+name: build-push
 on:
   workflow_call:
     inputs:
