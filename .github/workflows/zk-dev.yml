@@ -1,53 +1,66 @@
-name: prod
+name: dev
 on:
-  push:
-    tags: #r/<ENVIRONMENT>/<DOCKER-TAG-OR-VERSION>
-      - 'prod/**'
   workflow_dispatch:
     inputs:
       DOCKER_TAG:
         description: 'Docker Image Tag'
         required: true
         default: 'latest'
-      ENV:
-        description: 'ENV'
+      GKE_CLUSTER:
+        description: 'Cluster Name'
         required: true
-        default: 'prod'
+        default: 'pxclient02'
+      ENVIRONMENT:
+        description: 'Environment'
+        type: string
+        default: 'poc'
+  workflow_call:
+    inputs:
+      VERSION:
+        type: string
+        default: 'latest'
+      GKE_CLUSTER:
+        type: string
+        required: true
+      ENVIRONMENT:
+        type: string
+        default: 'poc'
+    secrets:
+      GKE_SA_KEY:
+        required: true
 env:
-  ENV: ${{ github.event.inputs.ENV }}
   DOCKER_TAG: ${{ github.event.inputs.DOCKER_TAG }}
-  GOOS: ${{ vars.GOOS }}
-  GOARCH: ${{ vars.GOARCH }}
-  CGO_ENABLED: ${{ vars.CGO_ENABLED }}
+  GKE_CLUSTER_MANUAL: ${{ github.event.inputs.GKE_CLUSTER }}
+  GKE_CLUSTER_CALL: ${{ inputs.GKE_CLUSTER }}
+  ENVIRONMENT_MANUAL: ${{ github.event.inputs.ENVIRONMENT }}
+  ENVIRONMENT_CALL: ${{ inputs.ENVIRONMENT }}
   GKE_SA_KEY: ${{ secrets.GKE_SA_KEY }}
-  DOCKER_REG: ${{ vars.DOCKER_REG }}
-  PROJECT_ID: ${{ vars.PROJECT_ID }}
-  DOCKER_REPO: ${{ vars.DOCKER_REPO }}
-  APP_NAME: ${{ vars.APP_NAME }}
-  GOPRIVATE: ${{ vars.GOPRIVATE }}
-  TOKEN: ${{ secrets.GITPAT }}
 
 jobs:
   init:
     runs-on: zk-self-hosted
     outputs:
-      ENVIRONMENT: ${{ steps.extractEnvAndVersion.outputs.TAG_ENV }}
-      VERSION: ${{ steps.extractEnvAndVersion.outputs.TAG_VERSION }}
+      ENVIRONMENT: ${{ steps.extractClusterAndVersion.outputs.ENVIRONMENT }}
+      CLUSTERNAME: ${{ steps.extractClusterAndVersion.outputs.TAG_CLUSTERNAME }}
+      VERSION: ${{ steps.extractClusterAndVersion.outputs.TAG_VERSION }}
     steps:
       - name: Set tag envt var
         run: |
           echo "GIT_TAG=${GITHUB_REF#refs/*/}" >> "$GITHUB_ENV"
 
-      - name: Extract env and version
-        id: extractEnvAndVersion
+      - name: Extract cluster and version
+        id: extractClusterAndVersion
         run: |
           if [ "$DOCKER_TAG" == "" ]; then
-            part1=$(echo "$GIT_TAG" | cut -d'/' -f2)
-            echo "TAG_VERSION=$part1" >> $GITHUB_OUTPUT
-            echo "TAG_ENV=prod" >> $GITHUB_OUTPUT
+            echo "TAG_CLUSTERNAME=$GKE_CLUSTER_CALL" >> $GITHUB_OUTPUT
+            echo "TAG_VERSION=$VERSION" >> $GITHUB_OUTPUT
+            echo "ENVIRONMENT=$ENVIRONMENT_CALL" >> $GITHUB_OUTPUT  
+            clusterName=$part1
           else
+            echo "TAG_CLUSTERNAME=$GKE_CLUSTER_MANUAL" >> $GITHUB_OUTPUT
             echo "TAG_VERSION=$DOCKER_TAG" >> $GITHUB_OUTPUT
-            echo "TAG_ENV=$ENV" >> $GITHUB_OUTPUT
+            echo "ENVIRONMENT=$ENVIRONMENT_MANUAL" >> $GITHUB_OUTPUT
+            clusterName=$GKE_CLUSTER
           fi
 
       - name: Dump steps context
@@ -60,7 +73,7 @@ jobs:
     with:
       VERSION: ${{ needs.init.outputs.VERSION }}
       ENVIRONMENT: ${{ needs.init.outputs.ENVIRONMENT }}
-      DOCKER_IDENTIFIER: ${{ needs.init.outputs.ENVIRONMENT }}
+      DOCKER_IDENTIFIER: ${{ needs.init.outputs.CLUSTERNAME }}
     secrets:
       GKE_SA_KEY: ${{ secrets.GKE_SA_KEY }}
     needs: init
@@ -70,7 +83,7 @@ jobs:
     with:
       VERSION: ${{ needs.init.outputs.VERSION }}
       ENVIRONMENT: ${{ needs.init.outputs.ENVIRONMENT }}
-      DOCKER_IDENTIFIER: ${{ needs.init.outputs.ENVIRONMENT }}
+      DOCKER_IDENTIFIER: ${{ needs.init.outputs.CLUSTERNAME }}
     secrets:
       GKE_SA_KEY: ${{ secrets.GKE_SA_KEY }}
     needs: init
@@ -80,7 +93,7 @@ jobs:
     with:
       HELM_VERSION: ${{ needs.init.outputs.VERSION }}
       ENVIRONMENT: ${{ needs.init.outputs.ENVIRONMENT }}
-      DOCKER_IDENTIFIER: ${{ needs.init.outputs.ENVIRONMENT }}
+      DOCKER_IDENTIFIER: ${{ needs.init.outputs.CLUSTERNAME }}
     secrets:
       AWS_ACCESS_ID: ${{ secrets.AWS_ACCESS_ID }}
       AWS_SECRET_KEY: ${{ secrets.AWS_SECRET_KEY }}

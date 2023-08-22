@@ -2,6 +2,9 @@
 # This is a YAML-formatted file.
 # Declare variables to be passed into your templates.
 
+global:
+  dockerBase: "us-west1-docker.pkg.dev/zerok-dev/zk-client"
+
 replicaCount: 1
 
 postgres:
@@ -12,11 +15,11 @@ postgres:
   user: "postgres"
 
 image:
-  repo: "us-west1-docker.pkg.dev/zerok-dev/zk-client/zk-scenario-manager"
+  repo: "zk-scenario-manager"
   tag: "latest"
   imagePullPolicy: Always
   migrationRestartPolicy: Never
-  migrationRepo: "us-west1-docker.pkg.dev/zerok-dev/zk-client/zk-scenario-manager-migration"
+  migrationRepo: "zk-scenario-manager-migration"
   migrationTag: "latest"
 
 imagePullSecrets: []
