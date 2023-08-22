@@ -8,7 +8,7 @@ metadata:
     "helm.sh/hook-weight": "-1"
     "helm.sh/hook-delete-policy": hook-succeeded
 spec:
-  completions: 5000
+  completions: 1
   template:
     spec:
       restartPolicy: {{ .Values.image.migrationRestartPolicy }}
