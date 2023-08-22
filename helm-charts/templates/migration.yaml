@@ -15,4 +15,10 @@ spec:
         - name: migration
           image: "{{ .Values.global.dockerBase }}/{{ .Values.image.migrationRepo }}:{{ .Values.image.migrationTag  }}"
           command: [ "migrate" ]
-          args: [ "-path=/zk/migrations", "-database=postgres://{{ .Values.postgres.user }}:{{ .Values.postgres.password }}@{{ .Values.postgres.host }}:5432/{{ .Values.postgres.database }}?sslmode=disable&x-migrations-table=zk_schema_migrations", "up" ]
+          args: [ "-path=/zk/migrations", "-database=postgres://{{ .Values.postgres.user }}:${PL_POSTGRES_PASSWORD}@{{ .Values.postgres.host }}:5432/{{ .Values.postgres.database }}?sslmode=disable&x-migrations-table=zk_schema_migrations", "up" ]
+          env:
+            - name: PL_POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: postgres
+                  key: postgres-password
