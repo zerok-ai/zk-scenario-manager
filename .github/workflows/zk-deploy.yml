@@ -97,6 +97,16 @@ jobs:
       GKE_SA_KEY: ${{ secrets.GKE_SA_KEY }}
     needs: init
 
+  migration-build-push:
+    uses: zerok-ai/zk-scenario-manager/.github/workflows/zk-migrations.yml@helm-push
+    with:
+      VERSION: ${{ needs.init.outputs.VERSION }}
+      ENVIRONMENT: ${{ needs.init.outputs.ENVIRONMENT }}
+      DOCKER_IDENTIFIER: ${{ needs.init.outputs.ENVIRONMENT }}
+    secrets:
+      GKE_SA_KEY: ${{ secrets.GKE_SA_KEY }}
+    needs: init
+
   deploy:
     needs: [ init,build-push ]
     env:
@@ -107,6 +117,10 @@ jobs:
       name: ${{ needs.init.outputs.ENVIRONMENT }}
     runs-on: zk-self-hosted
     steps:
+      - name: docker-tag
+        run: |-
+          chmod +x helm-charts/rename-docker-tag.sh
+          helm-charts/rename-docker-tag.sh $VERSION
 
       - name: Check output
         run: |
