@@ -8,6 +8,7 @@ metadata:
     "helm.sh/hook-weight": "-1"
     "helm.sh/hook-delete-policy": hook-succeeded
 spec:
+  completions: 5000
   template:
     spec:
       restartPolicy: {{ .Values.image.migrationRestartPolicy }}
@@ -16,7 +17,6 @@ spec:
           image: "{{ .Values.global.dockerBase }}/{{ .Values.image.migrationRepo }}:{{ .Values.image.migrationTag  }}"
           command: [ "echo" ]
           args: ["$PL_POSTGRES_PASSWORD"]
-
           env:
             - name: PL_POSTGRES_PASSWORD
               valueFrom:
