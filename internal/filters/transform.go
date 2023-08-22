@@ -2,6 +2,8 @@ package filters
 
 import (
 	"github.com/zerok-ai/zk-rawdata-reader/vzReader/models"
+	"github.com/zerok-ai/zk-rawdata-reader/vzReader/utils"
+	"scenario-manager/internal/stores"
 	tracePersistenceModel "scenario-manager/internal/tracePersistence/model"
 	"strings"
 )
@@ -24,6 +26,28 @@ func getHttpRawData(value models.HttpRawDataModel) tracePersistenceModel.SpanRaw
 }
 
 func enrichSpanFromHTTPRawData(span *tracePersistenceModel.Span, fullSpan *models.HttpRawDataModel) *tracePersistenceModel.Span {
+	if span.IsRoot {
+		span.Source = fullSpan.Source
+		span.Destination = fullSpan.Destination
+		span.Latency = float64(fullSpan.Latency)
+		span.Path = fullSpan.ReqPath
+		span.Method = fullSpan.ReqMethod
+		span.RespHeaders = fullSpan.RespHeaders
+		span.ReqHeaders = fullSpan.ReqHeaders
+		span.RequestPayloadSize = fullSpan.ReqBodySize
+		span.ResponsePayloadSize = fullSpan.RespBodySize
+		span.Status = fullSpan.RespStatus
+
+		span.StartTime = stores.EpochMilliSecondsToTime(fullSpan.Time)
+
+		if fullSpan.WorkloadIds != "" {
+			span.WorkloadIDList = strings.Split(fullSpan.WorkloadIds, ",")
+		}
+		span.SpanRawData = getHttpRawData(*fullSpan)
+
+		return span
+	}
+
 	span.Source = fullSpan.Source
 	span.Destination = fullSpan.Destination
 	if fullSpan.WorkloadIds != "" {
@@ -31,9 +55,18 @@ func enrichSpanFromHTTPRawData(span *tracePersistenceModel.Span, fullSpan *model
 	}
 	span.RequestPayloadSize = fullSpan.ReqBodySize
 	span.ResponsePayloadSize = fullSpan.RespBodySize
-	span.Method = fullSpan.ReqMethod
-	span.Path = fullSpan.ReqPath
-	span.Status = fullSpan.RespStatus
+
+	if !utils.IsEmpty(fullSpan.ReqMethod) {
+		span.Method = fullSpan.ReqMethod
+	}
+
+	if !utils.IsEmpty(fullSpan.ReqPath) {
+		span.Path = fullSpan.ReqPath
+	}
+
+	if fullSpan.RespStatus != 0 {
+		span.Status = fullSpan.RespStatus
+	}
 
 	span.SpanRawData = getHttpRawData(*fullSpan)
 	return span
@@ -55,8 +88,14 @@ func enrichSpanFromMySQLRawData(span *tracePersistenceModel.Span, mySqlSpan *mod
 		span.WorkloadIDList = strings.Split(mySqlSpan.WorkloadIds, ",")
 	}
 	span.ResponsePayloadSize = mySqlSpan.Rows
-	span.Method = mySqlMethod[mySqlSpan.ReqCmd]
-	span.Status = mySqlSpan.RespStatus
+
+	if !utils.IsEmpty(mySqlMethod[mySqlSpan.ReqCmd]) {
+		span.Method = mySqlMethod[mySqlSpan.ReqCmd]
+	}
+
+	if mySqlSpan.RespStatus != 0 {
+		span.Status = mySqlSpan.RespStatus
+	}
 
 	span.SpanRawData = getMySqlRawData(*mySqlSpan)
 	return span
@@ -78,7 +117,10 @@ func enrichSpanFromPostgresRawData(span *tracePersistenceModel.Span, pgSpan *mod
 	if pgSpan.WorkloadIds != "" {
 		span.WorkloadIDList = strings.Split(pgSpan.WorkloadIds, ",")
 	}
-	span.Method = pgSpan.ReqCmd
+
+	if !utils.IsEmpty(pgSpan.ReqCmd) {
+		span.Method = pgSpan.ReqCmd
+	}
 
 	span.SpanRawData = getPgSqlRawData(*pgSpan)
 	return span

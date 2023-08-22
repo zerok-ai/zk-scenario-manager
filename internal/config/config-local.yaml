@@ -10,12 +10,12 @@ redis:
 postgres:
   host: 127.0.0.1
   port: 5432
-  #  user: "postgres"
-  #  password: "eo1Mgtm6HI"
-  #  dbname: "pl"
-  user: "pl"
-  password: "pl"
-  dbname: "zk"
+  user: "postgres"
+  password: "eo1Mgtm6HI"
+  dbname: "pl"
+#  user: "pl"
+#  password: "pl"
+#  dbname: "zk"
 
 logs:
   color: true

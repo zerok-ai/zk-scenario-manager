@@ -25,16 +25,18 @@ const (
 
 	OTelAttrProtocol   = "net.protocol.name"
 	OTelAttrHttpMethod = "http.method"
+	OTelAttrHttpStatus = "http.status_code"
 
 	OTelExceptionUrl = "/exception"
 
 	OTelAttrHttpUrl    = "http.url"
+	OTelAttrHttpTarget = "http.target"
 	OTelHttpAttrRoute  = "http.route"
 	OTelHttpAttrScheme = "http.scheme"
 	OTelHttpAttrQuery  = "url.query"
 
 	OTelHttpAttrServerAddress = "server.address"
-	OTelHttpAttrServerPort    = "server.port"
+	OTelHttpAttrNetPeerName   = "net.peer.name"
 
 	OTelDBAttrDBName           = "db.name"
 	OTelDBAttrDBSqlTable       = "db.sql.table"
@@ -42,6 +44,7 @@ const (
 	OTelDBAttrConnectionString = "db.connection_string"
 	OTelDBStatement            = "db.statement"
 	OTelDBAttrUserName         = "db.user"
+	OTelDBAttrOperation        = "db.operation"
 )
 
 func getNumDigits(timestamp uint64) int {
@@ -58,15 +61,15 @@ func latencyInMilliSeconds(epochStart uint64, epochEnd uint64) float64 {
 	numberOfDigits := getNumDigits(epochStart)
 	latency := epochEnd - epochStart
 
-	// time is in nanoseconds
-	if numberOfDigits > 13 {
-		return float64(latency) / 1000000
+	// time is in milliseconds, convert to nanoseconds and return
+	if numberOfDigits <= 13 {
+		return float64(latency) * 1000000
 	}
 
 	return float64(latency)
 }
 
-func epochMilliSecondsToTime(epochNS uint64) time.Time {
+func EpochMilliSecondsToTime(epochNS uint64) time.Time {
 
 	numberOfDigits := getNumDigits(epochNS)
 

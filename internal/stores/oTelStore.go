@@ -8,6 +8,7 @@ import (
 	"github.com/zerok-ai/zk-utils-go/storage/redis/config"
 	typedef "scenario-manager/internal"
 	tracePersistenceModel "scenario-manager/internal/tracePersistence/model"
+	"strconv"
 	"time"
 )
 
@@ -40,24 +41,39 @@ func GetOTelStore(redisConfig *config.RedisConfig) *OTelStore {
 type SpanFromOTel struct {
 	TraceID      typedef.TTraceid
 	SpanID       typedef.TSpanId
-	ParentSpanID typedef.TSpanId `json:"parentSpanID"`
-	Kind         string          `json:"spanKind"`
+	ParentSpanID typedef.TSpanId `json:"parent_span_id"`
+	Kind         string          `json:"span_kind"`
 
 	StartTime uint64 `json:"start_ns"`
 	EndTime   uint64 `json:"end_ns"`
+
+	SourceIP string `json:"source_ip"`
+	DestIP   string `json:"dest_ip"`
 
 	Attributes         map[string]interface{} `json:"attributes"`
 	SpanForPersistence *tracePersistenceModel.Span
 	Children           []SpanFromOTel
 }
 
-func (spanFromOTel *SpanFromOTel) getStringAttribute(attr string) (string, bool) {
-	str := ""
+func (spanFromOTel *SpanFromOTel) GetStringAttribute(attr string) (string, bool) {
+	var protocol interface{}
 	success := false
-	if protocol, ok := spanFromOTel.Attributes[attr]; ok {
-		str, success = protocol.(string)
+	var stringValue string
+	if protocol, success = spanFromOTel.Attributes[attr]; success {
+		switch v := protocol.(type) {
+		case string:
+			stringValue = v
+		case float64:
+			stringValue = strconv.FormatFloat(v, 'f', -1, 64)
+		case int:
+			stringValue = strconv.Itoa(v)
+		default:
+			stringValue = "Unknown Type"
+			success = false
+			zkLogger.Error(LoggerTag, "getStringAttribute: Unknown Type for ", attr, " value=", protocol)
+		}
 	}
-	return str, success
+	return stringValue, success
 }
 
 func (spanFromOTel *SpanFromOTel) getNumberAttribute(attr string) (string, bool) {
@@ -76,12 +92,12 @@ func (spanFromOTel *SpanFromOTel) createAndPopulateSpanForPersistence() {
 		SpanID:       string(spanFromOTel.SpanID),
 		Kind:         spanFromOTel.Kind,
 		ParentSpanID: string(spanFromOTel.ParentSpanID),
-		StartTime:    epochMilliSecondsToTime(spanFromOTel.StartTime),
+		StartTime:    EpochMilliSecondsToTime(spanFromOTel.StartTime),
 		Latency:      latencyInMilliSeconds(spanFromOTel.StartTime, spanFromOTel.EndTime),
 	}
 
 	// set protocol
-	if protocol, ok := spanFromOTel.getStringAttribute(OTelAttrProtocol); ok {
+	if protocol, ok := spanFromOTel.GetStringAttribute(OTelAttrProtocol); ok {
 		spanFromOTel.SpanForPersistence.Protocol = protocol
 	}
 
@@ -95,6 +111,7 @@ func (spanFromOTel *SpanFromOTel) populateThroughHttpAttributeMap() {
 	spanForPersistence := spanFromOTel.SpanForPersistence
 	// set protocol for exception
 	if httpMethod, methodExists := spanFromOTel.Attributes[OTelAttrHttpMethod]; methodExists {
+		spanForPersistence.Method = httpMethod.(string)
 		if url, urlExists := spanFromOTel.Attributes[OTelAttrHttpUrl]; urlExists {
 			if url == OTelExceptionUrl && httpMethod == HTTPPost {
 				spanForPersistence.Protocol = PException
@@ -102,26 +119,41 @@ func (spanFromOTel *SpanFromOTel) populateThroughHttpAttributeMap() {
 		}
 	}
 
+	if status, ok := spanFromOTel.GetStringAttribute(OTelAttrHttpStatus); ok {
+		s, err := strconv.Atoi(status)
+		if err != nil {
+			zkLogger.Error(LoggerTag, "populateThroughHttpAttributeMap: status=", status, " err=", err)
+		}
+		spanForPersistence.Status = s
+	}
+
 	//	set route
 	if spanFromOTel.Kind == SERVER {
-		if route, ok := spanFromOTel.getStringAttribute(OTelHttpAttrRoute); ok {
+		if route, ok := spanFromOTel.GetStringAttribute(OTelHttpAttrRoute); ok {
 			spanForPersistence.Route = route
 		}
 
-		if scheme, ok := spanFromOTel.getStringAttribute(OTelHttpAttrScheme); ok {
+		if scheme, ok := spanFromOTel.GetStringAttribute(OTelHttpAttrScheme); ok {
 			spanForPersistence.Scheme = scheme
 		}
 
-		if route, ok := spanFromOTel.getStringAttribute(OTelHttpAttrQuery); ok {
-			spanForPersistence.Query = route
+		if query, ok := spanFromOTel.GetStringAttribute(OTelHttpAttrQuery); ok {
+			spanForPersistence.Query = query
+		}
+
+		// path
+		if path, ok := spanFromOTel.GetStringAttribute(OTelAttrHttpTarget); ok {
+			spanForPersistence.Path = path
 		}
 
 	} else if spanFromOTel.Kind == CLIENT {
-		if route, ok := spanFromOTel.getStringAttribute(OTelHttpAttrServerAddress); ok {
-			spanForPersistence.Route += route
+		if netPeerName, ok := spanFromOTel.GetStringAttribute(OTelHttpAttrNetPeerName); ok {
+			spanForPersistence.Route = netPeerName
 		}
-		if route, ok := spanFromOTel.getStringAttribute(OTelHttpAttrServerPort); ok {
-			spanForPersistence.Route += ":" + route
+
+		// path
+		if path, ok := spanFromOTel.GetStringAttribute(OTelAttrHttpUrl); ok {
+			spanForPersistence.Path = path
 		}
 	}
 }
@@ -129,7 +161,7 @@ func (spanFromOTel *SpanFromOTel) populateThroughHttpAttributeMap() {
 func (spanFromOTel *SpanFromOTel) populateThroughDBAttributeMap() bool {
 
 	spanForPersistence := spanFromOTel.SpanForPersistence
-	if db, exists := spanFromOTel.getStringAttribute(OTelAttrDBSystem); exists {
+	if db, exists := spanFromOTel.GetStringAttribute(OTelAttrDBSystem); exists {
 		spanForPersistence.Protocol = db
 		spanForPersistence.Scheme = db
 	} else {
@@ -138,25 +170,30 @@ func (spanFromOTel *SpanFromOTel) populateThroughDBAttributeMap() bool {
 
 	// set route
 	spanForPersistence.Route = ""
-	if dbName, ok := spanFromOTel.getStringAttribute(OTelDBAttrDBName); ok {
+	if dbName, ok := spanFromOTel.GetStringAttribute(OTelDBAttrDBName); ok {
 		spanForPersistence.Route += dbName
 	}
-	if dbTableName, ok := spanFromOTel.getStringAttribute(OTelDBAttrDBSqlTable); ok {
+	if dbTableName, ok := spanFromOTel.GetStringAttribute(OTelDBAttrDBSqlTable); ok {
 		spanForPersistence.Route += dbTableName
 	}
 
 	// path
-	if path, ok := spanFromOTel.getStringAttribute(OTelDBAttrConnectionString); ok {
+	if path, ok := spanFromOTel.GetStringAttribute(OTelDBAttrConnectionString); ok {
 		spanForPersistence.Path = path
 	}
 
 	// query
-	if query, ok := spanFromOTel.getStringAttribute(OTelDBStatement); ok {
+	if query, ok := spanFromOTel.GetStringAttribute(OTelDBStatement); ok {
 		spanForPersistence.Query = query
 	}
 
 	//username
-	if userName, ok := spanFromOTel.getStringAttribute(OTelDBAttrUserName); ok {
+	if userName, ok := spanFromOTel.GetStringAttribute(OTelDBAttrUserName); ok {
+		spanForPersistence.Username = userName
+	}
+
+	//method
+	if userName, ok := spanFromOTel.GetStringAttribute(OTelDBAttrOperation); ok {
 		spanForPersistence.Username = userName
 	}
 
@@ -249,16 +286,8 @@ func (t OTelStore) GetSpansForTracesFromDB(keys []typedef.TTraceid) (map[typedef
 		if rootSpan == nil {
 			zkLogger.Debug(LoggerTag, "rootSpanID not found for trace id ", traceId)
 			continue
-		} else if rootSpan.Kind == SERVER {
-			rootClient := SpanFromOTel{
-				TraceID:  rootSpan.TraceID,
-				SpanID:   rootSpan.ParentSpanID,
-				Kind:     CLIENT,
-				Children: []SpanFromOTel{*rootSpan},
-			}
-			traceFromOTel.Spans[rootSpan.ParentSpanID] = &rootClient
-			rootSpan = &rootClient
 		}
+
 		rootSpan.SpanForPersistence.IsRoot = true
 		traceFromOTel.RootSpanID = rootSpan.SpanID
 

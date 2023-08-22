@@ -3,6 +3,7 @@ package filters
 import (
 	"crypto/md5"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"github.com/jmespath/go-jmespath"
 	"github.com/pkg/errors"
@@ -269,13 +270,63 @@ func (scenarioManager *ScenarioManager) addRawDataToSpans(tracesFromOTelStore ma
 	// handle http and exception
 	protocol := stores.PHttp
 	spansWithHTTPRawData := scenarioManager.getRawDataForHTTPAndException(timeRange, tracesPerProtocol)
-	for index := range spansWithHTTPRawData {
-		spanWithRawData := &spansWithHTTPRawData[index]
-		spanFromOTel := getSpanFromOTel(spanWithRawData.TraceId, spanWithRawData.SpanId, tracesFromOTelStore)
+
+	for _, spanWithRawDataFromPixie := range spansWithHTTPRawData {
+		spanFromOTel := getSpanFromOTel(spanWithRawDataFromPixie.TraceId, spanWithRawDataFromPixie.SpanId, tracesFromOTelStore)
 		if spanFromOTel == nil {
-			continue
+			pixieSpanId := spanWithRawDataFromPixie.SpanId
+			traceId := spanWithRawDataFromPixie.TraceId
+			traceFromOtel := tracesFromOTelStore[typedef.TTraceid(traceId)]
+			rootSpanIdFromOtel := traceFromOtel.RootSpanID
+			otelRootSpan := traceFromOtel.Spans[rootSpanIdFromOtel]
+
+			if otelRootSpan != nil && otelRootSpan.Kind == SERVER && string(otelRootSpan.ParentSpanID) == pixieSpanId &&
+				spanWithRawDataFromPixie.SourceIp == otelRootSpan.SourceIP && spanWithRawDataFromPixie.DestIp == otelRootSpan.DestIP {
+
+				rootSpanByteArr, err := json.Marshal(otelRootSpan)
+				if err != nil {
+					zkLogger.Error(LoggerTag, "Error marshalling otelRootSpan:", err)
+					continue
+				}
+
+				var rootClient stores.SpanFromOTel
+				err = json.Unmarshal(rootSpanByteArr, &rootClient)
+				if err != nil {
+					zkLogger.Error(LoggerTag, "Error marshalling otelRootSpan:", err)
+					continue
+				}
+
+				//rootClient.TraceID = otelRootSpan.TraceID
+				rootClient.ParentSpanID = ""
+				rootClient.SpanID = otelRootSpan.ParentSpanID
+				rootClient.Kind = CLIENT
+				rootClient.Children = []stores.SpanFromOTel{*otelRootSpan}
+				rootClient.SpanForPersistence.SpanID = string(rootClient.SpanID)
+				rootClient.SpanForPersistence.Kind = rootClient.Kind
+				rootClient.SpanForPersistence.ParentSpanID = string(rootClient.ParentSpanID)
+				rootClient.SpanForPersistence.Destination = spanWithRawDataFromPixie.Destination
+				rootClient.SpanForPersistence.Source = ""
+
+				otelRootSpan.SpanForPersistence.IsRoot = false
+
+				// set protocol
+				if protocol, ok := rootClient.GetStringAttribute(stores.OTelAttrProtocol); ok {
+					rootClient.SpanForPersistence.Protocol = protocol
+				}
+
+				traceFromOtel.Spans[otelRootSpan.ParentSpanID] = &rootClient
+				otelRootSpan = &rootClient
+				spanFromOTel = &rootClient
+
+				spanFromOTel.SpanForPersistence = enrichSpanFromHTTPRawData(rootClient.SpanForPersistence, &spanWithRawDataFromPixie)
+				tracesFromOTelStore[typedef.TTraceid(traceId)] = traceFromOtel
+
+			} else {
+				continue
+			}
+		} else {
+			spanFromOTel.SpanForPersistence = enrichSpanFromHTTPRawData(spanFromOTel.SpanForPersistence, &spanWithRawDataFromPixie)
 		}
-		spanFromOTel.SpanForPersistence = enrichSpanFromHTTPRawData(spanFromOTel.SpanForPersistence, spanWithRawData)
 	}
 
 	// mysql
