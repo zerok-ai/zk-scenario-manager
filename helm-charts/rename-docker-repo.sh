@@ -6,4 +6,4 @@ echo "THIS_DIR=$THIS_DIR"
 echo "DOCKER_REPO=$DOCKER_REPO"
 
 # Set the image tag based on the chart version
-perl -pi -e "s/dockerBase: \".*\"/dockerBase: \"$DOCKER_REPO\"/" $THIS_DIR/values.yaml
+perl -pi -e "s#dockerBase: \".*\"#dockerBase: \"$DOCKER_REPO\"#" $THIS_DIR/values.yaml
