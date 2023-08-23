@@ -87,49 +87,50 @@ jobs:
           STEPS_CONTEXT: ${{ toJson(steps) }}
         run: echo "$STEPS_CONTEXT"
 
-#  dev:
-#    uses: zerok-ai/zk-scenario-manager/.github/workflows/zk-dev.yml@helm-push
+  dev:
+    uses: zerok-ai/zk-scenario-manager/.github/workflows/zk-dev.yml@helm-push
+    with:
+      VERSION: ${{ needs.init.outputs.VERSION }}
+      GKE_CLUSTER: ${{ needs.init.outputs.CLUSTERNAME }}
+      ENVIRONMENT: ${{ needs.init.outputs.ENVIRONMENT }}
+    secrets:
+      GKE_SA_KEY: ${{ secrets.GKE_SA_KEY }}
+    needs: init
+
+#  build-push:
+#    uses: zerok-ai/zk-scenario-manager/.github/workflows/zk-build-push.yml@helm-push
 #    with:
 #      VERSION: ${{ needs.init.outputs.VERSION }}
-#      GKE_CLUSTER: ${{ needs.init.outputs.CLUSTERNAME }}
 #      ENVIRONMENT: ${{ needs.init.outputs.ENVIRONMENT }}
+#      DOCKER_IDENTIFIER: ${{ needs.init.outputs.CLUSTERNAME }}
 #    secrets:
 #      GKE_SA_KEY: ${{ secrets.GKE_SA_KEY }}
 #    needs: init
-
-  build-push:
-    uses: zerok-ai/zk-scenario-manager/.github/workflows/zk-build-push.yml@helm-push
-    with:
-      VERSION: ${{ needs.init.outputs.VERSION }}
-      ENVIRONMENT: ${{ needs.init.outputs.ENVIRONMENT }}
-      DOCKER_IDENTIFIER: ${{ needs.init.outputs.CLUSTERNAME }}
-    secrets:
-      GKE_SA_KEY: ${{ secrets.GKE_SA_KEY }}
-    needs: init
-
-  migration-build-push:
-    uses: zerok-ai/zk-scenario-manager/.github/workflows/zk-migrations.yml@helm-push
-    with:
-      VERSION: ${{ needs.init.outputs.VERSION }}
-      ENVIRONMENT: ${{ needs.init.outputs.ENVIRONMENT }}
-      DOCKER_IDENTIFIER: ${{ needs.init.outputs.CLUSTERNAME }}
-    secrets:
-      GKE_SA_KEY: ${{ secrets.GKE_SA_KEY }}
-    needs: init
-
-  helm-push:
-    uses: zerok-ai/zk-scenario-manager/.github/workflows/zk-helm-publish.yml@helm-push
-    with:
-      HELM_VERSION: ${{ needs.init.outputs.VERSION }}
-      ENVIRONMENT: ${{ needs.init.outputs.ENVIRONMENT }}
-      DOCKER_IDENTIFIER: ${{ needs.init.outputs.CLUSTERNAME }}
-    secrets:
-      AWS_ACCESS_ID: ${{ secrets.AWS_ACCESS_ID }}
-      AWS_SECRET_KEY: ${{ secrets.AWS_SECRET_KEY }}
-    needs: [ init,build-push,migration-build-push ]
+#
+#  migration-build-push:
+#    uses: zerok-ai/zk-scenario-manager/.github/workflows/zk-migrations.yml@helm-push
+#    with:
+#      VERSION: ${{ needs.init.outputs.VERSION }}
+#      ENVIRONMENT: ${{ needs.init.outputs.ENVIRONMENT }}
+#      DOCKER_IDENTIFIER: ${{ needs.init.outputs.CLUSTERNAME }}
+#    secrets:
+#      GKE_SA_KEY: ${{ secrets.GKE_SA_KEY }}
+#    needs: init
+#
+#  helm-push:
+#    uses: zerok-ai/zk-scenario-manager/.github/workflows/zk-helm-publish.yml@helm-push
+#    with:
+#      HELM_VERSION: ${{ needs.init.outputs.VERSION }}
+#      ENVIRONMENT: ${{ needs.init.outputs.ENVIRONMENT }}
+#      DOCKER_IDENTIFIER: ${{ needs.init.outputs.CLUSTERNAME }}
+#    secrets:
+#      AWS_ACCESS_ID: ${{ secrets.AWS_ACCESS_ID }}
+#      AWS_SECRET_KEY: ${{ secrets.AWS_SECRET_KEY }}
+#    needs: [ init,build-push,migration-build-push ]
 
   deploy:
-    needs: [ init,build-push,migration-build-push ]
+#    needs: [ init,build-push,migration-build-push ]
+    needs: [ init,dev ]
     env:
       CLUSTERNAME: ${{ needs.init.outputs.CLUSTERNAME }}
       VERSION: ${{ needs.init.outputs.VERSION }}
