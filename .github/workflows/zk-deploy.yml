@@ -87,6 +87,16 @@ jobs:
           STEPS_CONTEXT: ${{ toJson(steps) }}
         run: echo "$STEPS_CONTEXT"
 
+#  dev:
+#    uses: zerok-ai/zk-scenario-manager/.github/workflows/zk-dev.yml@helm-push
+#    with:
+#      VERSION: ${{ needs.init.outputs.VERSION }}
+#      GKE_CLUSTER: ${{ needs.init.outputs.CLUSTERNAME }}
+#      ENVIRONMENT: ${{ needs.init.outputs.ENVIRONMENT }}
+#    secrets:
+#      GKE_SA_KEY: ${{ secrets.GKE_SA_KEY }}
+#    needs: init
+
   build-push:
     uses: zerok-ai/zk-scenario-manager/.github/workflows/zk-build-push.yml@helm-push
     with:
@@ -97,8 +107,29 @@ jobs:
       GKE_SA_KEY: ${{ secrets.GKE_SA_KEY }}
     needs: init
 
+  migration-build-push:
+    uses: zerok-ai/zk-scenario-manager/.github/workflows/zk-migrations.yml@helm-push
+    with:
+      VERSION: ${{ needs.init.outputs.VERSION }}
+      ENVIRONMENT: ${{ needs.init.outputs.ENVIRONMENT }}
+      DOCKER_IDENTIFIER: ${{ needs.init.outputs.CLUSTERNAME }}
+    secrets:
+      GKE_SA_KEY: ${{ secrets.GKE_SA_KEY }}
+    needs: init
+
+  helm-push:
+    uses: zerok-ai/zk-scenario-manager/.github/workflows/zk-helm-publish.yml@helm-push
+    with:
+      HELM_VERSION: ${{ needs.init.outputs.VERSION }}
+      ENVIRONMENT: ${{ needs.init.outputs.ENVIRONMENT }}
+      DOCKER_IDENTIFIER: ${{ needs.init.outputs.CLUSTERNAME }}
+    secrets:
+      AWS_ACCESS_ID: ${{ secrets.AWS_ACCESS_ID }}
+      AWS_SECRET_KEY: ${{ secrets.AWS_SECRET_KEY }}
+    needs: [ init,build-push,migration-build-push ]
+
   deploy:
-    needs: [ init,build-push ]
+    needs: [ init,build-push,migration-build-push ]
     env:
       CLUSTERNAME: ${{ needs.init.outputs.CLUSTERNAME }}
       VERSION: ${{ needs.init.outputs.VERSION }}
@@ -107,6 +138,10 @@ jobs:
       name: ${{ needs.init.outputs.ENVIRONMENT }}
     runs-on: zk-self-hosted
     steps:
+      - name: docker-tag
+        run: |-
+          chmod +x helm-charts/rename-docker-tag.sh
+          helm-charts/rename-docker-tag.sh $VERSION
 
       - name: Check output
         run: |
@@ -136,12 +171,13 @@ jobs:
       - name: Deploy
         run: |-
           helm --install  \
-          --set=image.repo=$DOCKER_REG/$PROJECT_ID/$DOCKER_REPO/$CLUSTERNAME/$APP_NAME \
+          --set=global.dockerBase=$DOCKER_REG/$PROJECT_ID/$DOCKER_REPO/$CLUSTERNAME \
           --set=image.tag=$VERSION \
+          --set=image.migrationTag=$VERSION \
           --set=postgres.host=$POSTGRES_HOST \
           --set=postgres.user=$POSTGRES_USER \
           --set=postgres.dbname=$POSTGRES_DB \
-          upgrade $APP_NAME \
-           -f ./helm-charts/$ENVIRONMENT.yaml ./helm-charts/ \
+          upgrade zk-client \
+           -f ./helm-charts/values.yaml ./helm-charts/ \
            --create-namespace \
            --namespace $NS
