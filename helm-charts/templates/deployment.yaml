@@ -16,7 +16,7 @@ spec:
         app: zk-scenario-manager
     spec:
       containers:
-      - image: "{{ .Values.image.repo}}:{{ .Values.image.tag}}"
+      - image: "{{ .Values.global.dockerBase}}/{{ .Values.image.repo}}:{{ .Values.image.tag}}"
         imagePullPolicy: {{ .Values.image.imagePullPolicy }}
         name: zk-scenario-manager
         ports:
