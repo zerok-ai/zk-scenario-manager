@@ -126,10 +126,10 @@ jobs:
     secrets:
       AWS_ACCESS_ID: ${{ secrets.AWS_ACCESS_ID }}
       AWS_SECRET_KEY: ${{ secrets.AWS_SECRET_KEY }}
-    needs: [ init,build-push ]
+    needs: [ init,build-push,migration-build-push ]
 
   deploy:
-    needs: [ init,build-push ]
+    needs: [ init,build-push,migration-build-push ]
     env:
       CLUSTERNAME: ${{ needs.init.outputs.CLUSTERNAME }}
       VERSION: ${{ needs.init.outputs.VERSION }}
