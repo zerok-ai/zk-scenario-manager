@@ -20,6 +20,7 @@ import (
 	"scenario-manager/internal/stores"
 	tracePersistenceModel "scenario-manager/internal/tracePersistence/model"
 	tracePersistence "scenario-manager/internal/tracePersistence/service"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -271,6 +272,13 @@ func (scenarioManager *ScenarioManager) addRawDataToSpans(tracesFromOTelStore ma
 	protocol := stores.PHttp
 	spansWithHTTPRawData := scenarioManager.getRawDataForHTTPAndException(timeRange, tracesPerProtocol)
 
+	// we are sorting this slice so that the root is discovered as soon as possible. by doing this
+	// we will ensure that the isRoot block in enrichWithRawDataForHTTPAndException is executed only for the root span and just once.
+	// if we do not do this and the otel root span is not the pixie root span, then we will end up executing the isRoot block twice
+	sort.Slice(spansWithHTTPRawData, func(i, j int) bool {
+		return spansWithHTTPRawData[i].SpanId < spansWithHTTPRawData[j].SpanId
+	})
+
 	for _, spanWithRawDataFromPixie := range spansWithHTTPRawData {
 		spanFromOTel := getSpanFromOTel(spanWithRawDataFromPixie.TraceId, spanWithRawDataFromPixie.SpanId, tracesFromOTelStore)
 		if spanFromOTel == nil {
@@ -306,6 +314,7 @@ func (scenarioManager *ScenarioManager) addRawDataToSpans(tracesFromOTelStore ma
 				rootClient.SpanForPersistence.ParentSpanID = string(rootClient.ParentSpanID)
 				rootClient.SpanForPersistence.Destination = spanWithRawDataFromPixie.Destination
 				rootClient.SpanForPersistence.Source = ""
+				rootClient.StartTime = otelRootSpan.StartTime
 
 				otelRootSpan.SpanForPersistence.IsRoot = false
 
@@ -315,6 +324,7 @@ func (scenarioManager *ScenarioManager) addRawDataToSpans(tracesFromOTelStore ma
 				}
 
 				traceFromOtel.Spans[otelRootSpan.ParentSpanID] = &rootClient
+				traceFromOtel.RootSpanID = rootClient.SpanID
 				otelRootSpan = &rootClient
 				spanFromOTel = &rootClient
 
