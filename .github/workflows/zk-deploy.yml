@@ -176,7 +176,7 @@ jobs:
           --set=postgres.host=$POSTGRES_HOST \
           --set=postgres.user=$POSTGRES_USER \
           --set=postgres.dbname=$POSTGRES_DB \
-          upgrade $APP_NAME \
+          upgrade zk-client \
            -f ./helm-charts/$ENVIRONMENT.yaml ./helm-charts/ \
            --create-namespace \
            --namespace $NS
