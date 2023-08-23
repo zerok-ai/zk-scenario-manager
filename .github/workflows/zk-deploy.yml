@@ -173,10 +173,11 @@ jobs:
           helm --install  \
           --set=global.dockerBase=$DOCKER_REG/$PROJECT_ID/$DOCKER_REPO/$CLUSTERNAME \
           --set=image.tag=$VERSION \
+          --set=image.migrationTag=$VERSION \
           --set=postgres.host=$POSTGRES_HOST \
           --set=postgres.user=$POSTGRES_USER \
           --set=postgres.dbname=$POSTGRES_DB \
           upgrade zk-client \
-           -f ./helm-charts/$ENVIRONMENT.yaml ./helm-charts/ \
+           -f ./helm-charts/values.yaml ./helm-charts/ \
            --create-namespace \
            --namespace $NS
