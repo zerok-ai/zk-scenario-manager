@@ -32,7 +32,7 @@ docker-push:
 # build app image
 docker-build-gke: IMAGE_PREFIX := $(LOCATION)-docker.pkg.dev/$(PROJECT_ID)/$(REPOSITORY)/
 docker-build-gke: ARCH := GOARCH=amd64
-docker-build-gke: DockerFile := -f DockerFile
+docker-build-gke: DockerFile := -f Dockerfile
 docker-build-gke: docker-build
 
 # build migration image
