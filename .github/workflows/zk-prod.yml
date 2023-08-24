@@ -34,12 +34,14 @@ jobs:
       ENVIRONMENT: ${{ github.event.inputs.ENV }}
       GIT_TAG: ${{ github.ref }}
       DOCKER_TAG: ${{ github.event.inputs.DOCKER_TAG }}
+    outputs:
+      ENVIRONMENT: ${{ steps.extractEnvAndVersion.outputs.TAG_ENV }}
+      VERSION: ${{ steps.extractEnvAndVersion.outputs.TAG_VERSION }}
 
   test:
     needs: init
     runs-on: zk-self-hosted
     env:
-      CLUSTERNAME: ${{ needs.init.outputs.CLUSTERNAME }}
       VERSION: ${{ needs.init.outputs.VERSION }}
       ENVIRONMENT: ${{ needs.init.outputs.ENVIRONMENT }}
     steps:
