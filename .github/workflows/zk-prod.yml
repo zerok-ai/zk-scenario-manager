@@ -37,11 +37,14 @@ jobs:
 
   test:
     need: init
+    runs-on: zk-self-hosted
     env:
       CLUSTERNAME: ${{ needs.init.outputs.CLUSTERNAME }}
       VERSION: ${{ needs.init.outputs.VERSION }}
       ENVIRONMENT: ${{ needs.init.outputs.ENVIRONMENT }}
-    run:
-      echo $VERSION
-      echo $ENVIRONMENT
-      echo $CLUSTERNAME
+    steps:
+      - name: docker-tag
+        run: |-
+          echo $VERSION
+          echo $ENVIRONMENT
+          echo $CLUSTERNAME
