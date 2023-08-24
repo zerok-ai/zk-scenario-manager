@@ -45,7 +45,7 @@ env:
 
 jobs:
   init:
-    uses: zerok-ai/zk-git-actions/.github/workflows/zk-prod-init.yml@main
+    uses: zerok-ai/zk-git-actions/.github/workflows/zk-dev-init.yml@main
     with:
       GKE_CLUSTER: ${{ github.event.inputs.GKE_CLUSTER }}
       GIT_TAG: ${{ github.ref }}
