@@ -34,9 +34,6 @@ jobs:
       ENVIRONMENT: ${{ github.event.inputs.ENV }}
       GIT_TAG: ${{ github.ref }}
       DOCKER_TAG: ${{ github.event.inputs.DOCKER_TAG }}
-    outputs:
-      ENVIRONMENT: ${{ steps.extractEnvAndVersion.outputs.TAG_ENV }}
-      VERSION: ${{ steps.extractEnvAndVersion.outputs.TAG_VERSION }}
 
   test:
     needs: init
