@@ -34,3 +34,14 @@ jobs:
       ENVIRONMENT: ${{ github.event.inputs.ENV }}
       GIT_TAG: ${{ github.ref }}
       DOCKER_TAG: ${{ github.event.inputs.DOCKER_TAG }}
+
+  test:
+    need: init
+    env:
+      CLUSTERNAME: ${{ needs.init.outputs.CLUSTERNAME }}
+      VERSION: ${{ needs.init.outputs.VERSION }}
+      ENVIRONMENT: ${{ needs.init.outputs.ENVIRONMENT }}
+    run:
+      echo $VERSION
+      echo $ENVIRONMENT
+      echo $CLUSTERNAME
