@@ -36,7 +36,7 @@ jobs:
       DOCKER_TAG: ${{ github.event.inputs.DOCKER_TAG }}
 
   test:
-    need: init
+    needs: init
     runs-on: zk-self-hosted
     env:
       CLUSTERNAME: ${{ needs.init.outputs.CLUSTERNAME }}
