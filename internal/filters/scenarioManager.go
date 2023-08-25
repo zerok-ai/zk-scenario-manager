@@ -481,7 +481,7 @@ func getListOfIssues(scenario *scenarioGeneratorModel.Scenario, spanMap typedef.
 		}
 	}
 
-	// 2. create a set of workspaceIds vs spans
+	// 2. create a set of workloadIds vs spans
 	workloadIdToSpansMap := make(map[typedef.TWorkloadId][]*tracePersistenceModel.Span, 0)
 	for _, span := range spanMap {
 		workloadIdList := span.WorkloadIDList
