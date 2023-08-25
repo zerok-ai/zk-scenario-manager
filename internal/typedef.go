@@ -11,7 +11,7 @@ type TTraceid string
 type TSpanId string
 type TMapOfSpanIdToSpan map[TSpanId]*tracePersistenceModel.Span
 
-type TWorkspaceID string
+type TWorkloadId string
 type TIssueHash string
 
 type TProtocol string
