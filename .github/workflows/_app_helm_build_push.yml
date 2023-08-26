@@ -1,0 +1,55 @@
+#
+name: _App_Helm_Build_Push
+on:
+  workflow_call:
+    inputs:
+      VERSION:
+        type: string
+        default: 'latest'
+      ENVIRONMENT:
+        type: string
+        default: 'poc'
+      DOCKER_IDENTIFIER:
+        type: string
+        default: 'prod'
+    secrets:
+      AWS_ACCESS_ID:
+        required: true
+      AWS_SECRET_KEY:
+        required: true
+      GKE_SA_KEY:
+        required: true
+
+jobs:
+
+  # build application and push docker image to docker repository
+  build-push:
+    uses: zerok-ai/zk-scenario-manager/.github/workflows/_build-push.yml@helm-push
+    with:
+      VERSION: ${{ inputs.VERSION }}
+      ENVIRONMENT: ${{ inputs.ENVIRONMENT }}
+      DOCKER_IDENTIFIER: ${{ inputs.DOCKER_IDENTIFIER }}
+    secrets:
+      GKE_SA_KEY: ${{ secrets.GKE_SA_KEY }}
+
+  # build migration image and push docker image to docker repository
+  migration-build-push:
+    uses: zerok-ai/zk-scenario-manager/.github/workflows/_build-push-migration.yml@helm-push
+    with:
+      VERSION: ${{ inputs.VERSION }}
+      ENVIRONMENT: ${{ inputs.ENVIRONMENT }}
+      DOCKER_IDENTIFIER: ${{ inputs.DOCKER_IDENTIFIER }}
+    secrets:
+      GKE_SA_KEY: ${{ secrets.GKE_SA_KEY }}
+
+  # build helm charts and publish to helm repository
+  helm-push:
+    uses: zerok-ai/zk-scenario-manager/.github/workflows/_helm-publish.yml@helm-push
+    with:
+      HELM_VERSION: ${{ inputs.VERSION }}
+      ENVIRONMENT: ${{ inputs.ENVIRONMENT }}
+      DOCKER_IDENTIFIER: ${{ inputs.DOCKER_IDENTIFIER }}
+    secrets:
+      AWS_ACCESS_ID: ${{ secrets.AWS_ACCESS_ID }}
+      AWS_SECRET_KEY: ${{ secrets.AWS_SECRET_KEY }}
+    needs: [ build-push,migration-build-push ]

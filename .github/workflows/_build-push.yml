@@ -1,4 +1,4 @@
-name: build-push
+name: _build-push
 on:
   workflow_call:
     inputs:
@@ -60,13 +60,6 @@ jobs:
 
       - name: Build
         run: go build -v -o zk-scenario-manager cmd/main.go
-
-      - name: Uploading Helm Charts (for deploy)
-        uses: actions/upload-artifact@v3
-        with:
-          name: helm-charts
-          path: |
-            helm-charts
 
       - name: Uploading Build files (for docker push)
         uses: actions/upload-artifact@v3

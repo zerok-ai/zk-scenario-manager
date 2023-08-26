@@ -1,4 +1,5 @@
-name: helm-publish
+# Common action: to be called by other actions
+name: _helm-publish
 on:
   workflow_call:
     inputs:
@@ -51,7 +52,14 @@ jobs:
         run: |-
           chmod +x helm-charts/rename-docker-repo.sh
           helm-charts/rename-docker-repo.sh $DOCKER_REG/$PROJECT_ID/$DOCKER_REPO/$DOCKER_IDENTIFIER
-          
+
+      - name: Uploading Helm Charts (for deploy)
+        uses: actions/upload-artifact@v3
+        with:
+          name: helm-charts
+          path: |
+            helm-charts
+
       - name: helm package
         run: |-
               helm dependency update helm-charts

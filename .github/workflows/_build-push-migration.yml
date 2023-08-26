@@ -1,4 +1,5 @@
-name: migrations-build-push
+# Common action: to be called by other actions
+name: _build-push-migrations
 on:
   workflow_call:
     inputs:
@@ -15,21 +16,13 @@ on:
       GKE_SA_KEY:
         required: true
 env:
-  ENV: ${{ github.event.inputs.ENV }}
-  DOCKER_TAG: ${{ github.event.inputs.DOCKER_TAG }}
-  GOOS: ${{ vars.GOOS }}
-  GOARCH: ${{ vars.GOARCH }}
-  CGO_ENABLED: ${{ vars.CGO_ENABLED }}
   GKE_SA_KEY: ${{ secrets.GKE_SA_KEY }}
-  DOCKER_REG: ${{ vars.DOCKER_REG }}
+  MIGRATIONS_APP_NAME: ${{ vars.APP_NAME }}-migration
   PROJECT_ID: ${{ vars.PROJECT_ID }}
   DOCKER_REPO: ${{ vars.DOCKER_REPO }}
-  MIGRATIONS_APP_NAME: ${{ vars.APP_NAME }}-migration
-  GOPRIVATE: ${{ vars.GOPRIVATE }}
-  TOKEN: ${{ secrets.GITPAT }}
-  VERSION: ${{ inputs.VERSION }}
-  ENVIRONMENT: ${{ inputs.ENVIRONMENT }}
+  DOCKER_REG: ${{ vars.DOCKER_REG }}
   DOCKER_IDENTIFIER: ${{ inputs.DOCKER_IDENTIFIER }}
+  VERSION: ${{ inputs.VERSION }}
 
 jobs:
   migrations-docker:
