@@ -24,7 +24,7 @@ jobs:
       DOCKER_TAG: ${{ github.event.inputs.DOCKER_TAG }}
 
   app-helm-build-push:
-    uses: zerok-ai/zk-scenario-manager/.github/workflows/_app_helm_build_push.yml@helm-push
+    uses: zerok-ai/zk-scenario-manager/.github/workflows/_app-helm-build-push.yml@helm-push
     with:
       VERSION: ${{ needs.init.outputs.VERSION }}
       ENVIRONMENT: ${{ needs.init.outputs.ENVIRONMENT }}
