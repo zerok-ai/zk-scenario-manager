@@ -1,6 +1,6 @@
 # Purpose: This action is triggered manually and is meant for the case where
 # the build happens through this action and the deployment is done through CLI
-name: dev (build & push)
+name: dev-build-push
 on:
   workflow_dispatch:
     inputs:
@@ -27,6 +27,8 @@ jobs:
       VERSION: ${{ needs.init.outputs.VERSION }}
       ENVIRONMENT: ${{ needs.init.outputs.ENVIRONMENT }}
       DOCKER_IDENTIFIER: ${{ needs.init.outputs.CLUSTERNAME }}
+      HELM_BUCKET_NAME: ${{ needs.init.outputs.HELM_BUCKET_NAME }}
+      HELM_BUCKET_URL: ${{ needs.init.outputs.HELM_BUCKET_URL }}
     secrets:
       GKE_SA_KEY: ${{ secrets.GKE_SA_KEY }}
       AWS_ACCESS_ID: ${{ secrets.AWS_ACCESS_ID }}

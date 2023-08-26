@@ -29,6 +29,8 @@ jobs:
       VERSION: ${{ needs.init.outputs.VERSION }}
       ENVIRONMENT: ${{ needs.init.outputs.ENVIRONMENT }}
       DOCKER_IDENTIFIER: ${{ needs.init.outputs.ENVIRONMENT }}
+      HELM_BUCKET_NAME: ${{ needs.init.outputs.HELM_BUCKET_NAME }}
+      HELM_BUCKET_URL: ${{ needs.init.outputs.HELM_BUCKET_URL }}
     secrets:
       GKE_SA_KEY: ${{ secrets.GKE_SA_KEY }}
       AWS_ACCESS_ID: ${{ secrets.AWS_ACCESS_ID }}
