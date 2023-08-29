@@ -3,20 +3,20 @@
 name: dev-build-push-deploy
 on:
   push:
-    tags: #r/<CLUSTER>/<DOCKER-TAG-OR-VERSION>
-      - 'r/**'
+    tags: #dev/<CLUSTER>/<DOCKER-TAG-OR-VERSION>
+      - 'dev/**'
 
-  # TODO: delete workflow_dispatch. It's for testing only
-  workflow_dispatch:
-    inputs:
-      DOCKER_TAG:
-        description: 'Docker Image Tag'
-        required: true
-        default: '0.0.9-helmtest'
-      GKE_CLUSTER:
-        description: 'Cluster Name'
-        required: true
-        default: 'devclient03'
+  #  # Uncomment the following code for testing
+#  workflow_dispatch:
+#    inputs:
+#      DOCKER_TAG:
+#        description: 'Docker Image Tag'
+#        required: true
+#        default: '0.0.9-helmtest'
+#      GKE_CLUSTER:
+#        description: 'Cluster Name'
+#        required: true
+#        default: 'devclient03'
 env:
   DOCKER_REG: ${{ vars.DOCKER_REG }}
   NS: ${{ vars.NS }}

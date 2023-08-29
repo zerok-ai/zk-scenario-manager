@@ -4,17 +4,17 @@ on:
     tags: #r/<ENVIRONMENT>/<DOCKER-TAG-OR-VERSION>
       - 'prod/**'
 
-  # TODO: delete workflow_dispatch. It's for testing only
-  workflow_dispatch:
-    inputs:
-      DOCKER_TAG:
-        description: 'Docker Image Tag'
-        required: true
-        default: '0.0.9-helmtest'
-      ENV:
-        description: 'ENV'
-        required: true
-        default: 'poc'
+#  # Uncomment the following code for testing
+#  workflow_dispatch:
+#    inputs:
+#      DOCKER_TAG:
+#        description: 'Docker Image Tag'
+#        required: true
+#        default: '0.0.9-helmtest'
+#      ENV:
+#        description: 'ENV'
+#        required: true
+#        default: 'poc'
 jobs:
   init:
     uses: zerok-ai/zk-git-actions/.github/workflows/zk-prod-init.yml@main
