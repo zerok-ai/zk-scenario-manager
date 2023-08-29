@@ -23,17 +23,43 @@ jobs:
       GIT_TAG: ${{ github.ref }}
       DOCKER_TAG: ${{ github.event.inputs.DOCKER_TAG }}
 
-  app-build-push:
-    uses: zerok-ai/zk-scenario-manager/.github/workflows/_app-build-push.yml@helm-push
+  build-push:
+    uses: zerok-ai/zk-git-actions/.github/workflows/zk-build-push.yml@main
     with:
       VERSION: ${{ needs.init.outputs.VERSION }}
       ENVIRONMENT: ${{ needs.init.outputs.ENVIRONMENT }}
-      DOCKER_IDENTIFIER: ${{ needs.init.outputs.ENVIRONMENT }}
+      DOCKER_IDENTIFIER: ${{ needs.init.outputs.CLUSTERNAME }}
+      PROJECT_ID: ${{ needs.init.outputs.PROJECT_ID }}
+    secrets:
+      GKE_SA_KEY: ${{ secrets.GKE_SA_KEY }}
+    needs: init
+
+  # build migration image and push docker image to docker repository
+  migration-build-push:
+    uses: zerok-ai/zk-git-actions/.github/workflows/zk-build-push.yml@main
+    with:
+      VERSION: ${{ needs.init.outputs.VERSION }}
+      ENVIRONMENT: ${{ needs.init.outputs.ENVIRONMENT }}
+      DOCKER_IDENTIFIER: ${{ needs.init.outputs.CLUSTERNAME }}
+      PROJECT_ID: ${{ needs.init.outputs.PROJECT_ID }}
+      MAKE_TARGET: 'ci-cd-build-migration'
+      DOCKER_FILE_NAME: 'Dockerfile-Migration'
+      APP_NAME_VAR: 'APP_NAME_MIGRATION'
+    secrets:
+      GKE_SA_KEY: ${{ secrets.GKE_SA_KEY }}
+    needs: init
+
+  # build helm charts and publish to helm repository
+  helm-push:
+    uses: zerok-ai/zk-git-actions/.github/workflows/zk-helm-publish.yml@main
+    with:
+      HELM_VERSION: ${{ needs.init.outputs.VERSION }}
+      ENVIRONMENT: ${{ needs.init.outputs.ENVIRONMENT }}
+      DOCKER_IDENTIFIER: ${{ needs.init.outputs.CLUSTERNAME }}
       HELM_BUCKET_NAME: ${{ needs.init.outputs.HELM_BUCKET_NAME }}
       HELM_BUCKET_URL: ${{ needs.init.outputs.HELM_BUCKET_URL }}
       PROJECT_ID: ${{ needs.init.outputs.PROJECT_ID }}
     secrets:
-      GKE_SA_KEY: ${{ secrets.GKE_SA_KEY_PROD }}
       AWS_ACCESS_ID: ${{ secrets.AWS_ACCESS_ID }}
       AWS_SECRET_KEY: ${{ secrets.AWS_SECRET_KEY }}
-    needs: init
+    needs: [init,build-push,migration-build-push]

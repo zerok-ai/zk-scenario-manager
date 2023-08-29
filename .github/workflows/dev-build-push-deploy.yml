@@ -35,74 +35,55 @@ jobs:
       GIT_TAG: ${{ github.ref }}
       DOCKER_TAG: ${{ github.event.inputs.DOCKER_TAG }}
 
-  app-build-push:
-    uses: zerok-ai/zk-scenario-manager/.github/workflows/_app-build-push.yml@helm-push
+  build-push:
+    uses: zerok-ai/zk-git-actions/.github/workflows/zk-build-push.yml@main
     with:
       VERSION: ${{ needs.init.outputs.VERSION }}
+      ENVIRONMENT: ${{ needs.init.outputs.ENVIRONMENT }}
+      DOCKER_IDENTIFIER: ${{ needs.init.outputs.CLUSTERNAME }}
+      PROJECT_ID: ${{ needs.init.outputs.PROJECT_ID }}
+    secrets:
+      GKE_SA_KEY: ${{ secrets.GKE_SA_KEY }}
+    needs: init
+
+  # build migration image and push docker image to docker repository
+  migration-build-push:
+    uses: zerok-ai/zk-git-actions/.github/workflows/zk-build-push.yml@main
+    with:
+      VERSION: ${{ needs.init.outputs.VERSION }}
+      ENVIRONMENT: ${{ needs.init.outputs.ENVIRONMENT }}
+      DOCKER_IDENTIFIER: ${{ needs.init.outputs.CLUSTERNAME }}
+      PROJECT_ID: ${{ needs.init.outputs.PROJECT_ID }}
+      MAKE_TARGET: 'ci-cd-build-migration'
+      DOCKER_FILE_NAME: 'Dockerfile-Migration'
+      APP_NAME_VAR: 'APP_NAME_MIGRATION'
+    secrets:
+      GKE_SA_KEY: ${{ secrets.GKE_SA_KEY }}
+    needs: init
+
+  # build helm charts and publish to helm repository
+  helm-push:
+    uses: zerok-ai/zk-git-actions/.github/workflows/zk-helm-publish.yml@main
+    with:
+      HELM_VERSION: ${{ needs.init.outputs.VERSION }}
       ENVIRONMENT: ${{ needs.init.outputs.ENVIRONMENT }}
       DOCKER_IDENTIFIER: ${{ needs.init.outputs.CLUSTERNAME }}
       HELM_BUCKET_NAME: ${{ needs.init.outputs.HELM_BUCKET_NAME }}
       HELM_BUCKET_URL: ${{ needs.init.outputs.HELM_BUCKET_URL }}
       PROJECT_ID: ${{ needs.init.outputs.PROJECT_ID }}
     secrets:
-      GKE_SA_KEY: ${{ secrets.GKE_SA_KEY_DEV }}
       AWS_ACCESS_ID: ${{ secrets.AWS_ACCESS_ID }}
       AWS_SECRET_KEY: ${{ secrets.AWS_SECRET_KEY }}
-    needs: init
+    needs: [init,build-push,migration-build-push]
 
   deploy:
     uses: zerok-ai/zk-git-actions/.github/workflows/zk-deploy.yml@main
     with:
-      CLUSTERNAME: GKE_CLUSTER
+      CLUSTERNAME: ${{ github.event.inputs.GKE_CLUSTER }}
       VERSION: ${{ needs.init.outputs.VERSION }}
+      MIGRATION_VERSION: ${{ needs.init.outputs.VERSION }}
       PROJECT_ID: ${{ needs.init.outputs.PROJECT_ID }}
       ENVIRONMENT: ${{ needs.init.outputs.ENVIRONMENT }}
-    needs: app-build-push
-
-#  deploy:
-#    needs: [ init,app-helm-build-push ]
-#    env:
-#      CLUSTERNAME: ${{ needs.init.outputs.CLUSTERNAME }}
-#      VERSION: ${{ needs.init.outputs.VERSION }}
-#      PROJECT_ID: ${{ needs.init.outputs.PROJECT_ID }}
-#    environment:
-#      name: ${{ needs.init.outputs.ENVIRONMENT }}
-#    runs-on: zk-self-hosted
-#    steps:
-#      - name: print-debug-vars
-#        run: |
-#          echo "GIT_TAG=$GIT_TAG"
-#          echo "DOCKER_TAG=$VERSION"
-#          echo "GITHUB_SHA=$GITHUB_SHA"
-#          echo "DOCKER_REPO=$DOCKER_REPO"
-#          echo "GKE_ZONE=$GKE_ZONE"
-#
-#      - id: 'auth'
-#        name: 'Authenticate to Google Cloud'
-#        uses: 'google-github-actions/auth@v0'
-#        with:
-#          credentials_json: '${{ secrets.GKE_SA_KEY_DEV }}'
-#
-#      - id: 'get-credentials'
-#        uses: 'google-github-actions/get-gke-credentials@v1'
-#        with:
-#          cluster_name: '${{ needs.init.outputs.CLUSTERNAME }}'
-#          location: '${{ env.GKE_ZONE }}'
-#
-#      - name: Checkout
-#        uses: actions/checkout@v3
-#
-#      - name: Deploy
-#        run: |-
-#          helm --install  \
-#          --set=global.dockerBase=$DOCKER_REG/$PROJECT_ID/$DOCKER_REPO/$CLUSTERNAME \
-#          --set=image.tag=$VERSION \
-#          --set=image.migrationTag=$VERSION \
-#          --set=postgres.host=$POSTGRES_HOST \
-#          --set=postgres.user=$POSTGRES_USER \
-#          --set=postgres.dbname=$POSTGRES_DB \
-#          upgrade $APP_NAME \
-#           -f ./helm-charts/values.yaml ./helm-charts/ \
-#           --create-namespace \
-#           --namespace $NS
-#
+    secrets:
+      GKE_SA_KEY: ${{ secrets.GKE_SA_KEY_DEV }}
+    needs: [init,build-push,migration-build-push]
