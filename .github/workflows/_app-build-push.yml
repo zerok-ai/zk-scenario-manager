@@ -1,5 +1,5 @@
 #
-name: _App_Helm_Build_Push
+name: _app_helm_build_push
 on:
   workflow_call:
     inputs:
