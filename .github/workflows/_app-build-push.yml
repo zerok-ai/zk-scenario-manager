@@ -16,6 +16,8 @@ on:
         type: string
       HELM_BUCKET_URL:
         type: string
+      PROJECT_ID:
+        type: string
     secrets:
       AWS_ACCESS_ID:
         required: true
@@ -26,35 +28,41 @@ on:
 
 jobs:
 
-  # build application and push docker image to docker repository
+  # build app image and push docker image to docker repository
   build-push:
-    uses: zerok-ai/zk-scenario-manager/.github/workflows/_build-push.yml@helm-push
+    uses: zerok-ai/zk-git-actions/.github/workflows/zk-build-push.yml@main
     with:
       VERSION: ${{ inputs.VERSION }}
       ENVIRONMENT: ${{ inputs.ENVIRONMENT }}
       DOCKER_IDENTIFIER: ${{ inputs.DOCKER_IDENTIFIER }}
+      PROJECT_ID: ${{ inputs.PROJECT_ID }}
     secrets:
       GKE_SA_KEY: ${{ secrets.GKE_SA_KEY }}
 
   # build migration image and push docker image to docker repository
   migration-build-push:
-    uses: zerok-ai/zk-scenario-manager/.github/workflows/_build-push-migration.yml@helm-push
+    uses: zerok-ai/zk-git-actions/.github/workflows/zk-build-push.yml@main
     with:
       VERSION: ${{ inputs.VERSION }}
       ENVIRONMENT: ${{ inputs.ENVIRONMENT }}
       DOCKER_IDENTIFIER: ${{ inputs.DOCKER_IDENTIFIER }}
+      PROJECT_ID: ${{ inputs.PROJECT_ID }}
+      MAKE_TARGET: 'ci-cd-build-migration'
+      DOCKER_FILE_NAME: 'Dockerfile-Migration'
+      APP_NAME_VAR: 'APP_NAME_MIGRATION'
     secrets:
       GKE_SA_KEY: ${{ secrets.GKE_SA_KEY }}
 
   # build helm charts and publish to helm repository
   helm-push:
-    uses: zerok-ai/zk-scenario-manager/.github/workflows/_helm-publish.yml@helm-push
+    uses: zerok-ai/zk-git-actions/.github/workflows/zk-helm-publish.yml@main
     with:
       HELM_VERSION: ${{ inputs.VERSION }}
       ENVIRONMENT: ${{ inputs.ENVIRONMENT }}
       DOCKER_IDENTIFIER: ${{ inputs.DOCKER_IDENTIFIER }}
       HELM_BUCKET_NAME: ${{ inputs.HELM_BUCKET_NAME }}
       HELM_BUCKET_URL: ${{ inputs.HELM_BUCKET_URL }}
+      PROJECT_ID: ${{ inputs.PROJECT_ID }}
     secrets:
       AWS_ACCESS_ID: ${{ secrets.AWS_ACCESS_ID }}
       AWS_SECRET_KEY: ${{ secrets.AWS_SECRET_KEY }}

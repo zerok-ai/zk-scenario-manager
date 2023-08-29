@@ -7,11 +7,11 @@ on:
       DOCKER_TAG:
         description: 'Docker Image Tag'
         required: true
-        default: 'latest'
+        default: '0.0.9-helmtest'
       GKE_CLUSTER:
         description: 'Cluster Name'
         required: true
-        default: 'pxclient02'
+        default: 'devclient03'
 
 jobs:
   init:
@@ -21,16 +21,17 @@ jobs:
       GIT_TAG: ${{ github.ref }}
       DOCKER_TAG: ${{ github.event.inputs.DOCKER_TAG }}
 
-  app-helm-build-push:
-    uses: zerok-ai/zk-scenario-manager/.github/workflows/_app-helm-build-push.yml@helm-push
+  app-build-push:
+    uses: zerok-ai/zk-scenario-manager/.github/workflows/_app-build-push.yml@helm-push
     with:
       VERSION: ${{ needs.init.outputs.VERSION }}
       ENVIRONMENT: ${{ needs.init.outputs.ENVIRONMENT }}
       DOCKER_IDENTIFIER: ${{ needs.init.outputs.CLUSTERNAME }}
       HELM_BUCKET_NAME: ${{ needs.init.outputs.HELM_BUCKET_NAME }}
       HELM_BUCKET_URL: ${{ needs.init.outputs.HELM_BUCKET_URL }}
+      PROJECT_ID: ${{ needs.init.outputs.PROJECT_ID }}
     secrets:
-      GKE_SA_KEY: ${{ secrets.GKE_SA_KEY }}
+      GKE_SA_KEY: ${{ secrets.GKE_SA_KEY_DEV }}
       AWS_ACCESS_ID: ${{ secrets.AWS_ACCESS_ID }}
       AWS_SECRET_KEY: ${{ secrets.AWS_SECRET_KEY }}
     needs: init
