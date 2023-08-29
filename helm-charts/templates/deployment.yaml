@@ -1,19 +1,22 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
+  name: {{ include "zk-scenario-manager.fullname" . }}
   labels:
     app: zk-scenario-manager
-  name: zk-scenario-manager
+    {{- include "zk-scenario-manager.labels" . | nindent 4 }}
   namespace: zk-client
 spec:
   replicas: 1
   selector:
     matchLabels:
       app: zk-scenario-manager
+      {{- include "zk-scenario-manager.labels" . | nindent 4 }}
   template:
     metadata:
       labels:
         app: zk-scenario-manager
+        {{- include "zk-scenario-manager.labels" . | nindent 4 }}
     spec:
       containers:
       - image: "{{ .Values.global.dockerBase}}/{{ .Values.image.repo}}:{{ .Values.image.tag}}"
@@ -26,13 +29,7 @@ spec:
             path: /healthz
             port: 80
           successThreshold: 3
-        resources:
-          limits:
-            cpu: 200m
-            memory: 128Mi
-          requests:
-            cpu: 100m
-            memory: 64Mi
+        resources: {{- toYaml .Values.zkScenarioManager.resources | nindent 10 }}
         volumeMounts:
         - mountPath: /zk/config
           name: config
@@ -44,5 +41,5 @@ spec:
                 key: postgres-password
       volumes:
       - configMap:
-          name: zk-scenario-manager
+          name: {{ include "zk-scenario-manager.fullname" . }}
         name: config
