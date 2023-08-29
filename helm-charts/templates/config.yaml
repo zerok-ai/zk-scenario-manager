@@ -13,7 +13,7 @@ data:
       host: "{{ .Values.postgres.host }}"
       port: {{ .Values.postgres.port }}
       user: "{{ .Values.postgres.user }}"
-      password: "{{ .Values.postgres.password }}"
+      password: ""
       dbname: "{{ .Values.postgres.dbname }}"
     server:
       host: 0.0.0.0
