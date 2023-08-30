@@ -32,6 +32,14 @@ image:
   migrationRepo: "zk-scenario-manager-migration"
   migrationTag: "latest"
 
+initImage:
+  repo: "us-west1-docker.pkg.dev/zerok-dev/curl/curl"
+  tag: "latest"
+  imagePullPolicy: Always
+  migrationRestartPolicy: Never
+  migrationRepo: "zk-scenario-manager-migration"
+  migrationTag: "latest"
+
 imagePullSecrets: []
 nameOverride: ""
 fullnameOverride: ""
