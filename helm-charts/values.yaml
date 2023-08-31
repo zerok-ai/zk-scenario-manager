@@ -5,6 +5,7 @@
 global:
   dockerBase: "us-west1-docker.pkg.dev/zerok-dev/zk-client"
 
+
 replicaCount: 1
 
 postgres:
@@ -14,8 +15,25 @@ postgres:
   database: "pl"
   user: "postgres"
 
+zkScenarioManager:
+  resources:
+    limits:
+      cpu: 200m
+      memory: 128Mi
+    requests:
+      cpu: 100m
+      memory: 64Mi
+
 image:
   repo: "zk-scenario-manager"
+  tag: "latest"
+  imagePullPolicy: Always
+  migrationRestartPolicy: Never
+  migrationRepo: "zk-scenario-manager-migration"
+  migrationTag: "latest"
+
+initImage:
+  repo: "us-west1-docker.pkg.dev/zerok-dev/curl/curl"
   tag: "latest"
   imagePullPolicy: Always
   migrationRestartPolicy: Never

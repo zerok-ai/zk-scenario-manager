@@ -55,4 +55,7 @@ docker-push-migration-gke: docker-push
 docker-build-push-gke: docker-build-gke docker-push-gke
 docker-build-push-migration-gke: docker-build-migration-gke docker-push-migration-gke
 
+# ------- CI-CD ------------
+ci-cd-build: build
 
+ci-cd-build-migration:

@@ -1,20 +1,44 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
+  name: {{ include "zk-scenario-manager.fullname" . }}
   labels:
     app: zk-scenario-manager
-  name: zk-scenario-manager
+    {{- include "zk-scenario-manager.labels" . | nindent 4 }}
   namespace: zk-client
 spec:
   replicas: 1
   selector:
     matchLabels:
       app: zk-scenario-manager
+      {{- include "zk-scenario-manager.labels" . | nindent 4 }}
   template:
     metadata:
       labels:
         app: zk-scenario-manager
+        {{- include "zk-scenario-manager.labels" . | nindent 4 }}
     spec:
+      initContainers:
+        - command:
+            - sh
+            - -c
+            - 'set -x; URL="https://${SERVICE_NAME}:${SERVICE_PORT}/status"; until [
+            $(curl -m 0.5 -s -o /dev/null -w "%{http_code}" -k ${URL}) -eq 200 ]; do
+            echo "waiting for ${URL}"; sleep 2; done;'
+          name: wsp-wait
+          env:
+            - name: SERVICE_NAME
+              value: zk-operator.zk-client.svc.cluster.local
+            - name: SERVICE_PORT
+              value: 8081
+          image: "{{ .Values.initImage.repo}}:{{ .Values.initImage.tag}}"
+          imagePullPolicy: IfNotPresent
+          resources: { }
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
       containers:
       - image: "{{ .Values.global.dockerBase}}/{{ .Values.image.repo}}:{{ .Values.image.tag}}"
         imagePullPolicy: {{ .Values.image.imagePullPolicy }}
@@ -26,13 +50,7 @@ spec:
             path: /healthz
             port: 80
           successThreshold: 3
-        resources:
-          limits:
-            cpu: 200m
-            memory: 128Mi
-          requests:
-            cpu: 100m
-            memory: 64Mi
+        resources: {{- toYaml .Values.zkScenarioManager.resources | nindent 10 }}
         volumeMounts:
         - mountPath: /zk/config
           name: config
@@ -44,5 +62,5 @@ spec:
                 key: postgres-password
       volumes:
       - configMap:
-          name: zk-scenario-manager
+          name: {{ include "zk-scenario-manager.fullname" . }}
         name: config

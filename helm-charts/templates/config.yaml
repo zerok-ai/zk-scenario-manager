@@ -13,8 +13,11 @@ data:
       host: "{{ .Values.postgres.host }}"
       port: {{ .Values.postgres.port }}
       user: "{{ .Values.postgres.user }}"
-      password: "{{ .Values.postgres.password }}"
+      password: ""
       dbname: "{{ .Values.postgres.dbname }}"
+      max_connections: 5
+      max_idle_connections: 5
+      connection_max_lifetime_in_minutes: 10
     server:
       host: 0.0.0.0
       port: 80
@@ -25,5 +28,5 @@ kind: ConfigMap
 metadata:
   labels:
     app: zk-scenario-manager
-  name: zk-scenario-manager
+    name: {{ include "zk-scenario-manager.fullname" . }}
   namespace: zk-client
