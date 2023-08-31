@@ -30,7 +30,7 @@ spec:
             - name: SERVICE_NAME
               value: zk-operator.zk-client.svc.cluster.local
             - name: SERVICE_PORT
-              value: 8081
+              value: "8081"
           image: "{{ .Values.initImage.repo}}:{{ .Values.initImage.tag}}"
           imagePullPolicy: IfNotPresent
           resources: { }
@@ -60,6 +60,11 @@ spec:
               secretKeyRef:
                 name: postgres
                 key: postgres-password
+          - name: REDIS_PASSWORD # Setting Redis password from Secret
+            valueFrom:
+              secretKeyRef:
+                name: redis
+                key: redis-password
       volumes:
       - configMap:
           name: {{ include "zk-scenario-manager.fullname" . }}

@@ -27,7 +27,7 @@ func GetTraceStore(redisConfig *config.RedisConfig, ttlForTransientSets time.Dur
 	readTimeout := time.Duration(redisConfig.ReadTimeout) * time.Second
 	_redisClient := redis.NewClient(&redis.Options{
 		Addr:        fmt.Sprint(redisConfig.Host, ":", redisConfig.Port),
-		Password:    "",
+		Password:    redisConfig.Password,
 		DB:          redisConfig.DBs[dbName],
 		ReadTimeout: readTimeout,
 	})
