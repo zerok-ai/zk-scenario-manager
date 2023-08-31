@@ -14,14 +14,13 @@ sync:
 	go get -v ./...
 
 build: sync
-	go build -v -o $(NAME) cmd/main.go
+	CGO_ENABLED=0 $(GOOS) $(ARCH) go build -v -o $(NAME) cmd/main.go
 
 run: build
 	go run cmd/main.go -c ./config/config.yaml 2>&1 | grep -v '^(0x'
 
 docker-build: sync
-	CGO_ENABLED=0 GOOS=linux $(ARCH) go build -v -o $(NAME) cmd/main.go
-	docker build --no-cache $(DockerFile) -t $(IMAGE_PREFIX)$(IMAGE_NAME)$(IMAGE_NAME_SUFFIX):$(IMAGE_VERSION) .
+	$(GOOS) $(ARCH) go build -v -o $(NAME) cmd/main.go
 
 docker-push:
 	docker push $(IMAGE_PREFIX)$(IMAGE_NAME)$(IMAGE_NAME_SUFFIX):$(IMAGE_VERSION)
@@ -30,14 +29,16 @@ docker-push:
 # ------- GKE ------------
 
 # build app image
-docker-build-gke: IMAGE_PREFIX := $(LOCATION)-docker.pkg.dev/$(PROJECT_ID)/$(REPOSITORY)/
+docker-build-gke: GOOS := GOOS=linux
 docker-build-gke: ARCH := GOARCH=amd64
+docker-build-gke: IMAGE_PREFIX := $(LOCATION)-docker.pkg.dev/$(PROJECT_ID)/$(REPOSITORY)/
 docker-build-gke: DockerFile := -f Dockerfile
 docker-build-gke: docker-build
 
 # build migration image
-docker-build-migration-gke: IMAGE_PREFIX := $(LOCATION)-docker.pkg.dev/$(PROJECT_ID)/$(REPOSITORY)/
+docker-build-migration-gke: GOOS := GOOS=linux
 docker-build-migration-gke: ARCH := GOARCH=amd64
+docker-build-migration-gke: IMAGE_PREFIX := $(LOCATION)-docker.pkg.dev/$(PROJECT_ID)/$(REPOSITORY)/
 docker-build-migration-gke: DockerFile := -f Dockerfile-Migration
 docker-build-migration-gke: IMAGE_NAME_SUFFIX := $(IMAGE_NAME_MIGRATION_SUFFIX)
 docker-build-migration-gke: docker-build
@@ -56,6 +57,8 @@ docker-build-push-gke: docker-build-gke docker-push-gke
 docker-build-push-migration-gke: docker-build-migration-gke docker-push-migration-gke
 
 # ------- CI-CD ------------
+ci-cd-build: GOOS := GOOS=linux
+ci-cd-build: ARCH := GOARCH=amd64
 ci-cd-build: build
 
 ci-cd-build-migration:
