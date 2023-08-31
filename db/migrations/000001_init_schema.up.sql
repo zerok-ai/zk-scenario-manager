@@ -56,5 +56,5 @@ CREATE TABLE span_raw_data
     is_truncated BOOLEAN,
     req_body     BYTEA,
     resp_body    BYTEA,
-    CONSTRAINT unique_span_trace UNIQUE (span_id, trace_id)
+    CONSTRAINT unique_span_trace UNIQUE (trace_id, span_id)
 );
