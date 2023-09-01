@@ -25,7 +25,7 @@ spec:
             - 'set -x; URL="https://${SERVICE_NAME}:${SERVICE_PORT}/status"; until [
             $(curl -m 0.5 -s -o /dev/null -w "%{http_code}" -k ${URL}) -eq 200 ]; do
             echo "waiting for ${URL}"; sleep 2; done;'
-          name: wsp-wait
+          name: operator-wait
           env:
             - name: SERVICE_NAME
               value: zk-operator.zk-client.svc.cluster.local
