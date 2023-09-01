@@ -23,17 +23,9 @@ func (t TraceStore) Close() {
 
 func GetTraceStore(redisConfig *config.RedisConfig, ttlForTransientSets time.Duration) *TraceStore {
 	dbName := "traces"
-	zkLogger.Debug(LoggerTag, "GetTraceStore: config=", redisConfig, "dbName=", dbName, "dbID=", redisConfig.DBs[dbName])
-	readTimeout := time.Duration(redisConfig.ReadTimeout) * time.Second
-	_redisClient := redis.NewClient(&redis.Options{
-		Addr:        fmt.Sprint(redisConfig.Host, ":", redisConfig.Port),
-		Password:    redisConfig.Password,
-		DB:          redisConfig.DBs[dbName],
-		ReadTimeout: readTimeout,
-	})
-
+	zkLogger.DebugF(LoggerTag, "GetTraceStore: redisConfig=%v", redisConfig)
+	_redisClient := config.GetRedisConnection(dbName, *redisConfig)
 	traceStore := TraceStore{redisClient: _redisClient, ttlForTransientSets: ttlForTransientSets}.initialize()
-
 	return traceStore
 }
 

@@ -60,7 +60,7 @@ spec:
               secretKeyRef:
                 name: postgres
                 key: postgres-password
-          - name: REDIS_PASSWORD # Setting Redis password from Secret
+          - name: ZK_REDIS_PASSWORD # Setting Redis password from Secret
             valueFrom:
               secretKeyRef:
                 name: redis

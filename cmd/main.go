@@ -26,12 +26,11 @@ func main() {
 	zkLogger.Info(LogTag, "********* Initializing Application *********")
 	zkHttpConfig.Init(cfg.Http.Debug)
 	zkLogger.Init(cfg.LogsConfig)
+
 	zkPostgresRepo, err := zkPostgres.NewZkPostgresRepo(cfg.Postgres)
 	if err != nil {
 		panic(err)
 	}
-
-	zkLogger.Debug(LogTag, "Parsed Configuration", cfg)
 
 	tpr := repository.NewTracePersistenceRepo(zkPostgresRepo)
 	tps := service.NewScenarioPersistenceService(tpr)

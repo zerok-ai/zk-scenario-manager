@@ -14,7 +14,7 @@ sync:
 	go get -v ./...
 
 build: sync
-	CGO_ENABLED=0 $(GOOS) $(ARCH) go build -v -o $(NAME) cmd/main.go
+	go build -v -o $(NAME) cmd/main.go
 
 run: build
 	go run cmd/main.go -c ./config/config.yaml 2>&1 | grep -v '^(0x'
@@ -57,8 +57,7 @@ docker-build-push-gke: docker-build-gke docker-push-gke
 docker-build-push-migration-gke: docker-build-migration-gke docker-push-migration-gke
 
 # ------- CI-CD ------------
-ci-cd-build: GOOS := GOOS=linux
-ci-cd-build: ARCH := GOARCH=amd64
-ci-cd-build: build
+ci-cd-build: sync
+	GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -v -o $(NAME) cmd/main.go
 
 ci-cd-build-migration:
