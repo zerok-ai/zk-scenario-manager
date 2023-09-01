@@ -22,15 +22,19 @@ spec:
         - command:
             - sh
             - -c
-            - 'set -x; URL="https://${SERVICE_NAME}:${SERVICE_PORT}/status"; until [
-            $(curl -m 0.5 -s -o /dev/null -w "%{http_code}" -k ${URL}) -eq 200 ]; do
-            echo "waiting for ${URL}"; sleep 2; done;'
+            - 'set -xe; URL="${PROTOCOL}://${SERVICE_NAME}:${SERVICE_PORT}${HEALTH_PATH}";
+              until [ $(curl -m 0.5 -s -o /dev/null -w "%{http_code}" -k ${URL}) -eq 200 ];
+              do echo "waiting for ${URL}"; sleep 2; done;'
           name: operator-wait
           env:
             - name: SERVICE_NAME
               value: zk-operator.zk-client.svc.cluster.local
             - name: SERVICE_PORT
-              value: "8081"
+              value: "80"
+            - name: PROTOCOL
+              value: http
+            - name: HEALTH_PATH
+              value: "/healthz"
           image: "{{ .Values.initImage.repo}}:{{ .Values.initImage.tag}}"
           imagePullPolicy: IfNotPresent
           resources: { }
