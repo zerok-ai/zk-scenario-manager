@@ -42,8 +42,10 @@ image:
   migrationTag: "latest"
 
 initImage:
-  repo: "gcr.io/pixie-oss/pixie-dev-public/curl:multiarch-7.87.0@sha256"
-  tag: "f7f265d5c64eb4463a43a99b6bf773f9e61a50aaa7cefaf564f43e42549a01dd"
+#  repo: "gcr.io/pixie-oss/pixie-dev-public/curl"
+#  tag: "multiarch-7.87.0@sha256:f7f265d5c64eb4463a43a99b6bf773f9e61a50aaa7cefaf564f43e42549a01dd"
+  repo: "us-west1-docker.pkg.dev/zerok-dev/stage/curl"
+  tag: "1.0.0"
 
 serviceAccount:
   # Specifies whether a service account should be created
