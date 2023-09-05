@@ -15,7 +15,7 @@ spec:
       containers:
         - name: migration
           image: "{{ .Values.global.dockerBase }}/{{ .Values.image.migrationRepo }}:{{ .Values.image.migrationTag  }}"
-          command: [ "/bin/sh", "-c", "migrate -path=/zk/migrations -database=postgres://{{ .Values.postgres.user }}:$PL_POSTGRES_PASSWORD@{{ .Values.postgres.host }}:5432/{{ .Values.postgres.database }}?sslmode=disable\\&x-migrations-table=zk_schema_migrations down" ]
+          command: [ "/bin/sh", "-c", "migrate -path=/zk/migrations -database=postgres://{{ .Values.postgres.user }}:$PL_POSTGRES_PASSWORD@{{ .Values.postgres.host }}:5432/{{ .Values.postgres.database }}?sslmode=disable\\&x-migrations-table=zk_schema_migrations up" ]
           env:
             - name: PL_POSTGRES_PASSWORD
               valueFrom:

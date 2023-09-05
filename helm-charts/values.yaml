@@ -8,6 +8,15 @@ global:
 
 replicaCount: 1
 
+redis:
+  host: redis.zk-client.svc.cluster.local
+  port: 6379
+  readTimeout: 20
+  dbs:
+    traces: 1
+    otel: 3
+    scenarios: 6
+
 postgres:
   host: "postgres.zk-client.svc.cluster.local"
   port: 5432
@@ -33,16 +42,8 @@ image:
   migrationTag: "latest"
 
 initImage:
-  repo: "us-west1-docker.pkg.dev/zerok-dev/curl/curl"
-  tag: "latest"
-  imagePullPolicy: Always
-  migrationRestartPolicy: Never
-  migrationRepo: "zk-scenario-manager-migration"
-  migrationTag: "latest"
-
-imagePullSecrets: []
-nameOverride: ""
-fullnameOverride: ""
+  repo: "us-west1-docker.pkg.dev/zerok-dev/stage/curl"
+  tag: latest
 
 serviceAccount:
   # Specifies whether a service account should be created
