@@ -46,7 +46,7 @@ func main() {
 
 	configurator := iris.WithConfiguration(iris.Configuration{
 		DisablePathCorrection: true,
-		LogLevel:              "debug",
+		LogLevel:              cfg.LogsConfig.Level,
 	})
 
 	if err = newApp().Listen(":"+cfg.Server.Port, configurator); err != nil {

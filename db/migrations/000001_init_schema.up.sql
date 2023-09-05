@@ -58,3 +58,8 @@ CREATE TABLE span_raw_data
     resp_body    BYTEA,
     CONSTRAINT unique_span_trace UNIQUE (trace_id, span_id)
 );
+
+CREATE INDEX idx_span_start_time ON span(start_time);
+
+CREATE INDEX idx_span_SOURCE ON span(SOURCE);
+CREATE INDEX idx_span_destination ON span(destination);
