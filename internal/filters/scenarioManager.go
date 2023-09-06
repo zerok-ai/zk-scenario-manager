@@ -123,6 +123,10 @@ func (scenarioManager *ScenarioManager) processAllScenarios() {
 
 	// 1. get all scenarios
 	scenarios := scenarioManager.scenarioStore.GetAllValues()
+	if len(scenarios) == 0 {
+		zkLogger.Error(LoggerTag, "Error getting all scenarios")
+		return
+	}
 
 	// 2. get all traceId sets from traceStore
 	namesOfAllSets, err := scenarioManager.traceStore.GetAllKeys()

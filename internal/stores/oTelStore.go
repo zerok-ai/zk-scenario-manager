@@ -42,6 +42,8 @@ type SpanFromOTel struct {
 	SourceIP string `json:"source_ip"`
 	DestIP   string `json:"dest_ip"`
 
+	ServiceName string `json:"service_name"`
+
 	Attributes         map[string]interface{} `json:"attributes"`
 	SpanForPersistence *tracePersistenceModel.Span
 	Children           []SpanFromOTel
@@ -80,12 +82,15 @@ func (spanFromOTel *SpanFromOTel) getNumberAttribute(attr string) (string, bool)
 func (spanFromOTel *SpanFromOTel) createAndPopulateSpanForPersistence() {
 
 	spanFromOTel.SpanForPersistence = &tracePersistenceModel.Span{
-		TraceID:      string(spanFromOTel.TraceID),
-		SpanID:       string(spanFromOTel.SpanID),
-		Kind:         spanFromOTel.Kind,
-		ParentSpanID: string(spanFromOTel.ParentSpanID),
-		StartTime:    EpochMilliSecondsToTime(spanFromOTel.StartTime),
-		Latency:      latencyInMilliSeconds(spanFromOTel.StartTime, spanFromOTel.EndTime),
+		TraceID:       string(spanFromOTel.TraceID),
+		SpanID:        string(spanFromOTel.SpanID),
+		Kind:          spanFromOTel.Kind,
+		ParentSpanID:  string(spanFromOTel.ParentSpanID),
+		StartTime:     EpochMilliSecondsToTime(spanFromOTel.StartTime),
+		Latency:       latencyInMilliSeconds(spanFromOTel.StartTime, spanFromOTel.EndTime),
+		SourceIP:      spanFromOTel.SourceIP,
+		DestinationIP: spanFromOTel.DestIP,
+		ServiceName:   spanFromOTel.ServiceName,
 	}
 
 	// set protocol
