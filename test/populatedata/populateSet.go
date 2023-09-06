@@ -20,8 +20,8 @@ type SetPopulator struct {
 	keyPrefix    string
 }
 
-func GetSetPopulator(rConfig *redisConfig.RedisConfig, dbName string, setName string, keyPrefix string, startCounter int, totalRecords int) *SetPopulator {
-	_redisClient := redisConfig.GetRedisConnection(dbName, *rConfig)
+func GetSetPopulator(rConfig redisConfig.RedisConfig, dbName string, setName string, keyPrefix string, startCounter int, totalRecords int) *SetPopulator {
+	_redisClient := redisConfig.GetRedisConnection(dbName, rConfig)
 
 	sp := SetPopulator{
 		redisClient:  _redisClient,

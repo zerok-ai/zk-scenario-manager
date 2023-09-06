@@ -23,10 +23,10 @@ func (t OTelStore) Close() {
 	t.redisClient.Close()
 }
 
-func GetOTelStore(redisConfig *config.RedisConfig) *OTelStore {
+func GetOTelStore(redisConfig config.RedisConfig) *OTelStore {
 	dbName := "otel"
 	zkLogger.Debug(LoggerTag, "GetOTelStore: config=", redisConfig, "dbName=", dbName, "dbID=", redisConfig.DBs[dbName])
-	_redisClient := config.GetRedisConnection(dbName, *redisConfig)
+	_redisClient := config.GetRedisConnection(dbName, redisConfig)
 	return OTelStore{redisClient: _redisClient}.initialize()
 }
 

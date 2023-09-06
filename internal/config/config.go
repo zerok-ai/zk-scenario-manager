@@ -43,7 +43,7 @@ type ScenariosConfig struct {
 
 // AppConfigs is an application configuration structure
 type AppConfigs struct {
-	Redis          *storage.RedisConfig            `yaml:"redis"`
+	Redis          storage.RedisConfig             `yaml:"redis"`
 	Postgres       zkPostgresConfig.PostgresConfig `yaml:"postgres"`
 	Server         ServerConfig                    `yaml:"server"`
 	AuthConfig     AuthConfig                      `yaml:"auth"`
