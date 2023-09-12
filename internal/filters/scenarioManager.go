@@ -59,7 +59,7 @@ func NewScenarioManager(cfg config.AppConfigs, tps tracePersistence.TracePersist
 		return nil, errors.Wrap(err, "failed to get new VZ reader")
 	}
 
-	vs, err := store.GetVersionedStore[scenarioGeneratorModel.Scenario](cfg.Redis, "scenarios", ScenarioRefreshInterval)
+	vs, err := store.GetVersionedStore[scenarioGeneratorModel.Scenario](&cfg.Redis, "scenarios", ScenarioRefreshInterval)
 	if err != nil {
 		return nil, err
 	}

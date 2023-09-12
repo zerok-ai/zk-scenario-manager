@@ -69,6 +69,11 @@ spec:
               secretKeyRef:
                 name: redis
                 key: redis-password
+          - name: ZK_REDIS_HOST # Setting Redis password from Secret
+            valueFrom:
+              configMapKeyRef:
+                name: zk-redis-config
+                key: redisHost
       volumes:
       - configMap:
           name: {{ include "zk-scenario-manager.fullname" . }}
