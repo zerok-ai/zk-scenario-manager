@@ -6,9 +6,11 @@ import (
 	"github.com/redis/go-redis/v9"
 	zkLogger "github.com/zerok-ai/zk-utils-go/logs"
 	"github.com/zerok-ai/zk-utils-go/storage/redis/config"
+	"net/url"
 	typedef "scenario-manager/internal"
 	tracePersistenceModel "scenario-manager/internal/tracePersistence/model"
 	"strconv"
+	"strings"
 )
 
 type OTelStore struct {
@@ -104,14 +106,21 @@ func (spanFromOTel *SpanFromOTel) createAndPopulateSpanForPersistence() {
 }
 
 func (spanFromOTel *SpanFromOTel) populateThroughHttpAttributeMap() {
-
 	spanForPersistence := spanFromOTel.SpanForPersistence
 	// set protocol for exception
 	if httpMethod, methodExists := spanFromOTel.Attributes[OTelAttrHttpMethod]; methodExists {
 		spanForPersistence.Method = httpMethod.(string)
-		if url, urlExists := spanFromOTel.Attributes[OTelAttrHttpUrl]; urlExists {
-			if url == OTelExceptionUrl && httpMethod == HTTPPost {
-				spanForPersistence.Protocol = PException
+		if urlAttribute, urlExists := spanFromOTel.Attributes[OTelAttrHttpUrl]; urlExists {
+			urlString := urlAttribute.(string)
+			parsedUrl, parseErr := url.Parse(urlString)
+			if parseErr != nil {
+				zkLogger.Error(LoggerTag, "populateThroughHttpAttributeMap: parseErr=", parseErr, " url=", urlString)
+			} else {
+				host := parsedUrl.Host
+				path := parsedUrl.Path
+				if strings.Contains(host, ZkOperatorServiceName) && strings.Contains(path, OTelExceptionUrl) && httpMethod == HTTPPost {
+					spanForPersistence.Protocol = PException
+				}
 			}
 		}
 	}
