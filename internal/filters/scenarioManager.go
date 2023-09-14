@@ -285,6 +285,8 @@ func (scenarioManager *ScenarioManager) addRawDataToSpans(tracesFromOTelStore ma
 		return spansWithHTTPRawData[i].SpanId < spansWithHTTPRawData[j].SpanId
 	})
 
+	processedSpans := ds.Set[string]{}
+
 	for _, spanWithRawDataFromPixie := range spansWithHTTPRawData {
 		spanFromOTel := getSpanFromOTel(spanWithRawDataFromPixie.TraceId, spanWithRawDataFromPixie.SpanId, tracesFromOTelStore)
 		if spanFromOTel == nil {
@@ -336,15 +338,17 @@ func (scenarioManager *ScenarioManager) addRawDataToSpans(tracesFromOTelStore ma
 
 				spanFromOTel.SpanForPersistence = enrichSpanFromHTTPRawData(rootClient.SpanForPersistence, &spanWithRawDataFromPixie)
 				tracesFromOTelStore[typedef.TTraceid(traceId)] = traceFromOtel
+				processedSpans.Add(spanWithRawDataFromPixie.SpanId)
 
 			} else {
 				continue
 			}
 		} else {
-			if string(spanFromOTel.SpanID) == spanWithRawDataFromPixie.SpanId {
+			if processedSpans.Contains(spanWithRawDataFromPixie.SpanId) {
 				continue
 			}
 			spanFromOTel.SpanForPersistence = enrichSpanFromHTTPRawData(spanFromOTel.SpanForPersistence, &spanWithRawDataFromPixie)
+			processedSpans.Add(spanWithRawDataFromPixie.SpanId)
 		}
 	}
 
