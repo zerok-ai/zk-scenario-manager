@@ -341,6 +341,9 @@ func (scenarioManager *ScenarioManager) addRawDataToSpans(tracesFromOTelStore ma
 				continue
 			}
 		} else {
+			if string(spanFromOTel.SpanID) == spanWithRawDataFromPixie.SpanId {
+				continue
+			}
 			spanFromOTel.SpanForPersistence = enrichSpanFromHTTPRawData(spanFromOTel.SpanForPersistence, &spanWithRawDataFromPixie)
 		}
 	}
