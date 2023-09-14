@@ -1,8 +1,8 @@
 ALTER TABLE span
-    ADD COLUMN source_ip VARCHAR(255);
+    ADD COLUMN source_ip VARCHAR(255) DEFAULT '';
 
 ALTER TABLE span
-    ADD COLUMN destination_ip VARCHAR(255);
+    ADD COLUMN destination_ip VARCHAR(255) DEFAULT '';
 
 ALTER TABLE span
-    ADD COLUMN service_name VARCHAR(255);
+    ADD COLUMN service_name VARCHAR(255) DEFAULT '';
