@@ -61,3 +61,16 @@ ci-cd-build: sync
 	GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -v -o $(NAME) cmd/main.go
 
 ci-cd-build-migration:
+
+#only for local migration
+create-migration-file:
+	migrate create -ext sql -dir db/migrations -seq $(name)
+
+migrate-up:
+	migrate -path db/migrations -database "postgres://pl:pl=@localhost:5432/pl?sslmode=disable&x-migrations-table=zk_schema_migrations" -verbose up $(count)
+
+migrate-down:
+	migrate -path db/migrations -database "postgres://pl:pl=@localhost:5432/pl?sslmode=disable&x-migrations-table=zk_schema_migrations" -verbose down $(count)
+
+fix-migration:
+	migrate -path db/migrations -database "postgres://pl:pl=@localhost:5432/pl?sslmode=disable&x-migrations-table=zk_schema_migrations" force $(version)

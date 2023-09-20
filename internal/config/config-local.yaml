@@ -6,6 +6,7 @@ redis:
     otel: 3
     scenarios: 6
   readTimeout: 20
+  password: W56FpRzJRd
 
 postgres:
   host: 127.0.0.1

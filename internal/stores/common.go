@@ -21,6 +21,8 @@ const (
 	PMySQL      = "mysql"
 	PPostgresql = "postgresql"
 
+	ZkOperatorServiceName = "zk-operator"
+
 	HTTPPost = "POST"
 
 	OTelAttrProtocol   = "net.protocol.name"

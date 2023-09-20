@@ -123,6 +123,10 @@ func (scenarioManager *ScenarioManager) processAllScenarios() {
 
 	// 1. get all scenarios
 	scenarios := scenarioManager.scenarioStore.GetAllValues()
+	if len(scenarios) == 0 {
+		zkLogger.Error(LoggerTag, "Error getting all scenarios")
+		return
+	}
 
 	// 2. get all traceId sets from traceStore
 	namesOfAllSets, err := scenarioManager.traceStore.GetAllKeys()
@@ -281,6 +285,8 @@ func (scenarioManager *ScenarioManager) addRawDataToSpans(tracesFromOTelStore ma
 		return spansWithHTTPRawData[i].SpanId < spansWithHTTPRawData[j].SpanId
 	})
 
+	processedSpans := ds.Set[string]{}
+
 	for _, spanWithRawDataFromPixie := range spansWithHTTPRawData {
 		spanFromOTel := getSpanFromOTel(spanWithRawDataFromPixie.TraceId, spanWithRawDataFromPixie.SpanId, tracesFromOTelStore)
 		if spanFromOTel == nil {
@@ -332,12 +338,17 @@ func (scenarioManager *ScenarioManager) addRawDataToSpans(tracesFromOTelStore ma
 
 				spanFromOTel.SpanForPersistence = enrichSpanFromHTTPRawData(rootClient.SpanForPersistence, &spanWithRawDataFromPixie)
 				tracesFromOTelStore[typedef.TTraceid(traceId)] = traceFromOtel
+				processedSpans.Add(spanWithRawDataFromPixie.SpanId)
 
 			} else {
 				continue
 			}
 		} else {
+			if processedSpans.Contains(spanWithRawDataFromPixie.SpanId) {
+				continue
+			}
 			spanFromOTel.SpanForPersistence = enrichSpanFromHTTPRawData(spanFromOTel.SpanForPersistence, &spanWithRawDataFromPixie)
+			processedSpans.Add(spanWithRawDataFromPixie.SpanId)
 		}
 	}
 

@@ -6,9 +6,11 @@ import (
 	"github.com/redis/go-redis/v9"
 	zkLogger "github.com/zerok-ai/zk-utils-go/logs"
 	"github.com/zerok-ai/zk-utils-go/storage/redis/config"
+	"net/url"
 	typedef "scenario-manager/internal"
 	tracePersistenceModel "scenario-manager/internal/tracePersistence/model"
 	"strconv"
+	"strings"
 )
 
 type OTelStore struct {
@@ -41,6 +43,8 @@ type SpanFromOTel struct {
 
 	SourceIP string `json:"source_ip"`
 	DestIP   string `json:"dest_ip"`
+
+	ServiceName string `json:"service_name"`
 
 	Attributes         map[string]interface{} `json:"attributes"`
 	SpanForPersistence *tracePersistenceModel.Span
@@ -80,12 +84,15 @@ func (spanFromOTel *SpanFromOTel) getNumberAttribute(attr string) (string, bool)
 func (spanFromOTel *SpanFromOTel) createAndPopulateSpanForPersistence() {
 
 	spanFromOTel.SpanForPersistence = &tracePersistenceModel.Span{
-		TraceID:      string(spanFromOTel.TraceID),
-		SpanID:       string(spanFromOTel.SpanID),
-		Kind:         spanFromOTel.Kind,
-		ParentSpanID: string(spanFromOTel.ParentSpanID),
-		StartTime:    EpochMilliSecondsToTime(spanFromOTel.StartTime),
-		Latency:      latencyInMilliSeconds(spanFromOTel.StartTime, spanFromOTel.EndTime),
+		TraceID:       string(spanFromOTel.TraceID),
+		SpanID:        string(spanFromOTel.SpanID),
+		Kind:          spanFromOTel.Kind,
+		ParentSpanID:  string(spanFromOTel.ParentSpanID),
+		StartTime:     EpochMilliSecondsToTime(spanFromOTel.StartTime),
+		Latency:       latencyInMilliSeconds(spanFromOTel.StartTime, spanFromOTel.EndTime),
+		SourceIP:      spanFromOTel.SourceIP,
+		DestinationIP: spanFromOTel.DestIP,
+		ServiceName:   spanFromOTel.ServiceName,
 	}
 
 	// set protocol
@@ -99,14 +106,21 @@ func (spanFromOTel *SpanFromOTel) createAndPopulateSpanForPersistence() {
 }
 
 func (spanFromOTel *SpanFromOTel) populateThroughHttpAttributeMap() {
-
 	spanForPersistence := spanFromOTel.SpanForPersistence
 	// set protocol for exception
 	if httpMethod, methodExists := spanFromOTel.Attributes[OTelAttrHttpMethod]; methodExists {
 		spanForPersistence.Method = httpMethod.(string)
-		if url, urlExists := spanFromOTel.Attributes[OTelAttrHttpUrl]; urlExists {
-			if url == OTelExceptionUrl && httpMethod == HTTPPost {
-				spanForPersistence.Protocol = PException
+		if urlAttribute, urlExists := spanFromOTel.Attributes[OTelAttrHttpUrl]; urlExists {
+			urlString := urlAttribute.(string)
+			parsedUrl, parseErr := url.Parse(urlString)
+			if parseErr != nil {
+				zkLogger.Error(LoggerTag, "populateThroughHttpAttributeMap: parseErr=", parseErr, " url=", urlString)
+			} else {
+				host := parsedUrl.Host
+				path := parsedUrl.Path
+				if strings.Contains(host, ZkOperatorServiceName) && strings.Contains(path, OTelExceptionUrl) && httpMethod == HTTPPost {
+					spanForPersistence.Protocol = PException
+				}
 			}
 		}
 	}

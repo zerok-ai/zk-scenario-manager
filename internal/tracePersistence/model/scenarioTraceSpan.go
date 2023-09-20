@@ -54,6 +54,9 @@ type Span struct {
 	Query               string    `json:"query"`
 	Status              int       `json:"status"`
 	Username            string    `json:"username"`
+	SourceIP            string    `json:"source_ip"`
+	DestinationIP       string    `json:"destination_ip"`
+	ServiceName         string    `json:"service_name"`
 
 	SpanRawData
 }
