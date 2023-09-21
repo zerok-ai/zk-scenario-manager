@@ -42,7 +42,7 @@ const (
 	UpsertExceptionQuery   = "INSERT INTO exception_data (id, exception_body) VALUES ($1, $2) ON CONFLICT (id) DO NOTHING"
 	UpsertIssueQuery       = "INSERT INTO issue (issue_hash, issue_title, scenario_id, scenario_version) VALUES ($1, $2, $3, $4) ON CONFLICT (issue_hash) DO NOTHING"
 	UpsertIncidentQuery    = "INSERT INTO incident (trace_id, issue_hash, incident_collection_time) VALUES ($1, $2, $3) ON CONFLICT (issue_hash, trace_id) DO NOTHING"
-	UpsertSpanQuery        = "INSERT INTO span (trace_id, parent_span_id, span_id, is_root, kind, start_time, latency, source, destination, workload_id_list, protocol, issue_hash_list, request_payload_size, response_payload_size, method, route, scheme, path, query, status, username, source_ip, destination_ip, service_name ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24) ON CONFLICT (trace_id, span_id) DO NOTHING"
+	UpsertSpanQuery        = "INSERT INTO span (trace_id, parent_span_id, span_id, is_root, kind, start_time, latency, source, destination, workload_id_list, protocol, issue_hash_list, request_payload_size, response_payload_size, method, route, scheme, path, query, status, username, source_ip, destination_ip, service_name, error_type, error_table_id ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26) ON CONFLICT (trace_id, span_id) DO NOTHING"
 	UpsertSpanRawDataQuery = "INSERT INTO span_raw_data (trace_id, span_id, req_headers, resp_headers, is_truncated, req_body, resp_body) VALUES ($1, $2, $3, $4, $5, $6, $7) ON CONFLICT (trace_id, span_id) DO NOTHING"
 )
 
@@ -69,8 +69,8 @@ func (z tracePersistenceRepo) Close() error {
 func (z tracePersistenceRepo) SaveTraceList(issuesDetailList []dto.IssuesDetailDto) error {
 	issueTableData := make([]interfaces.DbArgs, 0)
 	traceTableData := make([]interfaces.DbArgs, 0)
-	traceTableMetadata := make([]interfaces.DbArgs, 0)
-	traceTableRawData := make([]interfaces.DbArgs, 0)
+	spanTableData := make([]interfaces.DbArgs, 0)
+	spanTableRawData := make([]interfaces.DbArgs, 0)
 
 	uniqueIssues := make(map[string]bool)
 	uniqueTraces := make(map[string]bool)
@@ -98,7 +98,7 @@ func (z tracePersistenceRepo) SaveTraceList(issuesDetailList []dto.IssuesDetailD
 			key := v.TraceID + v.SpanID
 			if _, ok := uniqueSpans[key]; !ok {
 				uniqueSpans[key] = true
-				traceTableMetadata = append(traceTableMetadata, v)
+				spanTableData = append(spanTableData, v)
 			}
 		}
 
@@ -106,7 +106,7 @@ func (z tracePersistenceRepo) SaveTraceList(issuesDetailList []dto.IssuesDetailD
 			key := v.TraceID + v.SpanID
 			if _, ok := uniqueRawSpans[key]; !ok {
 				uniqueRawSpans[key] = true
-				traceTableRawData = append(traceTableRawData, v)
+				spanTableRawData = append(spanTableRawData, v)
 			}
 		}
 	}
@@ -117,7 +117,7 @@ func (z tracePersistenceRepo) SaveTraceList(issuesDetailList []dto.IssuesDetailD
 		return err
 	}
 
-	err = doBulkUpsertForTraceList(tx, z.dbRepo, issueTableData, traceTableData, traceTableMetadata, traceTableRawData)
+	err = doBulkUpsertForTraceList(tx, z.dbRepo, issueTableData, traceTableData, spanTableData, spanTableRawData)
 	if err == nil {
 		tx.Commit()
 		return nil

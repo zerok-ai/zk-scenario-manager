@@ -133,6 +133,8 @@ func ConvertIncidentIssuesToIssueDto(s model.IncidentWithIssues) (IssuesDetailDt
 			SourceIP:            span.SourceIP,
 			DestinationIP:       span.DestinationIP,
 			ServiceName:         span.ServiceName,
+			ErrorType:           span.ErrorType,
+			ErrorTableId:        span.ErrorTableId,
 		}
 
 		spanRawDataDto := SpanRawDataTableDto{
