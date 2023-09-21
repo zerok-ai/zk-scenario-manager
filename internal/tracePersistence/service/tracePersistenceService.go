@@ -12,6 +12,7 @@ var LogTag = "zk_trace_persistence_service"
 
 type TracePersistenceService interface {
 	SaveIncidents([]model.IncidentWithIssues) *zkErrors.ZkError
+	SaveExceptions([]model.ExceptionData) (map[string]bool, *zkErrors.ZkError)
 	Close() error
 }
 
@@ -59,4 +60,8 @@ func (s tracePersistenceService) SaveIncidents(issuesDetails []model.IncidentWit
 	}
 
 	return nil
+}
+
+func (s tracePersistenceService) SaveExceptions(exceptions []model.ExceptionData) (map[string]bool, *zkErrors.ZkError) {
+	return nil, nil
 }

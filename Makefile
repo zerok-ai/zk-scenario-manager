@@ -67,10 +67,10 @@ create-migration-file:
 	migrate create -ext sql -dir db/migrations -seq $(name)
 
 migrate-up:
-	migrate -path db/migrations -database "postgres://pl:pl=@localhost:5432/pl?sslmode=disable&x-migrations-table=zk_schema_migrations" -verbose up $(count)
+	migrate -path db/migrations -database "postgres://pl:pl=@localhost:5432/zk?sslmode=disable&x-migrations-table=zk_schema_migrations" -verbose up $(count)
 
 migrate-down:
-	migrate -path db/migrations -database "postgres://pl:pl=@localhost:5432/pl?sslmode=disable&x-migrations-table=zk_schema_migrations" -verbose down $(count)
+	migrate -path db/migrations -database "postgres://pl:pl=@localhost:5432/zk?sslmode=disable&x-migrations-table=zk_schema_migrations" -verbose down $(count)
 
 fix-migration:
-	migrate -path db/migrations -database "postgres://pl:pl=@localhost:5432/pl?sslmode=disable&x-migrations-table=zk_schema_migrations" force $(version)
+	migrate -path db/migrations -database "postgres://pl:pl=@localhost:5432/zk?sslmode=disable&x-migrations-table=zk_schema_migrations" force $(version)

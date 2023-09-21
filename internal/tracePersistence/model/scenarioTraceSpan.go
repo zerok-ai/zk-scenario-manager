@@ -9,6 +9,11 @@ import (
 
 var LogTag = "zk_trace_model"
 
+type ExceptionData struct {
+	Id            string `json:"id"`
+	ExceptionBody string `json:"exception_body"`
+}
+
 type IncidentWithIssues struct {
 	Incident       Incident     `json:"incident"`
 	IssueGroupList []IssueGroup `json:"issue_group_list"`
@@ -57,6 +62,8 @@ type Span struct {
 	SourceIP            string    `json:"source_ip"`
 	DestinationIP       string    `json:"destination_ip"`
 	ServiceName         string    `json:"service_name"`
+	ErrorType           string    `json:"error_type"`
+	ErrorTableId        string    `json:"error_table_id"`
 
 	SpanRawData
 }
