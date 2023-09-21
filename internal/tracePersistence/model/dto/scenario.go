@@ -40,6 +40,30 @@ func (t IncidentTableDto) GetAllColumns() []any {
 	return []any{t.TraceId, t.IssueHash, t.IncidentCollectionTime}
 }
 
+type ExceptionTableDto struct {
+	Id            string `json:"id"`
+	ExceptionBody []byte `json:"exception_body"`
+}
+
+func (e ExceptionTableDto) GetAllColumns() []any {
+	return []any{e.Id, e.ExceptionBody}
+}
+
+func ConvertExceptionToExceptionDto(exception model.ExceptionData) (ExceptionTableDto, *error) {
+	var exceptionDto ExceptionTableDto
+	if !utils.IsEmpty(exception.ExceptionBody) {
+		compressedStr, err := zkCrypto.CompressStringGzip(exception.ExceptionBody)
+		if err != nil {
+			zkLogger.Error(LogTag, err)
+			return exceptionDto, &err
+		}
+		exceptionDto.ExceptionBody = compressedStr
+	}
+	exceptionDto.Id = exception.Id
+
+	return exceptionDto, nil
+}
+
 func ConvertIncidentIssuesToIssueDto(s model.IncidentWithIssues) (IssuesDetailDto, *error) {
 	var response IssuesDetailDto
 	var issueDtoList []IssueTableDto
