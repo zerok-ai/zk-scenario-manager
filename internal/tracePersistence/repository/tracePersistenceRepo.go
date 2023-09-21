@@ -39,6 +39,7 @@ const (
 	RequestPayload  = "request_payload"
 	ResponsePayload = "response_payload"
 
+	UpsertExceptionQuery   = "INSERT INTO exception_data (id, exception_body) VALUES ($1, $2) ON CONFLICT (id) DO NOTHING"
 	UpsertIssueQuery       = "INSERT INTO issue (issue_hash, issue_title, scenario_id, scenario_version) VALUES ($1, $2, $3, $4) ON CONFLICT (issue_hash) DO NOTHING"
 	UpsertIncidentQuery    = "INSERT INTO incident (trace_id, issue_hash, incident_collection_time) VALUES ($1, $2, $3) ON CONFLICT (issue_hash, trace_id) DO NOTHING"
 	UpsertSpanQuery        = "INSERT INTO span (trace_id, parent_span_id, span_id, is_root, kind, start_time, latency, source, destination, workload_id_list, protocol, issue_hash_list, request_payload_size, response_payload_size, method, route, scheme, path, query, status, username, source_ip, destination_ip, service_name ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24) ON CONFLICT (trace_id, span_id) DO NOTHING"
@@ -49,6 +50,7 @@ var LogTag = "zk_trace_persistence_repo"
 
 type TracePersistenceRepo interface {
 	SaveTraceList([]dto.IssuesDetailDto) error
+	SaveExceptions(exceptions []dto.ExceptionTableDto) error
 	Close() error
 }
 
@@ -123,6 +125,32 @@ func (z tracePersistenceRepo) SaveTraceList(issuesDetailList []dto.IssuesDetailD
 
 	tx.Rollback()
 	return err
+}
+
+func (z tracePersistenceRepo) SaveExceptions(exceptions []dto.ExceptionTableDto) error {
+	uniqueExceptions := make(map[string]bool)
+	exceptionData := make([]interfaces.DbArgs, 0)
+	for _, v := range exceptions {
+		if _, ok := uniqueExceptions[v.Id]; !ok {
+			uniqueExceptions[v.Id] = true
+			exceptionData = append(exceptionData, v)
+		}
+	}
+
+	tx, err := z.dbRepo.CreateTransaction()
+	if err != nil {
+		zkLogger.Info(LogTag, "Error Creating transaction")
+		return err
+	}
+
+	err = bulkUpsert(tx, z.dbRepo, UpsertExceptionQuery, exceptionData)
+	if err != nil {
+		zkLogger.Error(LogTag, "Error in bulk upsert for incident table", err)
+		tx.Rollback()
+		return err
+	}
+	tx.Commit()
+	return nil
 }
 
 //func doBulkInsertForTraceList(tx *sql.Tx, dbRepo sqlDB.DatabaseRepo, issueData, traceData, span, spanRawData []interfaces.DbArgs) error {

@@ -12,7 +12,7 @@ var LogTag = "zk_trace_persistence_service"
 
 type TracePersistenceService interface {
 	SaveIncidents([]model.IncidentWithIssues) *zkErrors.ZkError
-	SaveExceptions([]model.ExceptionData) (map[string]bool, *zkErrors.ZkError)
+	SaveExceptions([]model.ExceptionData) *zkErrors.ZkError
 	Close() error
 }
 
@@ -62,6 +62,38 @@ func (s tracePersistenceService) SaveIncidents(issuesDetails []model.IncidentWit
 	return nil
 }
 
-func (s tracePersistenceService) SaveExceptions(exceptions []model.ExceptionData) (map[string]bool, *zkErrors.ZkError) {
-	return nil, nil
+func (s tracePersistenceService) SaveExceptions(exceptions []model.ExceptionData) *zkErrors.ZkError {
+	sanitizedExceptions := make([]model.ExceptionData, 0)
+	for _, exception := range exceptions {
+		if exception.Id == "" || exception.ExceptionBody == "" {
+			continue
+		}
+		sanitizedExceptions = append(sanitizedExceptions, exception)
+	}
+
+	if len(sanitizedExceptions) == 0 {
+		zkLogger.Error(LogTag, "Empty exception list, or contains invalid data")
+		zkErr := zkErrors.ZkErrorBuilder{}.Build(zkErrors.ZkErrorBadRequest, nil)
+		return &zkErr
+	}
+
+	exceptionDtoList := make([]dto.ExceptionTableDto, 0)
+	for _, exception := range sanitizedExceptions {
+		exceptionDto, err := dto.ConvertExceptionToExceptionDto(exception)
+		if err != nil {
+			zkLogger.Error(LogTag, err)
+			zkErr := zkErrors.ZkErrorBuilder{}.Build(zkErrors.ZkErrorBadRequest, nil)
+			return &zkErr
+		}
+		exceptionDtoList = append(exceptionDtoList, exceptionDto)
+	}
+
+	err := s.repo.SaveExceptions(exceptionDtoList)
+	if err != nil {
+		zkLogger.Error(LogTag, "Failed to save exceptions", err)
+		zkErr := zkErrors.ZkErrorBuilder{}.Build(zkErrors.ZkErrorDbError, nil)
+		return &zkErr
+	}
+
+	return nil
 }
