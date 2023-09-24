@@ -13,23 +13,26 @@ import (
 	"strings"
 )
 
-type OTelStore struct {
+type OTelDataHandler struct {
 	redisClient *redis.Client
 }
 
-func (t OTelStore) initialize() *OTelStore {
+func (t OTelDataHandler) initialize() *OTelDataHandler {
 	return &t
 }
 
-func (t OTelStore) Close() {
-	t.redisClient.Close()
+func (t OTelDataHandler) Close() {
+	err := t.redisClient.Close()
+	if err != nil {
+		return
+	}
 }
 
-func GetOTelStore(redisConfig config.RedisConfig) *OTelStore {
+func GetOTelStore(redisConfig config.RedisConfig) *OTelDataHandler {
 	dbName := "otel"
 	zkLogger.Debug(LoggerTag, "GetOTelStore: config=", redisConfig, "dbName=", dbName, "dbID=", redisConfig.DBs[dbName])
 	_redisClient := config.GetRedisConnection(dbName, redisConfig)
-	return OTelStore{redisClient: _redisClient}.initialize()
+	return OTelDataHandler{redisClient: _redisClient}.initialize()
 }
 
 type SpanFromOTel struct {
@@ -105,7 +108,7 @@ func (spanFromOTel *SpanFromOTel) createAndPopulateSpanForPersistence() {
 	}
 }
 
-func (spanFromOTel *SpanFromOTel) populateThroughHttpAttributeMap() {
+func (spanFromOTel *SpanFromOTel) populateExceptionAttributeMap() bool {
 	spanForPersistence := spanFromOTel.SpanForPersistence
 	// set protocol for exception
 	if httpMethod, methodExists := spanFromOTel.Attributes[OTelAttrHttpMethod]; methodExists {
@@ -124,6 +127,14 @@ func (spanFromOTel *SpanFromOTel) populateThroughHttpAttributeMap() {
 			}
 		}
 	}
+	return true
+}
+
+func (spanFromOTel *SpanFromOTel) populateThroughHttpAttributeMap() bool {
+	spanForPersistence := spanFromOTel.SpanForPersistence
+
+	// set protocol
+	spanFromOTel.populateExceptionAttributeMap()
 
 	if status, ok := spanFromOTel.GetStringAttribute(OTelAttrHttpStatus); ok {
 		s, err := strconv.Atoi(status)
@@ -162,6 +173,8 @@ func (spanFromOTel *SpanFromOTel) populateThroughHttpAttributeMap() {
 			spanForPersistence.Path = path
 		}
 	}
+
+	return true
 }
 
 func (spanFromOTel *SpanFromOTel) populateThroughDBAttributeMap() bool {
@@ -219,7 +232,7 @@ type TraceFromOTel struct {
 // GetSpansForTracesFromDB retrieves the spans for the given traceIds from the database
 // Returns a map of traceId to TraceFromOTel
 // Returns a map of protocol to array of traces
-func (t OTelStore) GetSpansForTracesFromDB(keys []typedef.TTraceid) (map[typedef.TTraceid]*TraceFromOTel, error) {
+func (t OTelDataHandler) GetSpansForTracesFromDB(keys []typedef.TTraceid) (map[typedef.TTraceid]*TraceFromOTel, error) {
 
 	redisClient := t.redisClient
 

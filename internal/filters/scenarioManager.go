@@ -12,7 +12,7 @@ import (
 	"github.com/zerok-ai/zk-utils-go/ds"
 	zkLogger "github.com/zerok-ai/zk-utils-go/logs"
 	scenarioGeneratorModel "github.com/zerok-ai/zk-utils-go/scenario/model"
-	store "github.com/zerok-ai/zk-utils-go/storage/redis"
+	zkRedis "github.com/zerok-ai/zk-utils-go/storage/redis"
 	ticker "github.com/zerok-ai/zk-utils-go/ticker"
 	"regexp"
 	typedef "scenario-manager/internal"
@@ -41,25 +41,26 @@ var queriesIgnoreList = []string{
 
 type ScenarioManager struct {
 	cfg           config.AppConfigs
-	scenarioStore *store.VersionedStore[scenarioGeneratorModel.Scenario]
+	scenarioStore *zkRedis.VersionedStore[scenarioGeneratorModel.Scenario]
 
-	traceStore *stores.TraceStore
-	oTelStore  *stores.OTelStore
+	traceStore           *stores.TraceStore
+	oTelStore            *stores.OTelDataHandler
+	exceptionStoreReader *stores.ExceptionStore
 
 	traceRawDataCollector *vzReader.VzReader
 
-	tracePersistenceService tracePersistence.TracePersistenceService
+	tracePersistenceService *tracePersistence.TracePersistenceService
 	issueRateMap            typedef.IssueRateMap
 	mutex                   sync.Mutex
 }
 
-func NewScenarioManager(cfg config.AppConfigs, tps tracePersistence.TracePersistenceService) (*ScenarioManager, error) {
+func NewScenarioManager(cfg config.AppConfigs, tps *tracePersistence.TracePersistenceService) (*ScenarioManager, error) {
 	reader, err := getNewVZReader(cfg)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to get new VZ reader")
 	}
 
-	vs, err := store.GetVersionedStore[scenarioGeneratorModel.Scenario](&cfg.Redis, "scenarios", ScenarioRefreshInterval)
+	vs, err := zkRedis.GetVersionedStore[scenarioGeneratorModel.Scenario](&cfg.Redis, "scenarios", ScenarioRefreshInterval)
 	if err != nil {
 		return nil, err
 	}
@@ -68,6 +69,7 @@ func NewScenarioManager(cfg config.AppConfigs, tps tracePersistence.TracePersist
 		scenarioStore:           vs,
 		traceStore:              stores.GetTraceStore(cfg.Redis, TTLForTransientSets),
 		oTelStore:               stores.GetOTelStore(cfg.Redis),
+		exceptionStoreReader:    stores.GetExceptionStore(cfg.Redis, tps),
 		traceRawDataCollector:   reader,
 		tracePersistenceService: tps,
 		cfg:                     cfg,
@@ -108,9 +110,10 @@ func (scenarioManager *ScenarioManager) Close() {
 	scenarioManager.scenarioStore.Close()
 	scenarioManager.traceStore.Close()
 	scenarioManager.oTelStore.Close()
+	scenarioManager.exceptionStoreReader.Close()
 
 	scenarioManager.traceRawDataCollector.Close()
-	err := scenarioManager.tracePersistenceService.Close()
+	err := (*scenarioManager.tracePersistenceService).Close()
 	if err != nil {
 		zkLogger.Error(LoggerTag, "Error closing tracePersistenceService")
 		return
@@ -146,7 +149,7 @@ func (scenarioManager *ScenarioManager) processAllScenarios() {
 	zkLogger.Info(LoggerTag, "Finished processing all scenarios \n")
 }
 
-// processTraceIDsAgainstScenarios processes all the traceIds against all the scenarios and saves the incidents in the persistence store
+// processTraceIDsAgainstScenarios processes all the traceIds against all the scenarios and saves the incidents in the persistence zkRedis
 // The traces are processed in the batches of size batchSizeForRawDataCollector
 func (scenarioManager *ScenarioManager) processTraceIDsAgainstScenarios(traceIds []typedef.TTraceid, scenarioWithTraces typedef.ScenarioToScenarioTracesMap) {
 	batch := 0
@@ -192,15 +195,15 @@ func (scenarioManager *ScenarioManager) processTraceIDsAgainstScenarios(traceIds
 			continue
 		}
 
-		// e. store the trace data in the persistence store
+		// e. zkRedis the trace data in the persistence zkRedis
 		zkLogger.DebugF(LoggerTag, "Before sending incidents for persistence, incident count: %d", len(newIncidentList))
 		startTime := time.Now()
-		saveError := scenarioManager.tracePersistenceService.SaveIncidents(newIncidentList)
+		saveError := (*scenarioManager.tracePersistenceService).SaveIncidents(newIncidentList)
 		if saveError != nil {
 			zkLogger.Error(LoggerTag, "Error saving incidents", saveError)
 		}
 		endTime := time.Now()
-		zkLogger.Info(LoggerTag, "Time taken to store data in persistent storage ", endTime.Sub(startTime))
+		zkLogger.Info(LoggerTag, "Time taken to zkRedis data in persistent storage ", endTime.Sub(startTime))
 
 		zkLogger.Info(LoggerTag, "processed batch", batch)
 	}
@@ -231,15 +234,12 @@ func (scenarioManager *ScenarioManager) getAllTraceIDs(scenarios map[string]*sce
 	return allTraceIds.GetAll(), scenarioWithTraces
 }
 
-// getDataForTraces collects span relation and span raw data for the traceIDs. The relation is collected from OTel store and raw data is collected from raw data store
+// getDataForTraces collects span relation and span raw data for the traceIDs. The relation is collected from OTel zkRedis and raw data is collected from raw data zkRedis
 func (scenarioManager *ScenarioManager) getDataForTraces(traceIds []typedef.TTraceid) map[typedef.TTraceid]*stores.TraceFromOTel {
 
 	// a. collect trace and span raw data for the traceIDs
 	startTime := time.Now()
-	tracesFromOTelStore, err := scenarioManager.oTelStore.GetSpansForTracesFromDB(traceIds)
-	if err != nil {
-		zkLogger.Error(LoggerTag, "error in getting data from OTel store", err)
-	}
+	tracesFromOTelStore := scenarioManager.getDataFromOTelStore(traceIds)
 	if tracesFromOTelStore == nil || len(tracesFromOTelStore) == 0 {
 		return nil
 	}
@@ -252,6 +252,14 @@ func (scenarioManager *ScenarioManager) getDataForTraces(traceIds []typedef.TTra
 	endTime = time.Now()
 	zkLogger.Info(LoggerTag, "Time taken to fetch raw spans ", endTime.Sub(startTime))
 
+	return tracesFromOTelStore
+}
+
+func (scenarioManager *ScenarioManager) getDataFromOTelStore(traceIds []typedef.TTraceid) map[typedef.TTraceid]*stores.TraceFromOTel {
+	tracesFromOTelStore, err := scenarioManager.oTelStore.GetSpansForTracesFromDB(traceIds)
+	if err != nil {
+		zkLogger.Error(LoggerTag, "error in getting data from OTel zkRedis", err)
+	}
 	return tracesFromOTelStore
 }
 
@@ -292,52 +300,52 @@ func (scenarioManager *ScenarioManager) addRawDataToSpans(tracesFromOTelStore ma
 		if spanFromOTel == nil {
 			pixieSpanId := spanWithRawDataFromPixie.SpanId
 			traceId := spanWithRawDataFromPixie.TraceId
-			traceFromOtel := tracesFromOTelStore[typedef.TTraceid(traceId)]
-			rootSpanIdFromOtel := traceFromOtel.RootSpanID
-			otelRootSpan := traceFromOtel.Spans[rootSpanIdFromOtel]
+			traceFromOTel := tracesFromOTelStore[typedef.TTraceid(traceId)]
+			rootSpanIdFromOTel := traceFromOTel.RootSpanID
+			oTelRootSpan := traceFromOTel.Spans[rootSpanIdFromOTel]
 
-			if otelRootSpan != nil && otelRootSpan.Kind == SERVER && string(otelRootSpan.ParentSpanID) == pixieSpanId &&
-				spanWithRawDataFromPixie.SourceIp == otelRootSpan.SourceIP && spanWithRawDataFromPixie.DestIp == otelRootSpan.DestIP {
+			if oTelRootSpan != nil && oTelRootSpan.Kind == SERVER && string(oTelRootSpan.ParentSpanID) == pixieSpanId &&
+				spanWithRawDataFromPixie.SourceIp == oTelRootSpan.SourceIP && spanWithRawDataFromPixie.DestIp == oTelRootSpan.DestIP {
 
-				rootSpanByteArr, err := json.Marshal(otelRootSpan)
+				rootSpanByteArr, err := json.Marshal(oTelRootSpan)
 				if err != nil {
-					zkLogger.Error(LoggerTag, "Error marshalling otelRootSpan:", err)
+					zkLogger.Error(LoggerTag, "Error marshalling oTelRootSpan:", err)
 					continue
 				}
 
 				var rootClient stores.SpanFromOTel
 				err = json.Unmarshal(rootSpanByteArr, &rootClient)
 				if err != nil {
-					zkLogger.Error(LoggerTag, "Error marshalling otelRootSpan:", err)
+					zkLogger.Error(LoggerTag, "Error marshalling oTelRootSpan:", err)
 					continue
 				}
 
-				//rootClient.TraceID = otelRootSpan.TraceID
+				//rootClient.TraceID = oTelRootSpan.TraceID
 				rootClient.ParentSpanID = ""
-				rootClient.SpanID = otelRootSpan.ParentSpanID
+				rootClient.SpanID = oTelRootSpan.ParentSpanID
 				rootClient.Kind = CLIENT
-				rootClient.Children = []stores.SpanFromOTel{*otelRootSpan}
+				rootClient.Children = []stores.SpanFromOTel{*oTelRootSpan}
 				rootClient.SpanForPersistence.SpanID = string(rootClient.SpanID)
 				rootClient.SpanForPersistence.Kind = rootClient.Kind
 				rootClient.SpanForPersistence.ParentSpanID = string(rootClient.ParentSpanID)
 				rootClient.SpanForPersistence.Destination = spanWithRawDataFromPixie.Destination
 				rootClient.SpanForPersistence.Source = ""
-				rootClient.StartTime = otelRootSpan.StartTime
+				rootClient.StartTime = oTelRootSpan.StartTime
 
-				otelRootSpan.SpanForPersistence.IsRoot = false
+				oTelRootSpan.SpanForPersistence.IsRoot = false
 
 				// set protocol
 				if protocol, ok := rootClient.GetStringAttribute(stores.OTelAttrProtocol); ok {
 					rootClient.SpanForPersistence.Protocol = protocol
 				}
 
-				traceFromOtel.Spans[otelRootSpan.ParentSpanID] = &rootClient
-				traceFromOtel.RootSpanID = rootClient.SpanID
-				otelRootSpan = &rootClient
+				traceFromOTel.Spans[oTelRootSpan.ParentSpanID] = &rootClient
+				traceFromOTel.RootSpanID = rootClient.SpanID
+				oTelRootSpan = &rootClient
 				spanFromOTel = &rootClient
 
 				spanFromOTel.SpanForPersistence = enrichSpanFromHTTPRawData(rootClient.SpanForPersistence, &spanWithRawDataFromPixie)
-				tracesFromOTelStore[typedef.TTraceid(traceId)] = traceFromOtel
+				tracesFromOTelStore[typedef.TTraceid(traceId)] = traceFromOTel
 				processedSpans.Add(spanWithRawDataFromPixie.SpanId)
 
 			} else {
@@ -416,7 +424,7 @@ func buildIncidentsForPersistence(scenariosWithTraces typedef.ScenarioToScenario
 
 	zkLogger.DebugF(LoggerTag, "Building scenario for persistence, trace_count=%d", len(tracesFromOTel))
 
-	// a. iterate through the trace data from OTelStore and build the structure which can be saved in DB
+	// a. iterate through the trace data from OTelDataHandler and build the structure which can be saved in DB
 	incidentsWithIssues := make([]tracePersistenceModel.IncidentWithIssues, 0)
 	traceTreeForPersistence := make(map[typedef.TTraceid]*typedef.TMapOfSpanIdToSpan, 0)
 	for traceId, traceFromOTel := range tracesFromOTel {

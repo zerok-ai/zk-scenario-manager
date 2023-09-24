@@ -35,7 +35,7 @@ func main() {
 	tpr := repository.NewTracePersistenceRepo(zkPostgresRepo)
 	tps := service.NewScenarioPersistenceService(tpr)
 
-	scenarioManager, err := filters.NewScenarioManager(cfg, tps)
+	scenarioManager, err := filters.NewScenarioManager(cfg, &tps)
 	if err != nil {
 		panic(err)
 	}
