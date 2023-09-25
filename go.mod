@@ -10,7 +10,7 @@ require (
 	github.com/redis/go-redis/v9 v9.0.5
 	github.com/stretchr/testify v1.8.4
 	github.com/zerok-ai/zk-rawdata-reader v0.0.0-20230823070357-4d8c27051c23
-	github.com/zerok-ai/zk-utils-go v0.4.11-0.20230921113802-97cd6c57737d
+	github.com/zerok-ai/zk-utils-go v0.4.11-0.20230925140411-dd96056dcae1
 )
 
 require (

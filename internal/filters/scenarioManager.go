@@ -1,6 +1,7 @@
 package filters
 
 import (
+	"context"
 	"crypto/md5"
 	"encoding/hex"
 	"encoding/json"
@@ -14,6 +15,7 @@ import (
 	scenarioGeneratorModel "github.com/zerok-ai/zk-utils-go/scenario/model"
 	zkRedis "github.com/zerok-ai/zk-utils-go/storage/redis"
 	ticker "github.com/zerok-ai/zk-utils-go/ticker"
+	zkErrors "github.com/zerok-ai/zk-utils-go/zkerrors"
 	"regexp"
 	typedef "scenario-manager/internal"
 	"scenario-manager/internal/config"
@@ -27,8 +29,11 @@ import (
 )
 
 const (
-	TitleDelimiter = "¦"
+	TitleDelimiter     = "¦"
+	cacheSize      int = 20
 )
+
+var ctx = context.Background()
 
 var queriesIgnoreList = []string{
 	"commit",
@@ -40,25 +45,20 @@ var queriesIgnoreList = []string{
 }
 
 type ScenarioManager struct {
-	cfg           config.AppConfigs
-	scenarioStore *zkRedis.VersionedStore[scenarioGeneratorModel.Scenario]
-
-	traceStore           *stores.TraceStore
-	oTelStore            *stores.OTelDataHandler
-	exceptionStoreReader *stores.ExceptionStore
-
-	traceRawDataCollector *vzReader.VzReader
-
+	cfg                     config.AppConfigs
+	scenarioStore           *zkRedis.VersionedStore[scenarioGeneratorModel.Scenario]
 	tracePersistenceService *tracePersistence.TracePersistenceService
+	traceStore              *stores.TraceStore
+	oTelStore               *stores.OTelDataHandler
+	serviceIPStore          *zkRedis.LocalCacheStore[string]
+	exceptionCacheSaveHooks ExceptionCacheSaveHooks[string]
+	exceptionStoreReader    *zkRedis.LocalCacheStore[string]
+	traceRawDataCollector   *vzReader.VzReader
 	issueRateMap            typedef.IssueRateMap
 	mutex                   sync.Mutex
 }
 
 func NewScenarioManager(cfg config.AppConfigs, tps *tracePersistence.TracePersistenceService) (*ScenarioManager, error) {
-	reader, err := getNewVZReader(cfg)
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to get new VZ reader")
-	}
 
 	vs, err := zkRedis.GetVersionedStore[scenarioGeneratorModel.Scenario](&cfg.Redis, "scenarios", ScenarioRefreshInterval)
 	if err != nil {
@@ -69,28 +69,20 @@ func NewScenarioManager(cfg config.AppConfigs, tps *tracePersistence.TracePersis
 		scenarioStore:           vs,
 		traceStore:              stores.GetTraceStore(cfg.Redis, TTLForTransientSets),
 		oTelStore:               stores.GetOTelStore(cfg.Redis),
-		exceptionStoreReader:    stores.GetExceptionStore(cfg.Redis, tps),
-		traceRawDataCollector:   reader,
 		tracePersistenceService: tps,
 		cfg:                     cfg,
 	}
-	return &fp, nil
-}
+	fp.exceptionCacheSaveHooks = ExceptionCacheSaveHooks[string]{scenarioManager: &fp}
 
-func getNewVZReader(cfg config.AppConfigs) (*vzReader.VzReader, error) {
-	reader := vzReader.VzReader{
-		CloudAddr:  cfg.ScenarioConfig.VZCloudAddr,
-		ClusterId:  cfg.ScenarioConfig.VZClusterId,
-		ClusterKey: cfg.ScenarioConfig.VZClusterKey,
-	}
-
-	err := reader.Init()
+	fp.exceptionStoreReader = getLRUCacheStore(cfg.Redis, &fp.exceptionCacheSaveHooks)
+	fp.serviceIPStore = getExpiryBasedCacheStore(cfg.Redis)
+	reader, err := getNewVZReader(cfg)
 	if err != nil {
-		fmt.Printf("Failed to init reader, err: %v\n", err)
-		return nil, err
+		return nil, errors.Wrap(err, "failed to get new VZ reader")
 	}
+	fp.traceRawDataCollector = reader
 
-	return &reader, nil
+	return &fp, nil
 }
 
 func (scenarioManager *ScenarioManager) Init() *ScenarioManager {
@@ -203,7 +195,7 @@ func (scenarioManager *ScenarioManager) processTraceIDsAgainstScenarios(traceIds
 			zkLogger.Error(LoggerTag, "Error saving incidents", saveError)
 		}
 		endTime := time.Now()
-		zkLogger.Info(LoggerTag, "Time taken to zkRedis data in persistent storage ", endTime.Sub(startTime))
+		zkLogger.Info(LoggerTag, "Time taken to zkRedis data in pe]rsistent storage ", endTime.Sub(startTime))
 
 		zkLogger.Info(LoggerTag, "processed batch", batch)
 	}
@@ -211,8 +203,8 @@ func (scenarioManager *ScenarioManager) processTraceIDsAgainstScenarios(traceIds
 
 // getAllTraceIDs gets all the traceIds from the traceStore for all the scenarios
 func (scenarioManager *ScenarioManager) getAllTraceIDs(scenarios map[string]*scenarioGeneratorModel.Scenario, namesOfAllSets []string) ([]typedef.TTraceid, typedef.ScenarioToScenarioTracesMap) {
-	allTraceIds := make(ds.Set[typedef.TTraceid], 0)
-	scenarioWithTraces := make(typedef.ScenarioToScenarioTracesMap, 0)
+	allTraceIds := make(ds.Set[typedef.TTraceid])
+	scenarioWithTraces := make(typedef.ScenarioToScenarioTracesMap)
 	for _, scenario := range scenarios {
 		if scenario == nil {
 			zkLogger.Debug(LoggerTag, "Found nil scenario")
@@ -516,7 +508,7 @@ func getListOfIssues(scenario *scenarioGeneratorModel.Scenario, spanMap typedef.
 
 	// 3. do a cartesian product of all the elements in workloadIdSet
 	spansForGrpBy := make([]map[typedef.TWorkloadId]*tracePersistenceModel.Span, 0)
-	for workloadId, _ := range workloadIdListInGroup {
+	for workloadId := range workloadIdListInGroup {
 		arrSpans := workloadIdToSpansMap[workloadId]
 		spansForGrpBy = getCartesianProductOfSpans(spansForGrpBy, workloadId, arrSpans)
 	}
@@ -676,4 +668,18 @@ func (scenarioManager *ScenarioManager) collectPostgresRawData(timeRange string,
 		return make([]models.PgSQLRawDataModel, 0)
 	}
 	return rawData.Results
+}
+
+type ExceptionCacheSaveHooks[T any] struct {
+	scenarioManager *ScenarioManager
+}
+
+func (exceptionCacheSaveHooks *ExceptionCacheSaveHooks[T]) PreCacheSaveHookAsync(key string, value *T) *zkErrors.ZkError {
+
+	if value != nil {
+		strToSave := fmt.Sprintf("%v", *value)
+		return (*exceptionCacheSaveHooks.scenarioManager.tracePersistenceService).SaveExceptions([]tracePersistenceModel.ExceptionData{{Id: key, ExceptionBody: strToSave}})
+	}
+
+	return nil
 }
