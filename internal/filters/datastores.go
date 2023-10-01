@@ -10,7 +10,7 @@ import (
 	"time"
 )
 
-func getLRUCacheStore(redisConfig storage.RedisConfig, csh zkRedis.CacheStoreHook[string]) *zkRedis.LocalCacheStore[string] {
+func getLRUCacheStore(redisConfig storage.RedisConfig, csh zkRedis.CacheStoreHook[string]) *zkRedis.LocalCacheKVStore[string] {
 
 	dbName := "exception"
 	cache := ds.GetLRUCache[string](cacheSize)
@@ -20,13 +20,13 @@ func getLRUCacheStore(redisConfig storage.RedisConfig, csh zkRedis.CacheStoreHoo
 	return localCache
 }
 
-func getExpiryBasedCacheStore(redisConfig storage.RedisConfig) *zkRedis.LocalCacheStore[string] {
+func getExpiryBasedCacheStore[T any](redisConfig storage.RedisConfig) *zkRedis.LocalCacheHSetStore {
 
 	dbName := "ip"
 	expiry := int64(5 * time.Minute)
-	cache := ds.GetCacheWithExpiry[string](expiry)
+	cache := ds.GetCacheWithExpiry[map[string]string](expiry)
 	redisClient := storage.GetRedisConnection(dbName, redisConfig)
-	localCache := zkRedis.GetLocalCacheStore[string](redisClient, cache, nil, ctx)
+	localCache := zkRedis.GetLocalCacheHSetStore(redisClient, cache, nil, ctx)
 
 	return localCache
 }

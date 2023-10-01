@@ -6,11 +6,9 @@ import (
 	"github.com/redis/go-redis/v9"
 	zkLogger "github.com/zerok-ai/zk-utils-go/logs"
 	"github.com/zerok-ai/zk-utils-go/storage/redis/config"
-	"net/url"
 	typedef "scenario-manager/internal"
 	tracePersistenceModel "scenario-manager/internal/tracePersistence/model"
 	"strconv"
-	"strings"
 )
 
 type OTelDataHandler struct {
@@ -35,20 +33,28 @@ func GetOTelStore(redisConfig config.RedisConfig) *OTelDataHandler {
 	return OTelDataHandler{redisClient: _redisClient}.initialize()
 }
 
+type OTelError struct {
+	ErrorType     string `json:"error_type"`
+	ExceptionType string `json:"exception_type"`
+	Hash          string `json:"hash"`
+	Message       string `json:"message"`
+}
+
 type SpanFromOTel struct {
 	TraceID      typedef.TTraceid
 	SpanID       typedef.TSpanId
 	ParentSpanID typedef.TSpanId `json:"parent_span_id"`
 	Kind         string          `json:"span_kind"`
 
-	StartTime uint64 `json:"start_ns"`
-	EndTime   uint64 `json:"end_ns"`
+	StartTimeNS uint64 `json:"start_ns"`
+	LatencyNS   uint64 `json:"latency_ns"`
 
 	SourceIP string `json:"source_ip"`
 	DestIP   string `json:"dest_ip"`
 
-	ServiceName string `json:"service_name"`
+	Errors []OTelError `json:"errors"`
 
+	WorkloadIDList     []string               `json:"workload_id_list"`
 	Attributes         map[string]interface{} `json:"attributes"`
 	SpanForPersistence *tracePersistenceModel.Span
 	Children           []SpanFromOTel
@@ -87,16 +93,18 @@ func (spanFromOTel *SpanFromOTel) getNumberAttribute(attr string) (string, bool)
 func (spanFromOTel *SpanFromOTel) createAndPopulateSpanForPersistence() {
 
 	spanFromOTel.SpanForPersistence = &tracePersistenceModel.Span{
-		TraceID:       string(spanFromOTel.TraceID),
-		SpanID:        string(spanFromOTel.SpanID),
-		Kind:          spanFromOTel.Kind,
-		ParentSpanID:  string(spanFromOTel.ParentSpanID),
-		StartTime:     EpochMilliSecondsToTime(spanFromOTel.StartTime),
-		Latency:       latencyInMilliSeconds(spanFromOTel.StartTime, spanFromOTel.EndTime),
-		SourceIP:      spanFromOTel.SourceIP,
-		DestinationIP: spanFromOTel.DestIP,
-		ServiceName:   spanFromOTel.ServiceName,
+		TraceID:        string(spanFromOTel.TraceID),
+		SpanID:         string(spanFromOTel.SpanID),
+		Kind:           spanFromOTel.Kind,
+		ParentSpanID:   string(spanFromOTel.ParentSpanID),
+		StartTime:      EpochNanoSecondsToTime(spanFromOTel.StartTimeNS),
+		Latency:        spanFromOTel.LatencyNS,
+		SourceIP:       spanFromOTel.SourceIP,
+		DestinationIP:  spanFromOTel.DestIP,
+		WorkloadIDList: spanFromOTel.WorkloadIDList,
 	}
+
+	//TODO: set service name
 
 	// set protocol
 	if protocol, ok := spanFromOTel.GetStringAttribute(OTelAttrProtocol); ok {
@@ -108,33 +116,30 @@ func (spanFromOTel *SpanFromOTel) createAndPopulateSpanForPersistence() {
 	}
 }
 
-func (spanFromOTel *SpanFromOTel) populateExceptionAttributeMap() bool {
+func (spanFromOTel *SpanFromOTel) populateExceptionAttributeMap() []string {
+
+	errorIds := make([]string, 0)
+
 	spanForPersistence := spanFromOTel.SpanForPersistence
 	// set protocol for exception
-	if httpMethod, methodExists := spanFromOTel.Attributes[OTelAttrHttpMethod]; methodExists {
-		spanForPersistence.Method = httpMethod.(string)
-		if urlAttribute, urlExists := spanFromOTel.Attributes[OTelAttrHttpUrl]; urlExists {
-			urlString := urlAttribute.(string)
-			parsedUrl, parseErr := url.Parse(urlString)
-			if parseErr != nil {
-				zkLogger.Error(LoggerTag, "populateThroughHttpAttributeMap: parseErr=", parseErr, " url=", urlString)
-			} else {
-				host := parsedUrl.Host
-				path := parsedUrl.Path
-				if strings.Contains(host, ZkOperatorServiceName) && strings.Contains(path, OTelExceptionUrl) && httpMethod == HTTPPost {
-					spanForPersistence.Protocol = PException
-				}
-			}
+	if spanFromOTel.Errors != nil && len(spanFromOTel.Errors) > 0 {
+
+		for _, oTelError := range spanFromOTel.Errors {
+			errorIds = append(errorIds, oTelError.Hash)
 		}
+
+		bytesOTelErrors, err := json.Marshal(spanFromOTel.Errors)
+		if err != nil {
+			zkLogger.Error(LoggerTag, "populateExceptionAttributeMap: err=", err)
+			return errorIds
+		}
+		spanForPersistence.ErrorType = string(bytesOTelErrors)
 	}
-	return true
+	return errorIds
 }
 
 func (spanFromOTel *SpanFromOTel) populateThroughHttpAttributeMap() bool {
 	spanForPersistence := spanFromOTel.SpanForPersistence
-
-	// set protocol
-	spanFromOTel.populateExceptionAttributeMap()
 
 	if status, ok := spanFromOTel.GetStringAttribute(OTelAttrHttpStatus); ok {
 		s, err := strconv.Atoi(status)
@@ -232,7 +237,7 @@ type TraceFromOTel struct {
 // GetSpansForTracesFromDB retrieves the spans for the given traceIds from the database
 // Returns a map of traceId to TraceFromOTel
 // Returns a map of protocol to array of traces
-func (t OTelDataHandler) GetSpansForTracesFromDB(keys []typedef.TTraceid) (map[typedef.TTraceid]*TraceFromOTel, error) {
+func (t OTelDataHandler) GetSpansForTracesFromDB(keys []typedef.TTraceid) (result map[typedef.TTraceid]*TraceFromOTel, oTelExceptions []string, err error) {
 
 	redisClient := t.redisClient
 
@@ -245,21 +250,29 @@ func (t OTelDataHandler) GetSpansForTracesFromDB(keys []typedef.TTraceid) (map[t
 		hashResults = append(hashResults, hashResult)
 	}
 	// 3. Execute the transaction
-	_, err := pipe.Exec(ctx)
+	_, err = pipe.Exec(ctx)
 	if err != nil {
 		fmt.Println("Error executing transaction:", err)
-		return nil, err
+		return nil, nil, err
 	}
 
 	// 4. Process the results
-	result := map[typedef.TTraceid]*TraceFromOTel{}
-	//tracesForProtocol := make(map[string]ds.Set[string], 0)
+	result, oTelExceptions = t.processResult(keys, hashResults)
+
+	return result, oTelExceptions, nil
+}
+
+func (t OTelDataHandler) processResult(keys []typedef.TTraceid, hashResults []*redis.MapStringStringCmd) (result map[typedef.TTraceid]*TraceFromOTel, exceptions []string) {
+
+	result = make(map[typedef.TTraceid]*TraceFromOTel)
+	exceptions = make([]string, 0)
+
 	for i, hashResult := range hashResults {
 		traceId := keys[i]
 		trace, err1 := hashResult.Result()
 
 		if err1 != nil {
-			zkLogger.Error(LoggerTag, "Error retrieving trace:", err)
+			zkLogger.Error(LoggerTag, "Error retrieving trace:", err1)
 			continue
 		}
 
@@ -281,6 +294,9 @@ func (t OTelDataHandler) GetSpansForTracesFromDB(keys []typedef.TTraceid) (map[t
 			sp.TraceID = traceId
 			sp.SpanID = typedef.TSpanId(spanId)
 			sp.createAndPopulateSpanForPersistence()
+
+			// handle exceptions
+			exceptions = append(exceptions, sp.populateExceptionAttributeMap()...)
 
 			traceFromOTel.Spans[typedef.TSpanId(spanId)] = &sp
 		}
@@ -313,5 +329,5 @@ func (t OTelDataHandler) GetSpansForTracesFromDB(keys []typedef.TTraceid) (map[t
 		result[traceId] = traceFromOTel
 	}
 
-	return result, nil
+	return result, exceptions
 }

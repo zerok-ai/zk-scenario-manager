@@ -23,7 +23,7 @@ func PopulateScenarios(redisConfig config.RedisConfig) {
 	err = scenarioPopulator.AddScenario(scenario)
 }
 
-func PopulateTraces(redisConfig *config.RedisConfig) {
+func PopulateTraces(redisConfig config.RedisConfig) {
 	GetSetPopulator(redisConfig, "traces", "idA1", "", 1, 40).PopulateData()
 	GetSetPopulator(redisConfig, "traces", "idA2", "", 76, 15).PopulateData()
 

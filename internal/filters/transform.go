@@ -51,7 +51,7 @@ func enrichSpanFromHTTPRawData(span *tracePersistenceModel.Span, fullSpan *model
 	if span.IsRoot {
 		span.Source = fullSpan.Source
 		span.Destination = fullSpan.Destination
-		span.Latency = float64(fullSpan.Latency)
+		span.Latency = uint64(fullSpan.Latency)
 		span.Path = fullSpan.ReqPath
 		span.Method = fullSpan.ReqMethod
 		span.RequestPayloadSize = fullSpan.ReqBodySize

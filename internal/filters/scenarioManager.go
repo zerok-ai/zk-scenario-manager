@@ -13,17 +13,16 @@ import (
 	"github.com/zerok-ai/zk-utils-go/ds"
 	zkLogger "github.com/zerok-ai/zk-utils-go/logs"
 	scenarioGeneratorModel "github.com/zerok-ai/zk-utils-go/scenario/model"
+	evaluators "github.com/zerok-ai/zk-utils-go/scenario/model/evaluators"
 	zkRedis "github.com/zerok-ai/zk-utils-go/storage/redis"
 	ticker "github.com/zerok-ai/zk-utils-go/ticker"
 	zkErrors "github.com/zerok-ai/zk-utils-go/zkerrors"
-	"regexp"
 	typedef "scenario-manager/internal"
 	"scenario-manager/internal/config"
 	"scenario-manager/internal/stores"
 	tracePersistenceModel "scenario-manager/internal/tracePersistence/model"
 	tracePersistence "scenario-manager/internal/tracePersistence/service"
 	"sort"
-	"strings"
 	"sync"
 	"time"
 )
@@ -50,9 +49,9 @@ type ScenarioManager struct {
 	tracePersistenceService *tracePersistence.TracePersistenceService
 	traceStore              *stores.TraceStore
 	oTelStore               *stores.OTelDataHandler
-	serviceIPStore          *zkRedis.LocalCacheStore[string]
+	serviceIPStore          *zkRedis.LocalCacheHSetStore
 	exceptionCacheSaveHooks ExceptionCacheSaveHooks[string]
-	exceptionStoreReader    *zkRedis.LocalCacheStore[string]
+	exceptionStoreReader    *zkRedis.LocalCacheKVStore[string]
 	traceRawDataCollector   *vzReader.VzReader
 	issueRateMap            typedef.IssueRateMap
 	mutex                   sync.Mutex
@@ -68,19 +67,19 @@ func NewScenarioManager(cfg config.AppConfigs, tps *tracePersistence.TracePersis
 	fp := ScenarioManager{
 		scenarioStore:           vs,
 		traceStore:              stores.GetTraceStore(cfg.Redis, TTLForTransientSets),
-		oTelStore:               stores.GetOTelStore(cfg.Redis),
 		tracePersistenceService: tps,
 		cfg:                     cfg,
 	}
 	fp.exceptionCacheSaveHooks = ExceptionCacheSaveHooks[string]{scenarioManager: &fp}
 
 	fp.exceptionStoreReader = getLRUCacheStore(cfg.Redis, &fp.exceptionCacheSaveHooks)
-	fp.serviceIPStore = getExpiryBasedCacheStore(cfg.Redis)
+	fp.serviceIPStore = getExpiryBasedCacheStore[interface{}](cfg.Redis)
 	reader, err := getNewVZReader(cfg)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to get new VZ reader")
 	}
 	fp.traceRawDataCollector = reader
+	fp.oTelStore = stores.GetOTelStore(cfg.Redis)
 
 	return &fp, nil
 }
@@ -167,7 +166,7 @@ func (scenarioManager *ScenarioManager) processTraceIDsAgainstScenarios(traceIds
 		}
 
 		// c. Process each trace against all the scenarioWithTraces
-		incidents := buildIncidentsForPersistence(scenarioWithTraces, tracesFromOTelStore)
+		incidents := scenarioManager.buildIncidentsForPersistence(scenarioWithTraces, tracesFromOTelStore)
 		if incidents == nil || len(incidents) == 0 {
 			zkLogger.ErrorF(LoggerTag, "no incidents to save")
 			continue
@@ -248,10 +247,25 @@ func (scenarioManager *ScenarioManager) getDataForTraces(traceIds []typedef.TTra
 }
 
 func (scenarioManager *ScenarioManager) getDataFromOTelStore(traceIds []typedef.TTraceid) map[typedef.TTraceid]*stores.TraceFromOTel {
-	tracesFromOTelStore, err := scenarioManager.oTelStore.GetSpansForTracesFromDB(traceIds)
+	tracesFromOTelStore, oTelExceptions, err := scenarioManager.oTelStore.GetSpansForTracesFromDB(traceIds)
 	if err != nil {
 		zkLogger.Error(LoggerTag, "error in getting data from OTel zkRedis", err)
 	}
+
+	if oTelExceptions != nil && len(oTelExceptions) > 0 {
+		exceptionData := make([]tracePersistenceModel.ExceptionData, 0)
+		for _, exceptionID := range oTelExceptions {
+			expStrPtr, isFromCache := scenarioManager.exceptionStoreReader.Get(exceptionID)
+			if !isFromCache {
+				expData := tracePersistenceModel.ExceptionData{Id: exceptionID, ExceptionBody: *expStrPtr}
+				exceptionData = append(exceptionData, expData)
+			}
+		}
+		if len(exceptionData) > 0 {
+			(*scenarioManager.tracePersistenceService).SaveExceptions(exceptionData)
+		}
+	}
+
 	return tracesFromOTelStore
 }
 
@@ -322,7 +336,7 @@ func (scenarioManager *ScenarioManager) addRawDataToSpans(tracesFromOTelStore ma
 				rootClient.SpanForPersistence.ParentSpanID = string(rootClient.ParentSpanID)
 				rootClient.SpanForPersistence.Destination = spanWithRawDataFromPixie.Destination
 				rootClient.SpanForPersistence.Source = ""
-				rootClient.StartTime = oTelRootSpan.StartTime
+				rootClient.StartTimeNS = oTelRootSpan.StartTimeNS
 
 				oTelRootSpan.SpanForPersistence.IsRoot = false
 
@@ -412,7 +426,7 @@ func getSpanFromOTel(traceId, spanId string, tracesFromOTelStore map[typedef.TTr
 	return spanFromOTel
 }
 
-func buildIncidentsForPersistence(scenariosWithTraces typedef.ScenarioToScenarioTracesMap, tracesFromOTel map[typedef.TTraceid]*stores.TraceFromOTel) []tracePersistenceModel.IncidentWithIssues {
+func (scenarioManager *ScenarioManager) buildIncidentsForPersistence(scenariosWithTraces typedef.ScenarioToScenarioTracesMap, tracesFromOTel map[typedef.TTraceid]*stores.TraceFromOTel) []tracePersistenceModel.IncidentWithIssues {
 
 	zkLogger.DebugF(LoggerTag, "Building scenario for persistence, trace_count=%d", len(tracesFromOTel))
 
@@ -435,14 +449,14 @@ func buildIncidentsForPersistence(scenariosWithTraces typedef.ScenarioToScenario
 		}
 
 		// evaluate this trace
-		incidents := evaluateIncidents(traceId, scenarioMap, spanMapOfPersistentSpans)
+		incidents := scenarioManager.evaluateIncidents(traceId, scenarioMap, spanMapOfPersistentSpans)
 		incidentsWithIssues = append(incidentsWithIssues, incidents)
 	}
 
 	return incidentsWithIssues
 }
 
-func evaluateIncidents(traceId typedef.TTraceid, scenarios map[typedef.TScenarioID]*scenarioGeneratorModel.Scenario, spansOfTrace typedef.TMapOfSpanIdToSpan) tracePersistenceModel.IncidentWithIssues {
+func (scenarioManager *ScenarioManager) evaluateIncidents(traceId typedef.TTraceid, scenarios map[typedef.TScenarioID]*scenarioGeneratorModel.Scenario, spansOfTrace typedef.TMapOfSpanIdToSpan) tracePersistenceModel.IncidentWithIssues {
 
 	spans := make([]*tracePersistenceModel.Span, 0)
 	for key := range spansOfTrace {
@@ -452,7 +466,7 @@ func evaluateIncidents(traceId typedef.TTraceid, scenarios map[typedef.TScenario
 	issueGroupList := make([]tracePersistenceModel.IssueGroup, 0)
 
 	for _, scenario := range scenarios {
-		listOfIssues := getListOfIssues(scenario, spansOfTrace)
+		listOfIssues := scenarioManager.getListOfIssues(scenario, spansOfTrace)
 		if len(listOfIssues) > 0 {
 			issueGroupList = append(issueGroupList, tracePersistenceModel.IssueGroup{
 				ScenarioId:      scenario.Id,
@@ -474,7 +488,7 @@ func evaluateIncidents(traceId typedef.TTraceid, scenarios map[typedef.TScenario
 	return incidentWithIssues
 }
 
-func getListOfIssues(scenario *scenarioGeneratorModel.Scenario, spanMap typedef.TMapOfSpanIdToSpan) []tracePersistenceModel.Issue {
+func (scenarioManager *ScenarioManager) getListOfIssues(scenario *scenarioGeneratorModel.Scenario, spanMap typedef.TMapOfSpanIdToSpan) []tracePersistenceModel.Issue {
 
 	// 1. create a set of used workload ids
 	workloadIdListInGroup := make(ds.Set[typedef.TWorkloadId], 0)
@@ -526,8 +540,8 @@ func getListOfIssues(scenario *scenarioGeneratorModel.Scenario, spanMap typedef.
 			}
 
 			// get hash and title
-			hash = hash + TitleDelimiter + getTextFromStructMembers(group.Hash, span)
-			title = title + TitleDelimiter + getTextFromStructMembers(group.Title, span)
+			hash = hash + TitleDelimiter + scenarioManager.getTextFromStructMembers(group.Hash, span)
+			title = title + TitleDelimiter + scenarioManager.getTextFromStructMembers(group.Title, span)
 		}
 		md5OfHash := md5.Sum([]byte(hash))
 		hash = hex.EncodeToString(md5OfHash[:])
@@ -580,67 +594,61 @@ func getCartesianProductOfSpans(arrOfWorkLoadSpanMap []map[typedef.TWorkloadId]*
 	return result
 }
 
-func extractStrings(input string) (string, string) {
-	// Define regular expressions to match the patterns
-	toJSONPattern := `#toJSON\((.*?)\)#`
-	jsonExtractPattern := `#jsonExtract\((.*?)\)`
+func (scenarioManager *ScenarioManager) getTextFromStructMembers(path string, span interface{}) string {
 
-	// Compile the regular expressions
-	toJSONRegex := regexp.MustCompile(toJSONPattern)
-	jsonExtractRegex := regexp.MustCompile(jsonExtractPattern)
+	var returnValue string
+	var ok bool
+	var functions []evaluators.Function
+	var valueAtObject interface{}
 
-	// Extract response_payload and message using regular expressions
-	responsePayload := toJSONRegex.FindStringSubmatch(input)
-	message := jsonExtractRegex.FindStringSubmatch(input)
+	valueAtObject = span
+	_, functions = evaluators.GetPathAndFunctions(path)
 
-	// If the patterns are found, return the matched values
-	if len(responsePayload) > 1 && len(message) > 1 {
-		return responsePayload[1], message[1]
+	// handle functions
+	for _, fn := range functions {
+		if valueAtObject == nil {
+			return returnValue
+		}
+
+		if fn.Name == "jsonExtract" {
+			valueAtObject, ok = evaluators.ExtractJSON(fn, valueAtObject)
+		} else if fn.Name == "getWorkloadFromIP" {
+			valueAtObject, ok = scenarioManager.getWorkLoadForIP(fn, valueAtObject)
+		} else {
+			valueAtObject, ok = evaluators.EvalStringFunction(fn, valueAtObject)
+		}
+		if !ok {
+			return ""
+		}
 	}
 
-	// If the patterns are not found, return empty strings
-	return "", ""
+	returnValue = fmt.Sprintf("%v", valueAtObject)
+	return returnValue
 }
 
-// currently this is hardcoded to extract just message out of the req body
-func extractFromException(dump string) string {
-	dump = strings.Trim(dump, "{}")
-	parts := strings.Split(dump, "message=")
-	if len(parts) > 1 {
-		return parts[1]
+func (scenarioManager *ScenarioManager) getWorkLoadForIP(fn evaluators.Function, valueAtObject interface{}) (string, bool) {
+
+	if len(fn.Args) < 1 {
+		return "", false
 	}
-	parts = strings.Split(dump, ", stacktrace=")
-	return parts[0]
 
-}
-
-func getTextFromStructMembers(path string, span *tracePersistenceModel.Span) string {
-	var result interface{}
-	var err error
-	if strings.Contains(path, "toJSON") {
-		path, extractValue := extractStrings(path)
-
-		result, err = jmespath.Search("ReqBody", span)
-		if err == nil {
-			str, ok := result.(string)
-			if ok {
-				return extractFromException(str)
-			}
-		}
-		zkLogger.Error(LoggerTag, "Error evaluating jmespath for span ", path+extractValue)
-
-	} else {
-		result, err = jmespath.Search(path, span)
+	// get the path and ip
+	path := fn.Args[0]
+	ip, err := jmespath.Search(path, valueAtObject)
+	if err != nil || ip == nil || ip.(string) == "" {
+		return "", false
 	}
-	if err == nil {
-		str, ok := result.(string)
-		if ok {
-			return str
-		}
-	} else {
-		zkLogger.Error(LoggerTag, "Error evaluating jmespath for span ", span)
+
+	// get the workload for the ip
+	workloadDetailsPtr, _ := scenarioManager.serviceIPStore.Get(ip.(string))
+	//workloadDetailsPtr, _ := scenarioManager.serviceIPStore.Get("10.60.1.53")
+	podDetails := loadIPDetailsIntoHashmap(ip.(string), workloadDetailsPtr)
+
+	serviceName, err := jmespath.Search("Metadata.ServiceName", podDetails)
+	if err != nil || serviceName == nil {
+		return ip.(string), false
 	}
-	return ""
+	return serviceName.(string), false
 }
 
 func (scenarioManager *ScenarioManager) collectHTTPRawData(traceIds []string, startTime string) []models.HttpRawDataModel {

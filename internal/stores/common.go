@@ -29,8 +29,6 @@ const (
 	OTelAttrHttpMethod = "http.method"
 	OTelAttrHttpStatus = "http.status_code"
 
-	OTelExceptionUrl = "/exception"
-
 	OTelAttrHttpUrl    = "http.url"
 	OTelAttrHttpTarget = "http.target"
 	OTelHttpAttrRoute  = "http.route"
@@ -87,4 +85,8 @@ func EpochMilliSecondsToTime(epochNS uint64) time.Time {
 
 	// Convert to time.Time using time.Unix
 	return time.Unix(timestampSeconds, 0).UTC()
+}
+
+func EpochNanoSecondsToTime(epochNS uint64) time.Time {
+	return time.Unix(0, int64(epochNS)).UTC()
 }

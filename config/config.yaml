@@ -6,7 +6,7 @@ redis:
     traces: 1
     scenarios: 2
     otel: 3
-    ip: 5
+    ip: 7
     exceptions: 8
   readTimeout: 20
 postgres:

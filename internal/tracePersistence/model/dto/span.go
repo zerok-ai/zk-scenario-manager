@@ -12,7 +12,7 @@ type SpanTableDto struct {
 	IsRoot              bool           `json:"is_root"`
 	Kind                string         `json:"kind"`
 	StartTime           time.Time      `json:"start_time"`
-	Latency             float64        `json:"latency"`
+	Latency             uint64         `json:"latency"`
 	Source              string         `json:"source"`
 	Destination         string         `json:"destination"`
 	WorkloadIDList      pq.StringArray `json:"workload_id_list"`
