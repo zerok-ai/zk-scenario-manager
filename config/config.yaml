@@ -7,6 +7,7 @@ redis:
     scenarios: 2
     otel: 3
     ip: 7
+    attrMap: 7
     exceptions: 8
   readTimeout: 20
 postgres:
