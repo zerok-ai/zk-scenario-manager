@@ -10,39 +10,10 @@ import (
 )
 
 const (
-	IssueTablePostgres       = "issue"
-	IncidentTablePostgres    = "incident"
-	SpanTablePostgres        = "span"
-	SpanRawDataTablePostgres = "span_raw_data"
-
-	ScenarioId             = "scenario_id"
-	ScenarioVersion        = "scenario_version"
-	TraceId                = "trace_id"
-	IssueHash              = "issue_hash"
-	IssueTitle             = "issue_title"
-	IncidentCollectionTime = "incident_collection_time"
-	EntryService           = "entry_service"
-	Endpoint               = "end_point"
-	RootSpanTime           = "root_span_time"
-
-	SpanId          = "span_id"
-	ParentSpanId    = "parent_span_id"
-	Source          = "source"
-	Destination     = "destination"
-	WorkloadIdList  = "workload_id_list"
-	Status          = "status"
-	Metadata        = "metadata"
-	LatencyNs       = "latency_ns"
-	Protocol        = "protocol"
-	IssueHashList   = "issue_hash_list"
-	Time            = "time"
-	RequestPayload  = "request_payload"
-	ResponsePayload = "response_payload"
-
-	UpsertExceptionQuery   = "INSERT INTO exception_data (id, exception_body) VALUES ($1, $2) ON CONFLICT (id) DO NOTHING"
+	UpsertErrorQuery       = "INSERT INTO errors_data (id, data) VALUES ($1, $2) ON CONFLICT (id) DO NOTHING"
 	UpsertIssueQuery       = "INSERT INTO issue (issue_hash, issue_title, scenario_id, scenario_version) VALUES ($1, $2, $3, $4) ON CONFLICT (issue_hash) DO NOTHING"
 	UpsertIncidentQuery    = "INSERT INTO incident (trace_id, issue_hash, incident_collection_time) VALUES ($1, $2, $3) ON CONFLICT (issue_hash, trace_id) DO NOTHING"
-	UpsertSpanQuery        = "INSERT INTO span (trace_id, parent_span_id, span_id, is_root, kind, start_time, latency, source, destination, workload_id_list, protocol, issue_hash_list, request_payload_size, response_payload_size, method, route, scheme, path, query, status, username, source_ip, destination_ip, service_name, error_type, error_table_id ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26) ON CONFLICT (trace_id, span_id) DO NOTHING"
+	UpsertSpanQuery        = "INSERT INTO span (trace_id, parent_span_id, span_id, is_root, kind, start_time, latency, source, destination, workload_id_list, protocol, issue_hash_list, request_payload_size, response_payload_size, method, route, scheme, path, query, status, username, source_ip, destination_ip, service_name, errors) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25) ON CONFLICT (trace_id, span_id) DO NOTHING"
 	UpsertSpanRawDataQuery = "INSERT INTO span_raw_data (trace_id, span_id, req_headers, resp_headers, is_truncated, req_body, resp_body) VALUES ($1, $2, $3, $4, $5, $6, $7) ON CONFLICT (trace_id, span_id) DO NOTHING"
 )
 
@@ -50,7 +21,7 @@ var LogTag = "zk_trace_persistence_repo"
 
 type TracePersistenceRepo interface {
 	SaveTraceList([]dto.IssuesDetailDto) error
-	SaveExceptions(exceptions []dto.ExceptionTableDto) error
+	SaveErrors(errors []dto.ErrorsDataTableDto) error
 	Close() error
 }
 
@@ -127,13 +98,13 @@ func (z tracePersistenceRepo) SaveTraceList(issuesDetailList []dto.IssuesDetailD
 	return err
 }
 
-func (z tracePersistenceRepo) SaveExceptions(exceptions []dto.ExceptionTableDto) error {
-	uniqueExceptions := make(map[string]bool)
-	exceptionData := make([]interfaces.DbArgs, 0)
-	for _, v := range exceptions {
-		if _, ok := uniqueExceptions[v.Id]; !ok {
-			uniqueExceptions[v.Id] = true
-			exceptionData = append(exceptionData, v)
+func (z tracePersistenceRepo) SaveErrors(errors []dto.ErrorsDataTableDto) error {
+	uniqueErrors := make(map[string]bool)
+	errorData := make([]interfaces.DbArgs, 0)
+	for _, v := range errors {
+		if _, ok := uniqueErrors[v.Id]; !ok {
+			uniqueErrors[v.Id] = true
+			errorData = append(errorData, v)
 		}
 	}
 
@@ -143,7 +114,7 @@ func (z tracePersistenceRepo) SaveExceptions(exceptions []dto.ExceptionTableDto)
 		return err
 	}
 
-	err = bulkUpsert(tx, z.dbRepo, UpsertExceptionQuery, exceptionData)
+	err = bulkUpsert(tx, z.dbRepo, UpsertErrorQuery, errorData)
 	if err != nil {
 		zkLogger.Error(LogTag, "Error in bulk upsert for incident table", err)
 		tx.Rollback()

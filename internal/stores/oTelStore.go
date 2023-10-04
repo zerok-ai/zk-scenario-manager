@@ -116,7 +116,7 @@ func (spanFromOTel *SpanFromOTel) createAndPopulateSpanForPersistence() {
 	}
 }
 
-func (spanFromOTel *SpanFromOTel) populateExceptionAttributeMap() []string {
+func (spanFromOTel *SpanFromOTel) populateErrorAttributeMap() []string {
 
 	errorIds := make([]string, 0)
 
@@ -130,10 +130,10 @@ func (spanFromOTel *SpanFromOTel) populateExceptionAttributeMap() []string {
 
 		bytesOTelErrors, err := json.Marshal(spanFromOTel.Errors)
 		if err != nil {
-			zkLogger.Error(LoggerTag, "populateExceptionAttributeMap: err=", err)
+			zkLogger.Error(LoggerTag, "populateErrorAttributeMap: err=", err)
 			return errorIds
 		}
-		spanForPersistence.ErrorType = string(bytesOTelErrors)
+		spanForPersistence.Errors = string(bytesOTelErrors)
 	}
 	return errorIds
 }
@@ -237,7 +237,7 @@ type TraceFromOTel struct {
 // GetSpansForTracesFromDB retrieves the spans for the given traceIds from the database
 // Returns a map of traceId to TraceFromOTel
 // Returns a map of protocol to array of traces
-func (t OTelDataHandler) GetSpansForTracesFromDB(keys []typedef.TTraceid) (result map[typedef.TTraceid]*TraceFromOTel, oTelExceptions []string, err error) {
+func (t OTelDataHandler) GetSpansForTracesFromDB(keys []typedef.TTraceid) (result map[typedef.TTraceid]*TraceFromOTel, oTelErrors []string, err error) {
 
 	redisClient := t.redisClient
 
@@ -257,15 +257,15 @@ func (t OTelDataHandler) GetSpansForTracesFromDB(keys []typedef.TTraceid) (resul
 	}
 
 	// 4. Process the results
-	result, oTelExceptions = t.processResult(keys, hashResults)
+	result, oTelErrors = t.processResult(keys, hashResults)
 
-	return result, oTelExceptions, nil
+	return result, oTelErrors, nil
 }
 
-func (t OTelDataHandler) processResult(keys []typedef.TTraceid, hashResults []*redis.MapStringStringCmd) (result map[typedef.TTraceid]*TraceFromOTel, exceptions []string) {
+func (t OTelDataHandler) processResult(keys []typedef.TTraceid, hashResults []*redis.MapStringStringCmd) (result map[typedef.TTraceid]*TraceFromOTel, errors []string) {
 
 	result = make(map[typedef.TTraceid]*TraceFromOTel)
-	exceptions = make([]string, 0)
+	errors = make([]string, 0)
 
 	for i, hashResult := range hashResults {
 		traceId := keys[i]
@@ -296,7 +296,7 @@ func (t OTelDataHandler) processResult(keys []typedef.TTraceid, hashResults []*r
 			sp.createAndPopulateSpanForPersistence()
 
 			// handle exceptions
-			exceptions = append(exceptions, sp.populateExceptionAttributeMap()...)
+			errors = append(errors, sp.populateErrorAttributeMap()...)
 
 			traceFromOTel.Spans[typedef.TSpanId(spanId)] = &sp
 		}
@@ -329,5 +329,5 @@ func (t OTelDataHandler) processResult(keys []typedef.TTraceid, hashResults []*r
 		result[traceId] = traceFromOTel
 	}
 
-	return result, exceptions
+	return result, errors
 }

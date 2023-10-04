@@ -1,4 +1,3 @@
 ALTER TABLE span
-    DROP COLUMN error_type,
-    DROP COLUMN error_table_id;
-DROP TABLE exception_data;
+    DROP COLUMN errors;
+DROP TABLE errors_data;

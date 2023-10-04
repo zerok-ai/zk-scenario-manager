@@ -17,7 +17,6 @@ const (
 	SERVER   = "SERVER"
 
 	PHttp       = "http"
-	PException  = "exception"
 	PMySQL      = "mysql"
 	PPostgresql = "postgresql"
 

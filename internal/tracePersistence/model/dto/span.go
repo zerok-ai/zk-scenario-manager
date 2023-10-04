@@ -30,10 +30,9 @@ type SpanTableDto struct {
 	SourceIP            string         `json:"source_ip"`
 	DestinationIP       string         `json:"destination_ip"`
 	ServiceName         string         `json:"service_name"`
-	ErrorType           string         `json:"error_type"`
-	ErrorTableId        string         `json:"error_table_id"`
+	Errors              string         `json:"errors"`
 }
 
 func (t SpanTableDto) GetAllColumns() []any {
-	return []any{t.TraceID, t.ParentSpanID, t.SpanID, t.IsRoot, t.Kind, t.StartTime, t.Latency, t.Source, t.Destination, t.WorkloadIDList, t.Protocol, t.IssueHashList, t.RequestPayloadSize, t.ResponsePayloadSize, t.Method, t.Route, t.Scheme, t.Path, t.Query, t.Status, t.Username, t.SourceIP, t.DestinationIP, t.ServiceName, t.ErrorType, t.ErrorTableId}
+	return []any{t.TraceID, t.ParentSpanID, t.SpanID, t.IsRoot, t.Kind, t.StartTime, t.Latency, t.Source, t.Destination, t.WorkloadIDList, t.Protocol, t.IssueHashList, t.RequestPayloadSize, t.ResponsePayloadSize, t.Method, t.Route, t.Scheme, t.Path, t.Query, t.Status, t.Username, t.SourceIP, t.DestinationIP, t.ServiceName, t.Errors}
 }

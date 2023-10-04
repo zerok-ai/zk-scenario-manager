@@ -40,28 +40,28 @@ func (t IncidentTableDto) GetAllColumns() []any {
 	return []any{t.TraceId, t.IssueHash, t.IncidentCollectionTime}
 }
 
-type ExceptionTableDto struct {
-	Id            string `json:"id"`
-	ExceptionBody []byte `json:"exception_body"`
+type ErrorsDataTableDto struct {
+	Id   string `json:"id"`
+	Data []byte `json:"data"`
 }
 
-func (e ExceptionTableDto) GetAllColumns() []any {
-	return []any{e.Id, e.ExceptionBody}
+func (e ErrorsDataTableDto) GetAllColumns() []any {
+	return []any{e.Id, e.Data}
 }
 
-func ConvertExceptionToExceptionDto(exception model.ExceptionData) (ExceptionTableDto, *error) {
-	var exceptionDto ExceptionTableDto
-	if !utils.IsEmpty(exception.ExceptionBody) {
-		compressedStr, err := zkCrypto.CompressStringGzip(exception.ExceptionBody)
+func ConvertErrorToErrorDto(errorData model.ErrorData) (ErrorsDataTableDto, *error) {
+	var errorDto ErrorsDataTableDto
+	if !utils.IsEmpty(errorData.Data) {
+		compressedStr, err := zkCrypto.CompressStringGzip(errorData.Data)
 		if err != nil {
 			zkLogger.Error(LogTag, err)
-			return exceptionDto, &err
+			return errorDto, &err
 		}
-		exceptionDto.ExceptionBody = compressedStr
+		errorDto.Data = compressedStr
 	}
-	exceptionDto.Id = exception.Id
+	errorDto.Id = errorData.Id
 
-	return exceptionDto, nil
+	return errorDto, nil
 }
 
 func ConvertIncidentIssuesToIssueDto(s model.IncidentWithIssues) (IssuesDetailDto, *error) {
@@ -133,8 +133,7 @@ func ConvertIncidentIssuesToIssueDto(s model.IncidentWithIssues) (IssuesDetailDt
 			SourceIP:            span.SourceIP,
 			DestinationIP:       span.DestinationIP,
 			ServiceName:         span.ServiceName,
-			ErrorType:           span.ErrorType,
-			ErrorTableId:        span.ErrorTableId,
+			Errors:              span.Errors,
 		}
 
 		spanRawDataDto := SpanRawDataTableDto{

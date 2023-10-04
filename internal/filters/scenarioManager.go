@@ -50,8 +50,8 @@ type ScenarioManager struct {
 	traceStore              *stores.TraceStore
 	oTelStore               *stores.OTelDataHandler
 	serviceIPStore          *zkRedis.LocalCacheHSetStore
-	exceptionCacheSaveHooks ExceptionCacheSaveHooks[string]
-	exceptionStoreReader    *zkRedis.LocalCacheKVStore[string]
+	errorCacheSaveHooks     ErrorCacheSaveHooks[string]
+	errorStoreReader        *zkRedis.LocalCacheKVStore[string]
 	traceRawDataCollector   *vzReader.VzReader
 	issueRateMap            typedef.IssueRateMap
 	mutex                   sync.Mutex
@@ -70,9 +70,9 @@ func NewScenarioManager(cfg config.AppConfigs, tps *tracePersistence.TracePersis
 		tracePersistenceService: tps,
 		cfg:                     cfg,
 	}
-	fp.exceptionCacheSaveHooks = ExceptionCacheSaveHooks[string]{scenarioManager: &fp}
+	fp.errorCacheSaveHooks = ErrorCacheSaveHooks[string]{scenarioManager: &fp}
 
-	fp.exceptionStoreReader = getLRUCacheStore(cfg.Redis, &fp.exceptionCacheSaveHooks)
+	fp.errorStoreReader = getLRUCacheStore(cfg.Redis, &fp.errorCacheSaveHooks)
 	fp.serviceIPStore = getExpiryBasedCacheStore[interface{}](cfg.Redis)
 	reader, err := getNewVZReader(cfg)
 	if err != nil {
@@ -101,7 +101,7 @@ func (scenarioManager *ScenarioManager) Close() {
 	scenarioManager.scenarioStore.Close()
 	scenarioManager.traceStore.Close()
 	scenarioManager.oTelStore.Close()
-	scenarioManager.exceptionStoreReader.Close()
+	scenarioManager.errorStoreReader.Close()
 
 	scenarioManager.traceRawDataCollector.Close()
 	err := (*scenarioManager.tracePersistenceService).Close()
@@ -247,22 +247,22 @@ func (scenarioManager *ScenarioManager) getDataForTraces(traceIds []typedef.TTra
 }
 
 func (scenarioManager *ScenarioManager) getDataFromOTelStore(traceIds []typedef.TTraceid) map[typedef.TTraceid]*stores.TraceFromOTel {
-	tracesFromOTelStore, oTelExceptions, err := scenarioManager.oTelStore.GetSpansForTracesFromDB(traceIds)
+	tracesFromOTelStore, oTelErrors, err := scenarioManager.oTelStore.GetSpansForTracesFromDB(traceIds)
 	if err != nil {
 		zkLogger.Error(LoggerTag, "error in getting data from OTel zkRedis", err)
 	}
 
-	if oTelExceptions != nil && len(oTelExceptions) > 0 {
-		exceptionData := make([]tracePersistenceModel.ExceptionData, 0)
-		for _, exceptionID := range oTelExceptions {
-			expStrPtr, isFromCache := scenarioManager.exceptionStoreReader.Get(exceptionID)
+	if oTelErrors != nil && len(oTelErrors) > 0 {
+		errorData := make([]tracePersistenceModel.ErrorData, 0)
+		for _, errorID := range oTelErrors {
+			expStrPtr, isFromCache := scenarioManager.errorStoreReader.Get(errorID)
 			if !isFromCache {
-				expData := tracePersistenceModel.ExceptionData{Id: exceptionID, ExceptionBody: *expStrPtr}
-				exceptionData = append(exceptionData, expData)
+				expData := tracePersistenceModel.ErrorData{Id: errorID, Data: *expStrPtr}
+				errorData = append(errorData, expData)
 			}
 		}
-		if len(exceptionData) > 0 {
-			(*scenarioManager.tracePersistenceService).SaveExceptions(exceptionData)
+		if len(errorData) > 0 {
+			(*scenarioManager.tracePersistenceService).SaveErrors(errorData)
 		}
 	}
 
@@ -290,7 +290,7 @@ func (scenarioManager *ScenarioManager) addRawDataToSpans(tracesFromOTelStore ma
 
 	// handle http and exception
 	protocol := stores.PHttp
-	spansWithHTTPRawData := scenarioManager.getRawDataForHTTPAndException(timeRange, tracesPerProtocol)
+	spansWithHTTPRawData := scenarioManager.getRawDataForHTTPAndError(timeRange, tracesPerProtocol)
 
 	// we are sorting this slice so that the root is discovered as soon as possible. by doing this
 	// we will ensure that the isRoot block in enrichWithRawDataForHTTPAndException is executed only for the root span and just once.
@@ -399,16 +399,11 @@ func (scenarioManager *ScenarioManager) addRawDataToSpans(tracesFromOTelStore ma
 
 }
 
-func (scenarioManager *ScenarioManager) getRawDataForHTTPAndException(timeRange string, tracesPerProtocol typedef.TTraceIdSetPerProtocol) []models.HttpRawDataModel {
+func (scenarioManager *ScenarioManager) getRawDataForHTTPAndError(timeRange string, tracesPerProtocol typedef.TTraceIdSetPerProtocol) []models.HttpRawDataModel {
 	// get the raw data for traces for HTTP and Exception
 	httpSet, ok := tracesPerProtocol[stores.PHttp]
 	if !ok || httpSet == nil {
-		httpSet = make(ds.Set[string], 0)
-	}
-
-	mySqlSet := tracesPerProtocol[stores.PException]
-	if ok || mySqlSet != nil {
-		httpSet.Union(mySqlSet)
+		httpSet = make(ds.Set[string])
 	}
 
 	return scenarioManager.collectHTTPRawData(httpSet.GetAll(), timeRange)
@@ -678,15 +673,15 @@ func (scenarioManager *ScenarioManager) collectPostgresRawData(timeRange string,
 	return rawData.Results
 }
 
-type ExceptionCacheSaveHooks[T any] struct {
+type ErrorCacheSaveHooks[T any] struct {
 	scenarioManager *ScenarioManager
 }
 
-func (exceptionCacheSaveHooks *ExceptionCacheSaveHooks[T]) PreCacheSaveHookAsync(key string, value *T) *zkErrors.ZkError {
+func (errorCacheSaveHooks *ErrorCacheSaveHooks[T]) PreCacheSaveHookAsync(key string, value *T) *zkErrors.ZkError {
 
 	if value != nil {
 		strToSave := fmt.Sprintf("%v", *value)
-		return (*exceptionCacheSaveHooks.scenarioManager.tracePersistenceService).SaveExceptions([]tracePersistenceModel.ExceptionData{{Id: key, ExceptionBody: strToSave}})
+		return (*errorCacheSaveHooks.scenarioManager.tracePersistenceService).SaveErrors([]tracePersistenceModel.ErrorData{{Id: key, Data: strToSave}})
 	}
 
 	return nil
