@@ -15,6 +15,7 @@ import (
 	scenarioGeneratorModel "github.com/zerok-ai/zk-utils-go/scenario/model"
 	evaluators "github.com/zerok-ai/zk-utils-go/scenario/model/evaluators"
 	zkRedis "github.com/zerok-ai/zk-utils-go/storage/redis"
+	"github.com/zerok-ai/zk-utils-go/storage/redis/clientDBNames"
 	ticker "github.com/zerok-ai/zk-utils-go/ticker"
 	zkErrors "github.com/zerok-ai/zk-utils-go/zkerrors"
 	typedef "scenario-manager/internal"
@@ -59,7 +60,7 @@ type ScenarioManager struct {
 
 func NewScenarioManager(cfg config.AppConfigs, tps *tracePersistence.TracePersistenceService) (*ScenarioManager, error) {
 
-	vs, err := zkRedis.GetVersionedStore[scenarioGeneratorModel.Scenario](&cfg.Redis, "scenarios", ScenarioRefreshInterval)
+	vs, err := zkRedis.GetVersionedStore[scenarioGeneratorModel.Scenario](&cfg.Redis, clientDBNames.ScenariosDBName, ScenarioRefreshInterval)
 	if err != nil {
 		return nil, err
 	}
@@ -635,7 +636,7 @@ func (scenarioManager *ScenarioManager) getWorkLoadForIP(fn evaluators.Function,
 	}
 
 	// get the workload for the ip
-	workloadDetailsPtr, _ := scenarioManager.serviceIPStore.Get(ip.(string))
+	workloadDetailsPtr, _ := (*scenarioManager.serviceIPStore).Get(ip.(string))
 	//workloadDetailsPtr, _ := scenarioManager.serviceIPStore.Get("10.60.1.53")
 	podDetails := loadIPDetailsIntoHashmap(ip.(string), workloadDetailsPtr)
 

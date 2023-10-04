@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/redis/go-redis/v9"
 	zkLogger "github.com/zerok-ai/zk-utils-go/logs"
+	"github.com/zerok-ai/zk-utils-go/storage/redis/clientDBNames"
 	"github.com/zerok-ai/zk-utils-go/storage/redis/config"
 	typedef "scenario-manager/internal"
 	tracePersistenceModel "scenario-manager/internal/tracePersistence/model"
@@ -27,7 +28,7 @@ func (t OTelDataHandler) Close() {
 }
 
 func GetOTelStore(redisConfig config.RedisConfig) *OTelDataHandler {
-	dbName := "otel"
+	dbName := clientDBNames.TraceDbName
 	zkLogger.Debug(LoggerTag, "GetOTelStore: config=", redisConfig, "dbName=", dbName, "dbID=", redisConfig.DBs[dbName])
 	_redisClient := config.GetRedisConnection(dbName, redisConfig)
 	return OTelDataHandler{redisClient: _redisClient}.initialize()
