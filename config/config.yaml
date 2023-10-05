@@ -16,6 +16,9 @@ postgres:
   user: "postgres"
   password: "eo1Mgtm6HI"
   dbname: "pl"
+  max_connections: 5
+  max_idle_connections: 5
+  connection_max_lifetime_in_minutes: 10
 logs:
   color: true
   level: DEBUG

@@ -5,9 +5,12 @@ data:
       port: {{ .Values.redis.port }}
       readTimeout: {{ .Values.redis.readTimeout }}
       dbs:
-        traces: {{ .Values.redis.dbs.traces }}
-        otel: {{ .Values.redis.dbs.otel }}
-        scenarios: {{ .Values.redis.dbs.scenarios }}
+        filtered_traces: "{{ .Values.redis.dbs.filtered_traces }}"
+        scenarios: "{{ .Values.redis.dbs.scenarios }}"
+        traces: "{{ .Values.redis.dbs.traces }}"
+        executor_attr: "{{ .Values.redis.dbs.executor_attr }}"
+        pod_details: "{{ .Values.redis.dbs.pod_details }}"
+        error_details: "{{ .Values.redis.dbs.error_details }}"
     postgres:
       host: "{{ .Values.postgres.host }}"
       port: {{ .Values.postgres.port }}

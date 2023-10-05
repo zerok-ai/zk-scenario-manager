@@ -13,9 +13,12 @@ redis:
   port: 6379
   readTimeout: 20
   dbs:
-    traces: 1
-    otel: 3
-    scenarios: 6
+    filtered_traces: 1
+    scenarios: 2
+    traces: 3
+    executor_attr: 4
+    pod_details: 7
+    error_details: 8
 
 postgres:
   host: "postgres.zk-client.svc.cluster.local"

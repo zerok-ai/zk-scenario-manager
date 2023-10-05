@@ -342,8 +342,8 @@ func (scenarioManager *ScenarioManager) addRawDataToSpans(tracesFromOTelStore ma
 				oTelRootSpan.SpanForPersistence.IsRoot = false
 
 				// set protocol
-				if protocol, ok := rootClient.GetStringAttribute(stores.OTelAttrProtocol); ok {
-					rootClient.SpanForPersistence.Protocol = protocol
+				if _protocol, ok := rootClient.GetStringAttribute(stores.OTelAttrProtocol); ok {
+					rootClient.SpanForPersistence.Protocol = _protocol
 				}
 
 				traceFromOTel.Spans[oTelRootSpan.ParentSpanID] = &rootClient
