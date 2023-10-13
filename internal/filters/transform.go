@@ -3,8 +3,8 @@ package filters
 import (
 	"encoding/json"
 	"github.com/zerok-ai/zk-rawdata-reader/vzReader/models"
-	"github.com/zerok-ai/zk-rawdata-reader/vzReader/utils"
 	zkLogger "github.com/zerok-ai/zk-utils-go/logs"
+	typedef "scenario-manager/internal"
 	tracePersistenceModel "scenario-manager/internal/tracePersistence/model"
 	"strings"
 )
@@ -15,7 +15,7 @@ var (
 
 func convertInterfaceMapToString(i interface{}) string {
 
-	if mapToConvert, ok := i.(map[string]interface{}); ok {
+	if mapToConvert, ok := i.(typedef.GenericMap); ok {
 		s, err := json.Marshal(mapToConvert)
 		if err != nil {
 			zkLogger.Error("Error while converting interface to string, %v", i, err)
@@ -47,47 +47,39 @@ func getHttpRawData(value models.HttpRawDataModel) tracePersistenceModel.SpanRaw
 	return raw
 }
 
-func enrichSpanFromHTTPRawData(span *tracePersistenceModel.Span, fullSpan *models.HttpRawDataModel) *tracePersistenceModel.Span {
-	if span.IsRoot {
-		span.Source = fullSpan.Source
-		span.Destination = fullSpan.Destination
-		span.Latency = uint64(fullSpan.Latency)
-		span.Path = fullSpan.ReqPath
-		span.Method = fullSpan.ReqMethod
-		span.RequestPayloadSize = fullSpan.ReqBodySize
-		span.ResponsePayloadSize = fullSpan.RespBodySize
-		span.Status = fullSpan.RespStatus
-		span.Protocol = "http"
-
-		if fullSpan.WorkloadIds != "" {
-			span.WorkloadIDList = strings.Split(fullSpan.WorkloadIds, ",")
-		}
-		span.SpanRawData = getHttpRawData(*fullSpan)
-
-		return span
-	}
-
+func enrichSpanFromHTTPRawData(span *tracePersistenceModel.Span, fullSpan *models.HttpRawDataModel, fullSpanVersion string) *tracePersistenceModel.Span {
 	span.Source = fullSpan.Source
 	span.Destination = fullSpan.Destination
+
+	// workload id
 	if fullSpan.WorkloadIds != "" {
-		span.WorkloadIDList = strings.Split(fullSpan.WorkloadIds, ",")
+
+		// split workload ids
+		pxWorkloadList := strings.Split(fullSpan.WorkloadIds, ",")
+
+		// append workload ids to workload ids in the span
+		spanWorkloadIDList := span.WorkloadIDList
+		if spanWorkloadIDList == nil {
+			span.WorkloadIDList = pxWorkloadList
+		} else {
+			spanWorkloadIDList = append(spanWorkloadIDList, pxWorkloadList...)
+			span.WorkloadIDList = spanWorkloadIDList
+		}
 	}
+
+	// body size
 	span.RequestPayloadSize = fullSpan.ReqBodySize
 	span.ResponsePayloadSize = fullSpan.RespBodySize
 
-	if !utils.IsEmpty(fullSpan.ReqMethod) {
-		span.Method = fullSpan.ReqMethod
-	}
-
-	if !utils.IsEmpty(fullSpan.ReqPath) {
-		span.Path = fullSpan.ReqPath
-	}
-
-	if fullSpan.RespStatus != 0 {
-		span.Status = fullSpan.RespStatus
-	}
-
+	// response raw data
 	span.SpanRawData = getHttpRawData(*fullSpan)
+
+	//if span.Protocol == "" {
+	//	span.Protocol = "http"
+	//}
+
+	span.EBPFSchemaVersion = fullSpanVersion
+
 	return span
 }
 
@@ -104,20 +96,34 @@ func enrichSpanFromMySQLRawData(span *tracePersistenceModel.Span, mySqlSpan *mod
 	span.Source = mySqlSpan.Source
 	span.Destination = mySqlSpan.Destination
 	span.Protocol = "mysql"
+
+	// workload id
 	if mySqlSpan.WorkloadIds != "" {
-		span.WorkloadIDList = strings.Split(mySqlSpan.WorkloadIds, ",")
+
+		// split workload ids
+		pxWorkloadList := strings.Split(mySqlSpan.WorkloadIds, ",")
+
+		// append workload ids to workload ids in the span
+		spanWorkloadIDList := span.WorkloadIDList
+		if spanWorkloadIDList == nil {
+			span.WorkloadIDList = pxWorkloadList
+		} else {
+			spanWorkloadIDList = append(spanWorkloadIDList, pxWorkloadList...)
+			span.WorkloadIDList = spanWorkloadIDList
+		}
+
 	}
+
+	// body size
 	span.ResponsePayloadSize = mySqlSpan.Rows
 
-	if !utils.IsEmpty(mySqlMethod[mySqlSpan.ReqCmd]) {
-		span.Method = mySqlMethod[mySqlSpan.ReqCmd]
-	}
-
-	if mySqlSpan.RespStatus != 0 {
-		span.Status = mySqlSpan.RespStatus
-	}
-
+	// response raw data
 	span.SpanRawData = getMySqlRawData(*mySqlSpan)
+
+	//if !utils.IsEmpty(mySqlMethod[mySqlSpan.ReqCmd]) {
+	//	span.Method = mySqlMethod[mySqlSpan.ReqCmd]
+	//}
+
 	return span
 }
 
@@ -134,14 +140,28 @@ func getPgSqlRawData(pgSpan models.PgSQLRawDataModel) tracePersistenceModel.Span
 func enrichSpanFromPostgresRawData(span *tracePersistenceModel.Span, pgSpan *models.PgSQLRawDataModel) *tracePersistenceModel.Span {
 	span.Source = pgSpan.Source
 	span.Destination = pgSpan.Destination
+
+	// workload id
 	if pgSpan.WorkloadIds != "" {
-		span.WorkloadIDList = strings.Split(pgSpan.WorkloadIds, ",")
+		// split workload ids
+		pxWorkloadList := strings.Split(pgSpan.WorkloadIds, ",")
+
+		// append workload ids to workload ids in the span
+		spanWorkloadIDList := span.WorkloadIDList
+		if spanWorkloadIDList == nil {
+			span.WorkloadIDList = pxWorkloadList
+		} else {
+			spanWorkloadIDList = append(spanWorkloadIDList, pxWorkloadList...)
+			span.WorkloadIDList = spanWorkloadIDList
+		}
 	}
 
-	if !utils.IsEmpty(pgSpan.ReqCmd) {
-		span.Method = pgSpan.ReqCmd
-	}
-
+	// response raw data
 	span.SpanRawData = getPgSqlRawData(*pgSpan)
+
+	//if !utils.IsEmpty(pgSpan.ReqCmd) {
+	//	span.Method = pgSpan.ReqCmd
+	//}
+
 	return span
 }

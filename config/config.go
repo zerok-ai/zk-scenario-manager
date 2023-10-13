@@ -33,12 +33,12 @@ type RouterConfigs struct {
 }
 
 type ScenariosConfig struct {
-	RedisRuleSetCount           int `yaml:"redisRuleSetCount" env-description:"No of possible sets for a rule in redis"`
-	ProcessingIntervalInSeconds int `yaml:"processingIntervalInSeconds" env-description:"Time interval in seconds for processing scenarios"`
-
-	VZCloudAddr  string `yaml:"vzCloudAddr" env-description:"vz cloud address"`
-	VZClusterId  string `yaml:"vzClusterId" env-description:"vz cluster id"`
-	VZClusterKey string `yaml:"vzClusterKey" env-description:"vz cluster key"`
+	RedisRuleSetCount           int    `yaml:"redisRuleSetCount" env-description:"No of possible sets for a rule in redis"`
+	ProcessingIntervalInSeconds int    `yaml:"processingIntervalInSeconds" env-description:"Time interval in seconds for processing scenarios"`
+	EBPFSchemaVersion           string `yaml:"ebpfSchemaVersion"`
+	VZCloudAddr                 string `yaml:"vzCloudAddr" env-description:"vz cloud address"`
+	VZClusterId                 string `yaml:"vzClusterId" env-description:"vz cluster id"`
+	VZClusterKey                string `yaml:"vzClusterKey" env-description:"vz cluster key"`
 }
 
 // AppConfigs is an application configuration structure

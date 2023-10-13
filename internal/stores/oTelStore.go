@@ -12,6 +12,9 @@ import (
 	"strconv"
 )
 
+type TWorkLoadIdToSpan map[typedef.TWorkloadId]*tracePersistenceModel.Span
+type TWorkLoadIdToSpanArray map[typedef.TWorkloadId][]*tracePersistenceModel.Span
+
 type OTelDataHandler struct {
 	redisClient *redis.Client
 }
@@ -46,6 +49,7 @@ type SpanFromOTel struct {
 	SpanID       typedef.TSpanId
 	ParentSpanID typedef.TSpanId `json:"parent_span_id"`
 	Kind         string          `json:"span_kind"`
+	OTelSchema   string          `json:"schema_version"`
 
 	StartTimeNS uint64 `json:"start_ns"`
 	LatencyNS   uint64 `json:"latency_ns"`
@@ -55,8 +59,10 @@ type SpanFromOTel struct {
 
 	Errors []OTelError `json:"errors"`
 
-	WorkloadIDList     []string               `json:"workload_id_list"`
-	Attributes         map[string]interface{} `json:"attributes"`
+	GroupByMap tracePersistenceModel.GroupByMap `json:"group_by"`
+
+	WorkloadIDList     []string           `json:"workload_id_list"`
+	Attributes         typedef.GenericMap `json:"attributes"`
 	SpanForPersistence *tracePersistenceModel.Span
 	Children           []SpanFromOTel
 }
@@ -94,18 +100,18 @@ func (spanFromOTel *SpanFromOTel) getNumberAttribute(attr string) (string, bool)
 func (spanFromOTel *SpanFromOTel) createAndPopulateSpanForPersistence() {
 
 	spanFromOTel.SpanForPersistence = &tracePersistenceModel.Span{
-		TraceID:        string(spanFromOTel.TraceID),
-		SpanID:         string(spanFromOTel.SpanID),
-		Kind:           spanFromOTel.Kind,
-		ParentSpanID:   string(spanFromOTel.ParentSpanID),
-		StartTime:      EpochNanoSecondsToTime(spanFromOTel.StartTimeNS),
-		Latency:        spanFromOTel.LatencyNS,
-		SourceIP:       spanFromOTel.SourceIP,
-		DestinationIP:  spanFromOTel.DestIP,
-		WorkloadIDList: spanFromOTel.WorkloadIDList,
+		TraceID:           string(spanFromOTel.TraceID),
+		SpanID:            string(spanFromOTel.SpanID),
+		OTelSchemaVersion: spanFromOTel.OTelSchema,
+		Kind:              spanFromOTel.Kind,
+		ParentSpanID:      string(spanFromOTel.ParentSpanID),
+		StartTime:         EpochNanoSecondsToTime(spanFromOTel.StartTimeNS),
+		Latency:           spanFromOTel.LatencyNS,
+		SourceIP:          spanFromOTel.SourceIP,
+		DestinationIP:     spanFromOTel.DestIP,
+		WorkloadIDList:    spanFromOTel.WorkloadIDList,
+		GroupByMap:        spanFromOTel.GroupByMap,
 	}
-
-	//TODO: set service name
 
 	// set protocol
 	if protocol, ok := spanFromOTel.GetStringAttribute(OTelAttrProtocol); ok {

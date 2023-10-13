@@ -25,9 +25,10 @@ logs:
 scenarioConfig:
   redisRuleSetCount: 12
   processingIntervalInSeconds: 10
+  ebpfSchemaVersion: "0.1.1-alpha"
   vzCloudAddr: "px.devcloud01.getanton.com:443"
-  vzClusterId: "351c0b80-e25c-4dbc-9fc6-94d69dfaf0ad"
-  vzClusterKey: "px-api-e0593597-de51-44cd-bc72-6cbdb881b2be"
+  vzClusterId: "f14c39ad-8796-40a4-8460-b5411b10c1df"
+  vzClusterKey: "px-api-3a8352dc-34f6-44d6-991d-f4a22b9ec6b1"
 server:
   host: localhost
   port: 80

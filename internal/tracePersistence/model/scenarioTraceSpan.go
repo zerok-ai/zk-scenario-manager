@@ -4,6 +4,7 @@ import (
 	"database/sql/driver"
 	"encoding/json"
 	"errors"
+	typedef "scenario-manager/internal"
 	"time"
 )
 
@@ -65,6 +66,38 @@ type Span struct {
 	Errors              string    `json:"errors"`
 
 	SpanRawData
+	OTelSchemaVersion string
+	EBPFSchemaVersion string
+	SpanAsMap         typedef.GenericMap
+	GroupByMap        GroupByMap
+}
+
+type GroupByValueItem struct {
+	WorkloadId string `json:"workload_id"`
+	Title      string `json:"title"`
+	Hash       string `json:"hash"`
+}
+
+type GroupByValues []*GroupByValueItem
+type ScenarioId string
+type GroupByMap map[ScenarioId]GroupByValues
+
+func (s Span) ToMap() (typedef.GenericMap, error) {
+	if s.SpanAsMap == nil {
+		spanAsString, err := json.Marshal(s)
+		if err != nil {
+			return nil, err
+		}
+
+		var spanAsMap typedef.GenericMap
+		err = json.Unmarshal(spanAsString, &spanAsMap)
+		if err != nil {
+			return nil, err
+		}
+
+		s.SpanAsMap = spanAsMap
+	}
+	return s.SpanAsMap, nil
 }
 
 type SpanRawData struct {
@@ -86,7 +119,7 @@ type RequestPayload interface {
 	GetString() string
 }
 
-type Metadata map[string]interface{}
+type Metadata typedef.GenericMap
 
 // Value Make the Attrs struct implement the driver.Valuer interface. This method
 // simply returns the JSON-encoded representation of the struct.

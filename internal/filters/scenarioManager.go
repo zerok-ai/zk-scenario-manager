@@ -6,20 +6,18 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"github.com/jmespath/go-jmespath"
 	"github.com/pkg/errors"
 	"github.com/zerok-ai/zk-rawdata-reader/vzReader"
 	"github.com/zerok-ai/zk-rawdata-reader/vzReader/models"
 	"github.com/zerok-ai/zk-utils-go/ds"
 	zkLogger "github.com/zerok-ai/zk-utils-go/logs"
 	scenarioGeneratorModel "github.com/zerok-ai/zk-utils-go/scenario/model"
-	evaluators "github.com/zerok-ai/zk-utils-go/scenario/model/evaluators"
 	zkRedis "github.com/zerok-ai/zk-utils-go/storage/redis"
 	"github.com/zerok-ai/zk-utils-go/storage/redis/clientDBNames"
 	ticker "github.com/zerok-ai/zk-utils-go/ticker"
 	zkErrors "github.com/zerok-ai/zk-utils-go/zkerrors"
+	"scenario-manager/config"
 	typedef "scenario-manager/internal"
-	"scenario-manager/internal/config"
 	"scenario-manager/internal/stores"
 	tracePersistenceModel "scenario-manager/internal/tracePersistence/model"
 	tracePersistence "scenario-manager/internal/tracePersistence/service"
@@ -28,6 +26,8 @@ import (
 	"time"
 )
 
+type TMapOfSpanIdToSpan map[typedef.TSpanId]*tracePersistenceModel.Span
+
 const (
 	TitleDelimiter     = "¦"
 	cacheSize      int = 20
@@ -35,22 +35,12 @@ const (
 
 var ctx = context.Background()
 
-var queriesIgnoreList = []string{
-	"commit",
-	"rollback",
-	"SET autocommit=0",
-	"SET autocommit=1",
-	"set session transaction read only",
-	"set session transaction read write",
-}
-
 type ScenarioManager struct {
 	cfg                     config.AppConfigs
 	scenarioStore           *zkRedis.VersionedStore[scenarioGeneratorModel.Scenario]
 	tracePersistenceService *tracePersistence.TracePersistenceService
 	traceStore              *stores.TraceStore
 	oTelStore               *stores.OTelDataHandler
-	serviceIPStore          *zkRedis.LocalCacheHSetStore
 	errorCacheSaveHooks     ErrorCacheSaveHooks[string]
 	errorStoreReader        *zkRedis.LocalCacheKVStore[string]
 	traceRawDataCollector   *vzReader.VzReader
@@ -74,7 +64,6 @@ func NewScenarioManager(cfg config.AppConfigs, tps *tracePersistence.TracePersis
 	fp.errorCacheSaveHooks = ErrorCacheSaveHooks[string]{scenarioManager: &fp}
 
 	fp.errorStoreReader = getLRUCacheStore(cfg.Redis, &fp.errorCacheSaveHooks)
-	fp.serviceIPStore = getExpiryBasedCacheStore[interface{}](cfg.Redis)
 	reader, err := getNewVZReader(cfg)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to get new VZ reader")
@@ -125,7 +114,7 @@ func (scenarioManager *ScenarioManager) processAllScenarios() {
 
 	// 2. get all traceId sets from traceStore
 	namesOfAllSets, err := scenarioManager.traceStore.GetAllKeys()
-	zkLogger.DebugF(LoggerTag, "Number of available scenarios: %d, traceSets in db: %d", len(scenarios), len(namesOfAllSets))
+	zkLogger.DebugF(LoggerTag, "Number of available scenarios: %d, workloads in db: %d", len(scenarios), len(namesOfAllSets))
 	if err != nil {
 		zkLogger.Error(LoggerTag, "Error getting all keys from traceStore ", err)
 		return
@@ -220,6 +209,8 @@ func (scenarioManager *ScenarioManager) getAllTraceIDs(scenarios map[string]*sce
 		if err != nil || tIds == nil || len(tIds) == 0 {
 			continue
 		}
+
+		zkLogger.InfoF(LoggerTag, "No of trace ids for scenario %v is %v", scenario.Id, len(tIds))
 		allTraceIds.AddBulk(tIds)
 		scenarioWithTraces[typedef.TScenarioID(scenario.Id)] = typedef.ScenarioTraces{Scenario: scenario, Traces: ds.Set[typedef.TTraceid]{}.AddBulk(tIds)}
 	}
@@ -274,14 +265,14 @@ func (scenarioManager *ScenarioManager) getDataFromOTelStore(traceIds []typedef.
 func (scenarioManager *ScenarioManager) addRawDataToSpans(tracesFromOTelStore map[typedef.TTraceid]*stores.TraceFromOTel) {
 
 	// create a map of protocol to set of traceIds
-	tracesPerProtocol := make(typedef.TTraceIdSetPerProtocol, 0)
+	tracesPerProtocol := make(typedef.TTraceIdSetPerProtocol)
 	for traceId, trace := range tracesFromOTelStore {
 
 		for _, span := range trace.Spans {
 			protocol := span.SpanForPersistence.Protocol
 			traceSet, ok := tracesPerProtocol[protocol]
 			if !ok {
-				traceSet = make(ds.Set[string], 0)
+				traceSet = make(ds.Set[string])
 			}
 			tracesPerProtocol[protocol] = traceSet.Add(string(traceId))
 		}
@@ -351,7 +342,7 @@ func (scenarioManager *ScenarioManager) addRawDataToSpans(tracesFromOTelStore ma
 				oTelRootSpan = &rootClient
 				spanFromOTel = &rootClient
 
-				spanFromOTel.SpanForPersistence = enrichSpanFromHTTPRawData(rootClient.SpanForPersistence, &spanWithRawDataFromPixie)
+				spanFromOTel.SpanForPersistence = enrichSpanFromHTTPRawData(rootClient.SpanForPersistence, &spanWithRawDataFromPixie, scenarioManager.cfg.ScenarioConfig.EBPFSchemaVersion)
 				tracesFromOTelStore[typedef.TTraceid(traceId)] = traceFromOTel
 				processedSpans.Add(spanWithRawDataFromPixie.SpanId)
 
@@ -362,7 +353,7 @@ func (scenarioManager *ScenarioManager) addRawDataToSpans(tracesFromOTelStore ma
 			if processedSpans.Contains(spanWithRawDataFromPixie.SpanId) {
 				continue
 			}
-			spanFromOTel.SpanForPersistence = enrichSpanFromHTTPRawData(spanFromOTel.SpanForPersistence, &spanWithRawDataFromPixie)
+			spanFromOTel.SpanForPersistence = enrichSpanFromHTTPRawData(spanFromOTel.SpanForPersistence, &spanWithRawDataFromPixie, scenarioManager.cfg.ScenarioConfig.EBPFSchemaVersion)
 			processedSpans.Add(spanWithRawDataFromPixie.SpanId)
 		}
 	}
@@ -428,16 +419,16 @@ func (scenarioManager *ScenarioManager) buildIncidentsForPersistence(scenariosWi
 
 	// a. iterate through the trace data from OTelDataHandler and build the structure which can be saved in DB
 	incidentsWithIssues := make([]tracePersistenceModel.IncidentWithIssues, 0)
-	traceTreeForPersistence := make(map[typedef.TTraceid]*typedef.TMapOfSpanIdToSpan, 0)
+	traceTreeForPersistence := make(map[typedef.TTraceid]*TMapOfSpanIdToSpan)
 	for traceId, traceFromOTel := range tracesFromOTel {
-		spanMapOfPersistentSpans := make(typedef.TMapOfSpanIdToSpan, 0)
+		spanMapOfPersistentSpans := make(TMapOfSpanIdToSpan)
 		for _, spanFromOTel := range traceFromOTel.Spans {
 			spanMapOfPersistentSpans[spanFromOTel.SpanID] = spanFromOTel.SpanForPersistence
 		}
 		traceTreeForPersistence[traceId] = &spanMapOfPersistentSpans
 
 		// find all the scenarios this trace belongs to
-		scenarioMap := make(map[typedef.TScenarioID]*scenarioGeneratorModel.Scenario, 0)
+		scenarioMap := make(map[typedef.TScenarioID]*scenarioGeneratorModel.Scenario)
 		for scenarioId, scenarioWithTraces := range scenariosWithTraces {
 			if scenarioWithTraces.Traces.Contains(traceId) {
 				scenarioMap[scenarioId] = scenarioWithTraces.Scenario
@@ -452,7 +443,7 @@ func (scenarioManager *ScenarioManager) buildIncidentsForPersistence(scenariosWi
 	return incidentsWithIssues
 }
 
-func (scenarioManager *ScenarioManager) evaluateIncidents(traceId typedef.TTraceid, scenarios map[typedef.TScenarioID]*scenarioGeneratorModel.Scenario, spansOfTrace typedef.TMapOfSpanIdToSpan) tracePersistenceModel.IncidentWithIssues {
+func (scenarioManager *ScenarioManager) evaluateIncidents(traceId typedef.TTraceid, scenarios map[typedef.TScenarioID]*scenarioGeneratorModel.Scenario, spansOfTrace TMapOfSpanIdToSpan) tracePersistenceModel.IncidentWithIssues {
 
 	spans := make([]*tracePersistenceModel.Span, 0)
 	for key := range spansOfTrace {
@@ -462,7 +453,7 @@ func (scenarioManager *ScenarioManager) evaluateIncidents(traceId typedef.TTrace
 	issueGroupList := make([]tracePersistenceModel.IssueGroup, 0)
 
 	for _, scenario := range scenarios {
-		listOfIssues := scenarioManager.getListOfIssues(scenario, spansOfTrace)
+		listOfIssues := scenarioManager.getListOfIssuesForScenario(scenario, spansOfTrace)
 		if len(listOfIssues) > 0 {
 			issueGroupList = append(issueGroupList, tracePersistenceModel.IssueGroup{
 				ScenarioId:      scenario.Id,
@@ -484,10 +475,45 @@ func (scenarioManager *ScenarioManager) evaluateIncidents(traceId typedef.TTrace
 	return incidentWithIssues
 }
 
-func (scenarioManager *ScenarioManager) getListOfIssues(scenario *scenarioGeneratorModel.Scenario, spanMap typedef.TMapOfSpanIdToSpan) []tracePersistenceModel.Issue {
+func (scenarioManager *ScenarioManager) getListOfIssuesForScenario(scenario *scenarioGeneratorModel.Scenario, spanMap TMapOfSpanIdToSpan) []tracePersistenceModel.Issue {
+
+	/* Logic with example
+
+	Scenario workloads
+	---------------------------
+	w1 - service `*` returns 5xx
+	w2 - service `1` returns 400
+
+	Group-by rules
+	---------------------------
+	 - W2.status-code
+	 - W1.size
+	 - w1.service-name
+
+	Situation for the trace
+	---------------------------
+	spans:		 			 s1,  s2,  s3
+	status-code				400, 500, 501
+	workload satisfied		 w2,  w1,  w1
+
+
+	Logic to solve
+	---------------------------
+	1. create a set of workload ids used in `group-by`. If no `group-by` is present, use all the workload ids??
+	2. loop over spans and create a map of workload to []span
+			w2[s1]
+			W1[s2, s3]
+
+	3. cross product to create an array of workload-span map
+			[w2:s1,w1:s2][w2:s1,w1:s3]
+			 --- map ---  --- map ---
+			-------array--------------
+
+	4. loop over each element of the array from the previous step and use Group-by rules to create map of issues
+	*/
 
 	// 1. create a set of used workload ids
-	workloadIdListInGroup := make(ds.Set[typedef.TWorkloadId], 0)
+	workloadIdListInGroup := make(ds.Set[typedef.TWorkloadId])
 
 	// this if condition is for the cases where there is no group by, so we take all the workload ids in the scenario and add it to the list
 	if scenario.GroupBy == nil || len(scenario.GroupBy) == 0 {
@@ -503,42 +529,67 @@ func (scenarioManager *ScenarioManager) getListOfIssues(scenario *scenarioGenera
 	}
 
 	// 2. create a set of workloadIds vs spans
-	workloadIdToSpansMap := make(map[typedef.TWorkloadId][]*tracePersistenceModel.Span, 0)
+	workloadIdToSpanArrayMap := make(stores.TWorkLoadIdToSpanArray)
 	for _, span := range spanMap {
 		workloadIdList := span.WorkloadIDList
 		for _, workloadId := range workloadIdList {
-			spans, ok := workloadIdToSpansMap[typedef.TWorkloadId(workloadId)]
+			spans, ok := workloadIdToSpanArrayMap[typedef.TWorkloadId(workloadId)]
 			if !ok {
 				spans = make([]*tracePersistenceModel.Span, 0)
 			}
-			newSpans := append(spans, span)
-			workloadIdToSpansMap[typedef.TWorkloadId(workloadId)] = newSpans
+			workloadIdToSpanArrayMap[typedef.TWorkloadId(workloadId)] = append(spans, span)
 		}
 	}
 
-	// 3. do a cartesian product of all the elements in workloadIdSet
-	spansForGrpBy := make([]map[typedef.TWorkloadId]*tracePersistenceModel.Span, 0)
+	// 3. do a cartesian product of all the elements in workloadIdSet. This gives us all the possible combinations of
+	//	workloads-span groups that can be give rise to a unique issues
+	issueSource := make([]map[typedef.TWorkloadId]*tracePersistenceModel.Span, 0)
 	for workloadId := range workloadIdListInGroup {
-		arrSpans := workloadIdToSpansMap[workloadId]
-		spansForGrpBy = getCartesianProductOfSpans(spansForGrpBy, workloadId, arrSpans)
+		arrSpans := workloadIdToSpanArrayMap[workloadId]
+		issueSource = getCartesianProductOfSpans(issueSource, arrSpans, workloadId)
 	}
 
-	// 4. iterate through spansForGrpBy and evaluate each groupBy clause
-	issueMap := make(map[typedef.TIssueHash]tracePersistenceModel.Issue, 0)
-	for _, mapOfIssueSpans := range spansForGrpBy {
+	// 4. iterate through issueSource and evaluate each groupBy clause
+	issueMap := make(map[typedef.TIssueHash]tracePersistenceModel.Issue)
+	for _, mapOfWorkloadIdToSpans := range issueSource {
 
+		// 4.a Initialize with default values
 		hash := scenario.Id + scenario.Version
 		title := scenario.Title
-		for _, group := range scenario.GroupBy {
-			span, ok := mapOfIssueSpans[typedef.TWorkloadId(group.WorkloadId)]
+		for index, group := range scenario.GroupBy {
+
+			// 4.a.1. get workload id from scenario object
+			workloadId := group.WorkloadId
+
+			// 4.a.2. get span for the workloadId
+			span, ok := mapOfWorkloadIdToSpans[typedef.TWorkloadId(workloadId)]
 			if !ok {
+				//TODO this data should come from ebpf. continue for now
 				continue
 			}
 
-			// get hash and title
-			hash = hash + TitleDelimiter + scenarioManager.getTextFromStructMembers(group.Hash, span)
-			title = title + TitleDelimiter + scenarioManager.getTextFromStructMembers(group.Title, span)
+			// 4.a.3. get the group_by object from span for the current scenario
+			groupByForScenario, ok := span.GroupByMap[tracePersistenceModel.ScenarioId(scenario.Id)]
+			if !ok {
+				//not sure why would this happen
+				continue
+			}
+
+			// 4.a.4. The indices of groupByForScenario and scenario.GroupBy should be same.
+			// 			get the group_by object from the span at the current index.
+			groupBy := groupByForScenario[index]
+			hash += TitleDelimiter
+			title += TitleDelimiter
+			if groupBy == nil {
+				//TODO this data should come from ebpf. do nothing for now.
+			} else {
+				hash += groupBy.Hash
+				title += groupBy.Title
+			}
+
 		}
+
+		// 5. add the new issue to the issueMap (this data will be returned from the function)
 		md5OfHash := md5.Sum([]byte(hash))
 		hash = hex.EncodeToString(md5OfHash[:])
 		issueMap[typedef.TIssueHash(hash)] = tracePersistenceModel.Issue{
@@ -546,8 +597,9 @@ func (scenarioManager *ScenarioManager) getListOfIssues(scenario *scenarioGenera
 			IssueTitle: title,
 		}
 
-		// iterate over mapOfIssueSpans
-		for _, span_ := range mapOfIssueSpans {
+		// 5. add issue-hash of the new issue to span in the current issue source
+		for _, span_ := range mapOfWorkloadIdToSpans {
+			// take the span id and change the original object
 			span, ok := spanMap[typedef.TSpanId(span_.SpanID)]
 			if !ok {
 				continue
@@ -555,8 +607,18 @@ func (scenarioManager *ScenarioManager) getListOfIssues(scenario *scenarioGenera
 			if span.IssueHashList == nil {
 				span.IssueHashList = make([]string, 0)
 			}
-			set := ds.Set[string]{}.AddBulk(span.IssueHashList).Add(hash)
-			span.IssueHashList = set.GetAll()
+
+			// iterate over span.IssueHashList and check for the existence of duplicate issueHash. If not present, add.
+			isIssueHashPresent := false
+			for _, issueHash := range span.IssueHashList {
+				if issueHash == hash {
+					isIssueHashPresent = true
+					break
+				}
+			}
+			if !isIssueHashPresent {
+				span.IssueHashList = append(span.IssueHashList, hash)
+			}
 		}
 	}
 
@@ -569,109 +631,26 @@ func (scenarioManager *ScenarioManager) getListOfIssues(scenario *scenarioGenera
 	return issues
 }
 
-func getCartesianProductOfSpans(arrOfWorkLoadSpanMap []map[typedef.TWorkloadId]*tracePersistenceModel.Span, workload typedef.TWorkloadId, arrOfSpans []*tracePersistenceModel.Span) []map[typedef.TWorkloadId]*tracePersistenceModel.Span {
+func getCartesianProductOfSpans(previousResult []map[typedef.TWorkloadId]*tracePersistenceModel.Span, multiplier []*tracePersistenceModel.Span, workload typedef.TWorkloadId) []map[typedef.TWorkloadId]*tracePersistenceModel.Span {
 
-	if len(arrOfSpans) == 0 {
-		return arrOfWorkLoadSpanMap
+	if len(multiplier) == 0 {
+		return previousResult
 	}
 
-	if len(arrOfWorkLoadSpanMap) == 0 {
-		arrOfWorkLoadSpanMap = append(arrOfWorkLoadSpanMap, make(map[typedef.TWorkloadId]*tracePersistenceModel.Span, 0))
+	if len(previousResult) == 0 {
+		previousResult = append(previousResult, make(map[typedef.TWorkloadId]*tracePersistenceModel.Span))
 	}
 
+	//e.g. [w2:s1,w1:s2] x w3:[s3,s4] = [w2:s1,w1:s2,w3:s3] [w2:s1,w1:s2,w3:s4]
 	result := make([]map[typedef.TWorkloadId]*tracePersistenceModel.Span, 0)
-	for _, s1 := range arrOfWorkLoadSpanMap {
-		for _, s2 := range arrOfSpans {
+	for _, s1 := range previousResult {
+		for _, s2 := range multiplier {
 			newMap := s1
 			newMap[workload] = s2
 			result = append(result, newMap)
 		}
 	}
 	return result
-}
-
-func (scenarioManager *ScenarioManager) getTextFromStructMembers(path string, span interface{}) string {
-
-	var returnValue string
-	var ok bool
-	var functions []evaluators.Function
-	var valueAtObject interface{}
-
-	valueAtObject = span
-	_, functions = evaluators.GetPathAndFunctions(path)
-
-	// handle functions
-	for _, fn := range functions {
-		if valueAtObject == nil {
-			return returnValue
-		}
-
-		if fn.Name == "jsonExtract" {
-			valueAtObject, ok = evaluators.ExtractJSON(fn, valueAtObject)
-		} else if fn.Name == "getWorkloadFromIP" {
-			valueAtObject, ok = scenarioManager.getWorkLoadForIP(fn, valueAtObject)
-		} else {
-			valueAtObject, ok = evaluators.EvalStringFunction(fn, valueAtObject)
-		}
-		if !ok {
-			return ""
-		}
-	}
-
-	returnValue = fmt.Sprintf("%v", valueAtObject)
-	return returnValue
-}
-
-func (scenarioManager *ScenarioManager) getWorkLoadForIP(fn evaluators.Function, valueAtObject interface{}) (string, bool) {
-
-	if len(fn.Args) < 1 {
-		return "", false
-	}
-
-	// get the path and ip
-	path := fn.Args[0]
-	ip, err := jmespath.Search(path, valueAtObject)
-	if err != nil || ip == nil || ip.(string) == "" {
-		return "", false
-	}
-
-	// get the workload for the ip
-	workloadDetailsPtr, _ := (*scenarioManager.serviceIPStore).Get(ip.(string))
-	//workloadDetailsPtr, _ := scenarioManager.serviceIPStore.Get("10.60.1.53")
-	podDetails := loadIPDetailsIntoHashmap(ip.(string), workloadDetailsPtr)
-
-	serviceName, err := jmespath.Search("Metadata.ServiceName", podDetails)
-	if err != nil || serviceName == nil {
-		return ip.(string), false
-	}
-	return serviceName.(string), false
-}
-
-func (scenarioManager *ScenarioManager) collectHTTPRawData(traceIds []string, startTime string) []models.HttpRawDataModel {
-	rawData, err := scenarioManager.traceRawDataCollector.GetHTTPRawData(traceIds, startTime)
-	if err != nil {
-		zkLogger.Error(LoggerTag, "Error getting raw spans for http traces ", traceIds, err)
-		return make([]models.HttpRawDataModel, 0)
-	}
-	return rawData.Results
-}
-
-func (scenarioManager *ScenarioManager) collectMySQLRawData(timeRange string, traceIds []string) []models.MySQLRawDataModel {
-	rawData, err := scenarioManager.traceRawDataCollector.GetMySQLRawData(traceIds, timeRange)
-	if err != nil {
-		zkLogger.Error(LoggerTag, "Error getting raw spans for mysql traces ", traceIds, err)
-		return make([]models.MySQLRawDataModel, 0)
-	}
-	return rawData.Results
-}
-
-func (scenarioManager *ScenarioManager) collectPostgresRawData(timeRange string, traceIds []string) []models.PgSQLRawDataModel {
-	rawData, err := scenarioManager.traceRawDataCollector.GetPgSQLRawData(traceIds, timeRange)
-	if err != nil {
-		zkLogger.Error(LoggerTag, "Error getting raw spans for postgres traces ", traceIds, err)
-		return make([]models.PgSQLRawDataModel, 0)
-	}
-	return rawData.Results
 }
 
 type ErrorCacheSaveHooks[T any] struct {

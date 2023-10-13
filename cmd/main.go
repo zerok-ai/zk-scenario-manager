@@ -6,7 +6,7 @@ import (
 	zkHttpConfig "github.com/zerok-ai/zk-utils-go/http/config"
 	zkLogger "github.com/zerok-ai/zk-utils-go/logs"
 	zkPostgres "github.com/zerok-ai/zk-utils-go/storage/sqlDB/postgres"
-	"scenario-manager/internal/config"
+	"scenario-manager/config"
 	"scenario-manager/internal/filters"
 	"scenario-manager/internal/tracePersistence/repository"
 	"scenario-manager/internal/tracePersistence/service"

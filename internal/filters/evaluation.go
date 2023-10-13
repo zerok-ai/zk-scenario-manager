@@ -6,8 +6,8 @@ import (
 	"fmt"
 	zkLogger "github.com/zerok-ai/zk-utils-go/logs"
 	"github.com/zerok-ai/zk-utils-go/scenario/model"
+	"scenario-manager/config"
 	typedef "scenario-manager/internal"
-	"scenario-manager/internal/config"
 	"scenario-manager/internal/stores"
 	"sort"
 	"strconv"
@@ -53,7 +53,9 @@ func (te TraceEvaluator) EvalScenario() ([]typedef.TTraceid, error) {
 	}
 
 	if !te.traceStore.SetExists(*resultKey) {
-		return nil, fmt.Errorf("resultset: %s for scenario %v doesn't exist", *resultKey, te.scenario.Id)
+		strError := fmt.Sprintf("No trace of interest for scenario: %v for scenario. Result key:%v doesn't exist", te.scenario.Id, *resultKey)
+		zkLogger.Info(LoggerTagEvaluation, strError)
+		return nil, fmt.Errorf(strError)
 	}
 
 	// get all the traceIds from the traceStore

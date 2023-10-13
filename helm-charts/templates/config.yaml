@@ -26,6 +26,7 @@ data:
     scenarioConfig:
       redisRuleSetCount: 12
       processingIntervalInSeconds: 10
+      ebpfSchemaVersion: "0.1.1-alpha"
 kind: ConfigMap
 metadata:
   name: {{ include "zk-scenario-manager.fullname" . }}

@@ -3,15 +3,14 @@ package internal
 import (
 	"github.com/zerok-ai/zk-utils-go/ds"
 	scenarioGeneratorModel "github.com/zerok-ai/zk-utils-go/scenario/model"
-	tracePersistenceModel "scenario-manager/internal/tracePersistence/model"
 	"time"
 )
 
 type TTraceid string
 type TSpanId string
-type TMapOfSpanIdToSpan map[TSpanId]*tracePersistenceModel.Span
 
 type TWorkloadId string
+
 type TIssueHash string
 
 type TProtocol string
@@ -35,3 +34,7 @@ type IssuesCounter struct {
 }
 
 type IssueRateMap map[TScenarioID][]IssuesCounter
+
+type ExecutorToSchemaVersionMap map[scenarioGeneratorModel.ExecutorName]string
+
+type GenericMap map[string]interface{}

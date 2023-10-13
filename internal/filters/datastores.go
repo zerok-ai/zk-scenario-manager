@@ -7,8 +7,7 @@ import (
 	zkRedis "github.com/zerok-ai/zk-utils-go/storage/redis"
 	"github.com/zerok-ai/zk-utils-go/storage/redis/clientDBNames"
 	storage "github.com/zerok-ai/zk-utils-go/storage/redis/config"
-	"scenario-manager/internal/config"
-	"time"
+	"scenario-manager/config"
 )
 
 func getLRUCacheStore(redisConfig storage.RedisConfig, csh zkRedis.CacheStoreHook[string]) *zkRedis.LocalCacheKVStore[string] {
@@ -17,17 +16,6 @@ func getLRUCacheStore(redisConfig storage.RedisConfig, csh zkRedis.CacheStoreHoo
 	cache := ds.GetLRUCache[string](cacheSize)
 	redisClient := storage.GetRedisConnection(dbName, redisConfig)
 	localCache := zkRedis.GetLocalCacheStore[string](redisClient, cache, csh, ctx)
-
-	return localCache
-}
-
-func getExpiryBasedCacheStore[T any](redisConfig storage.RedisConfig) *zkRedis.LocalCacheHSetStore {
-
-	dbName := clientDBNames.PodDetailsDbName
-	expiry := int64(5 * time.Minute)
-	cache := ds.GetCacheWithExpiry[map[string]string](expiry)
-	redisClient := storage.GetRedisConnection(dbName, redisConfig)
-	localCache := zkRedis.GetLocalCacheHSetStore(redisClient, cache, nil, ctx)
 
 	return localCache
 }
