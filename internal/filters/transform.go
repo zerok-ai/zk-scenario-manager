@@ -48,8 +48,6 @@ func getHttpRawData(value models.HttpRawDataModel) tracePersistenceModel.SpanRaw
 }
 
 func enrichSpanFromHTTPRawData(span *tracePersistenceModel.Span, fullSpan *models.HttpRawDataModel, fullSpanVersion string) *tracePersistenceModel.Span {
-	span.Source = fullSpan.Source
-	span.Destination = fullSpan.Destination
 
 	// workload id
 	if fullSpan.WorkloadIds != "" {
@@ -93,8 +91,7 @@ func getMySqlRawData(mySqlSpan models.MySQLRawDataModel) tracePersistenceModel.S
 }
 
 func enrichSpanFromMySQLRawData(span *tracePersistenceModel.Span, mySqlSpan *models.MySQLRawDataModel) *tracePersistenceModel.Span {
-	span.Source = mySqlSpan.Source
-	span.Destination = mySqlSpan.Destination
+
 	span.Protocol = "mysql"
 
 	// workload id
@@ -138,8 +135,6 @@ func getPgSqlRawData(pgSpan models.PgSQLRawDataModel) tracePersistenceModel.Span
 }
 
 func enrichSpanFromPostgresRawData(span *tracePersistenceModel.Span, pgSpan *models.PgSQLRawDataModel) *tracePersistenceModel.Span {
-	span.Source = pgSpan.Source
-	span.Destination = pgSpan.Destination
 
 	// workload id
 	if pgSpan.WorkloadIds != "" {

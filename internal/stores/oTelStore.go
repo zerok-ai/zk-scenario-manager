@@ -54,8 +54,11 @@ type SpanFromOTel struct {
 	StartTimeNS uint64 `json:"start_ns"`
 	LatencyNS   uint64 `json:"latency_ns"`
 
-	SourceIP string `json:"source_ip"`
-	DestIP   string `json:"dest_ip"`
+	ServiceName string `json:"service_name"`
+	Source      string `json:"source"`
+	SourceIP    string `json:"source_ip"`
+	Destination string `json:"destination"`
+	DestIP      string `json:"destination_ip"`
 
 	Errors []OTelError `json:"errors"`
 
@@ -107,10 +110,14 @@ func (spanFromOTel *SpanFromOTel) createAndPopulateSpanForPersistence() {
 		ParentSpanID:      string(spanFromOTel.ParentSpanID),
 		StartTime:         EpochNanoSecondsToTime(spanFromOTel.StartTimeNS),
 		Latency:           spanFromOTel.LatencyNS,
-		SourceIP:          spanFromOTel.SourceIP,
-		DestinationIP:     spanFromOTel.DestIP,
 		WorkloadIDList:    spanFromOTel.WorkloadIDList,
 		GroupByMap:        spanFromOTel.GroupByMap,
+
+		ServiceName:   spanFromOTel.ServiceName,
+		Source:        spanFromOTel.Source,
+		SourceIP:      spanFromOTel.SourceIP,
+		Destination:   spanFromOTel.Destination,
+		DestinationIP: spanFromOTel.DestIP,
 	}
 
 	// set protocol
