@@ -230,10 +230,10 @@ func (scenarioManager *ScenarioManager) getDataForTraces(traceIds []typedef.TTra
 	zkLogger.InfoF(LoggerTag, "Time taken to fetch OTel spans[%v] ", endTime.Sub(startTime))
 
 	// b. get the raw data for traces from vizier
-	startTime = time.Now()
-	scenarioManager.addRawDataToSpans(tracesFromOTelStore)
-	endTime = time.Now()
-	zkLogger.Info(LoggerTag, "Time taken to fetch raw spans ", endTime.Sub(startTime))
+	//startTime = time.Now()
+	//scenarioManager.addRawDataToSpans(tracesFromOTelStore)
+	//endTime = time.Now()
+	//zkLogger.Info(LoggerTag, "Time taken to fetch raw spans ", endTime.Sub(startTime))
 
 	return tracesFromOTelStore
 }
