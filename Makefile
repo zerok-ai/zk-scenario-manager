@@ -8,19 +8,28 @@ PROJECT_ID ?= zerok-dev
 REPOSITORY ?= zk-client
 
 export GO111MODULE=on
+export BUILDER_NAME=multi-platform-builder
 export GOPRIVATE=github.com/zerok-ai/zk-utils-go,github.com/zerok-ai/zk-rawdata-reader
 
 sync:
 	go get -v ./...
 
 build: sync
-	go build -v -o $(NAME) cmd/main.go
+	go build -v -o bin/$(NAME) cmd/main.go
 
 run: build
-	go run cmd/main.go -c ./config/config.yaml 2>&1 | grep -v '^(0x'
+	go run cmd/main.go -c ./config/config.yaml
 
 docker-build: sync
-	$(GOOS) $(ARCH) go build -v -o $(NAME) cmd/main.go
+	$(GOOS) $(ARCH) go build -v -o bin/$(NAME)-$(ARCH) cmd/main.go
+
+docker-build-multi-arch: sync
+	GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -v -o bin/$(NAME)-amd64 cmd/main.go
+	GOOS=linux GOARCH=arm64 CGO_ENABLED=0 go build -v -o bin/$(NAME)-arm64 cmd/main.go
+	docker buildx rm ${BUILDER_NAME} || true
+	docker buildx create --use --platform=linux/arm64,linux/amd64 --name ${BUILDER_NAME}
+	docker buildx build --platform=linux/arm64,linux/amd64 --push --tag ${CLIENT_IMG} -f Dockerfile .
+	docker buildx rm ${BUILDER_NAME}
 
 docker-push:
 	docker push $(IMAGE_PREFIX)$(IMAGE_NAME)$(IMAGE_NAME_SUFFIX):$(IMAGE_VERSION)
@@ -58,7 +67,8 @@ docker-build-push-migration-gke: docker-build-migration-gke docker-push-migratio
 
 # ------- CI-CD ------------
 ci-cd-build: sync
-	GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -v -o $(NAME) cmd/main.go
+	GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -v -o bin/$(NAME)-amd64 cmd/main.go
+	GOOS=linux GOARCH=arm64 CGO_ENABLED=0 go build -v -o bin/$(NAME)-arm64 cmd/main.go
 
 ci-cd-build-migration:
 
