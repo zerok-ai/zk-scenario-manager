@@ -12,6 +12,8 @@ spec:
   template:
     spec:
       restartPolicy: {{ .Values.image.migrationRestartPolicy }}
+      nodeSelector:
+        beta.kubernetes.io/arch: amd64
       containers:
         - name: migration
           image: "{{ .Values.global.dockerBase }}/{{ .Values.image.migrationRepo }}:{{ .Values.image.migrationTag  }}"
