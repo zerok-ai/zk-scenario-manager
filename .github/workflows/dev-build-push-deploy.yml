@@ -19,13 +19,8 @@ on:
 #        default: 'devclient03'
 env:
   DOCKER_REG: ${{ vars.DOCKER_REG }}
-  NS: ${{ vars.NS }}
   DOCKER_REPO: ${{ vars.DOCKER_REPO }}
   APP_NAME: ${{ vars.APP_NAME }}
-  GKE_ZONE: ${{ vars.GKE_ZONE }}
-  POSTGRES_DB: ${{ vars.POSTGRES_DB }}
-  POSTGRES_HOST: ${{ vars.POSTGRES_HOST }}
-  POSTGRES_USER: ${{ secrets.POSTGRES_USER }}
 
 jobs:
   init:
@@ -36,14 +31,14 @@ jobs:
       DOCKER_TAG: ${{ github.event.inputs.DOCKER_TAG }}
 
   build-push:
-    uses: zerok-ai/zk-git-actions/.github/workflows/zk-build-push.yml@main
+    uses: zerok-ai/zk-git-actions/.github/workflows/zk-build-push-multiarch.yml@main
     with:
       VERSION: ${{ needs.init.outputs.VERSION }}
       ENVIRONMENT: ${{ needs.init.outputs.ENVIRONMENT }}
       DOCKER_IDENTIFIER: ${{ needs.init.outputs.CLUSTERNAME }}
       PROJECT_ID: ${{ needs.init.outputs.PROJECT_ID }}
     secrets:
-      GKE_SA_KEY: ${{ secrets.GKE_SA_KEY }}
+      GKE_SA_KEY: ${{ secrets.GKE_SA_KEY_DEV }}
     needs: init
 
   # build migration image and push docker image to docker repository
@@ -58,7 +53,7 @@ jobs:
       DOCKER_FILE_NAME: 'Dockerfile-Migration'
       APP_NAME_VAR: 'APP_NAME_MIGRATION'
     secrets:
-      GKE_SA_KEY: ${{ secrets.GKE_SA_KEY }}
+      GKE_SA_KEY: ${{ secrets.GKE_SA_KEY_DEV }}
     needs: init
 
   # build helm charts and publish to helm repository
@@ -79,7 +74,7 @@ jobs:
   deploy:
     uses: zerok-ai/zk-git-actions/.github/workflows/zk-deploy.yml@main
     with:
-      CLUSTERNAME: ${{ github.event.inputs.GKE_CLUSTER }}
+      CLUSTERNAME: ${{ needs.init.outputs.CLUSTERNAME }}
       VERSION: ${{ needs.init.outputs.VERSION }}
       MIGRATION_VERSION: ${{ needs.init.outputs.VERSION }}
       PROJECT_ID: ${{ needs.init.outputs.PROJECT_ID }}

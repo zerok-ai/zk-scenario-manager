@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/redis/go-redis/v9"
-	redisConfig "github.com/zerok-ai/zk-utils-go/storage/redis/config"
+	"github.com/zerok-ai/zk-utils-go/storage/redis/config"
 )
 
 var (
@@ -20,12 +20,8 @@ type SetPopulator struct {
 	keyPrefix    string
 }
 
-func GetSetPopulator(redisConfig *redisConfig.RedisConfig, dbName string, setName string, keyPrefix string, startCounter int, totalRecords int) *SetPopulator {
-	_redisClient := redis.NewClient(&redis.Options{
-		Addr:     fmt.Sprint(redisConfig.Host, ":", redisConfig.Port),
-		Password: "",
-		DB:       redisConfig.DBs[dbName],
-	})
+func GetSetPopulator(rConfig config.RedisConfig, dbName string, setName string, keyPrefix string, startCounter int, totalRecords int) *SetPopulator {
+	_redisClient := config.GetRedisConnection(dbName, rConfig)
 
 	sp := SetPopulator{
 		redisClient:  _redisClient,

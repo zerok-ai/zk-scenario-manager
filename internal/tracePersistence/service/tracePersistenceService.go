@@ -12,6 +12,7 @@ var LogTag = "zk_trace_persistence_service"
 
 type TracePersistenceService interface {
 	SaveIncidents([]model.IncidentWithIssues) *zkErrors.ZkError
+	SaveErrors([]model.ErrorData) *zkErrors.ZkError
 	Close() error
 }
 
@@ -29,15 +30,10 @@ type tracePersistenceService struct {
 
 func (s tracePersistenceService) SaveIncidents(issuesDetails []model.IncidentWithIssues) *zkErrors.ZkError {
 
-	if issuesDetails == nil || len(issuesDetails) == 0 {
-		zkErr := zkErrors.ZkErrorBuilder{}.Build(zkErrors.ZkErrorBadRequest, nil)
-		return &zkErr
-	}
-
 	issuesDetailsDtoList := make([]dto.IssuesDetailDto, 0)
 
 	for _, issuesDetail := range issuesDetails {
-		b, zkErr, validIssueDetail := dto.ValidateAndSanitiseIssue(issuesDetail)
+		b, validIssueDetail, zkErr := dto.ValidateAndSanitiseIssue(issuesDetail)
 		if !b || zkErr != nil {
 			zkLogger.Error("Invalid issuesDetail", zkErr)
 			continue
@@ -59,6 +55,42 @@ func (s tracePersistenceService) SaveIncidents(issuesDetails []model.IncidentWit
 
 	saveErr := s.repo.SaveTraceList(issuesDetailsDtoList)
 	if saveErr != nil {
+		zkErr := zkErrors.ZkErrorBuilder{}.Build(zkErrors.ZkErrorDbError, nil)
+		return &zkErr
+	}
+
+	return nil
+}
+
+func (s tracePersistenceService) SaveErrors(errors []model.ErrorData) *zkErrors.ZkError {
+	sanitizedErrors := make([]model.ErrorData, 0)
+	for _, e := range errors {
+		if e.Id == "" || e.Data == "" {
+			continue
+		}
+		sanitizedErrors = append(sanitizedErrors, e)
+	}
+
+	if len(sanitizedErrors) == 0 {
+		zkLogger.Error(LogTag, "Empty error list, or contains invalid data")
+		zkErr := zkErrors.ZkErrorBuilder{}.Build(zkErrors.ZkErrorBadRequest, nil)
+		return &zkErr
+	}
+
+	errorDtoList := make([]dto.ErrorsDataTableDto, 0)
+	for _, e := range sanitizedErrors {
+		errorDto, err := dto.ConvertErrorToErrorDto(e)
+		if err != nil {
+			zkLogger.Error(LogTag, err)
+			zkErr := zkErrors.ZkErrorBuilder{}.Build(zkErrors.ZkErrorBadRequest, nil)
+			return &zkErr
+		}
+		errorDtoList = append(errorDtoList, errorDto)
+	}
+
+	err := s.repo.SaveErrors(errorDtoList)
+	if err != nil {
+		zkLogger.Error(LogTag, "Failed to save errors", err)
 		zkErr := zkErrors.ZkErrorBuilder{}.Build(zkErrors.ZkErrorDbError, nil)
 		return &zkErr
 	}

@@ -2,28 +2,35 @@ apiVersion: v1
 data:
   config.yaml: |
     redis:
-      host: redis-master.zk-client.svc.cluster.local
-      port: 6379
-      readTimeout: 20
+      port: {{ .Values.redis.port }}
+      readTimeout: {{ .Values.redis.readTimeout }}
       dbs:
-        traces: 1
-        otel: 3
-        scenarios: 6
+        filtered_traces: {{ .Values.redis.dbs.filtered_traces }}
+        scenarios: {{ .Values.redis.dbs.scenarios }}
+        traces: {{ .Values.redis.dbs.traces }}
+        executor_attr: {{ .Values.redis.dbs.executor_attr }}
+        pod_details: {{ .Values.redis.dbs.pod_details }}
+        error_details: {{ .Values.redis.dbs.error_details }}
     postgres:
       host: "{{ .Values.postgres.host }}"
       port: {{ .Values.postgres.port }}
       user: "{{ .Values.postgres.user }}"
-      password: "{{ .Values.postgres.password }}"
-      dbname: "{{ .Values.postgres.dbname }}"
+      password: ""
+      dbname: "{{ .Values.postgres.database }}"
+      max_connections: 5
+      max_idle_connections: 5
+      connection_max_lifetime_in_minutes: 10
     server:
       host: 0.0.0.0
       port: 80
     scenarioConfig:
       redisRuleSetCount: 12
       processingIntervalInSeconds: 10
+      ebpfSchemaVersion: "0.1.1-alpha"
 kind: ConfigMap
 metadata:
+  name: {{ include "zk-scenario-manager.fullname" . }}
   labels:
-    app: zk-scenario-manager
-  name: zk-scenario-manager
+    app: {{ include "zk-scenario-manager.fullname" . }}
+    name: {{ include "zk-scenario-manager.fullname" . }}
   namespace: zk-client

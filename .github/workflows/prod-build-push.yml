@@ -28,10 +28,10 @@ jobs:
     with:
       VERSION: ${{ needs.init.outputs.VERSION }}
       ENVIRONMENT: ${{ needs.init.outputs.ENVIRONMENT }}
-      DOCKER_IDENTIFIER: ${{ needs.init.outputs.CLUSTERNAME }}
+      DOCKER_IDENTIFIER: ${{ needs.init.outputs.ENVIRONMENT }}
       PROJECT_ID: ${{ needs.init.outputs.PROJECT_ID }}
     secrets:
-      GKE_SA_KEY: ${{ secrets.GKE_SA_KEY }}
+      GKE_SA_KEY: ${{ secrets.GKE_SA_KEY_PROD }}
     needs: init
 
   # build migration image and push docker image to docker repository
@@ -40,13 +40,13 @@ jobs:
     with:
       VERSION: ${{ needs.init.outputs.VERSION }}
       ENVIRONMENT: ${{ needs.init.outputs.ENVIRONMENT }}
-      DOCKER_IDENTIFIER: ${{ needs.init.outputs.CLUSTERNAME }}
+      DOCKER_IDENTIFIER: ${{ needs.init.outputs.ENVIRONMENT }}
       PROJECT_ID: ${{ needs.init.outputs.PROJECT_ID }}
       MAKE_TARGET: 'ci-cd-build-migration'
       DOCKER_FILE_NAME: 'Dockerfile-Migration'
       APP_NAME_VAR: 'APP_NAME_MIGRATION'
     secrets:
-      GKE_SA_KEY: ${{ secrets.GKE_SA_KEY }}
+      GKE_SA_KEY: ${{ secrets.GKE_SA_KEY_PROD }}
     needs: init
 
   # build helm charts and publish to helm repository
@@ -55,7 +55,7 @@ jobs:
     with:
       HELM_VERSION: ${{ needs.init.outputs.VERSION }}
       ENVIRONMENT: ${{ needs.init.outputs.ENVIRONMENT }}
-      DOCKER_IDENTIFIER: ${{ needs.init.outputs.CLUSTERNAME }}
+      DOCKER_IDENTIFIER: ${{ needs.init.outputs.ENVIRONMENT }}
       HELM_BUCKET_NAME: ${{ needs.init.outputs.HELM_BUCKET_NAME }}
       HELM_BUCKET_URL: ${{ needs.init.outputs.HELM_BUCKET_URL }}
       PROJECT_ID: ${{ needs.init.outputs.PROJECT_ID }}

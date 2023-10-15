@@ -4,10 +4,16 @@ import (
 	"database/sql/driver"
 	"encoding/json"
 	"errors"
+	typedef "scenario-manager/internal"
 	"time"
 )
 
 var LogTag = "zk_trace_model"
+
+type ErrorData struct {
+	Id   string `json:"id"`
+	Data string `json:"data"`
+}
 
 type IncidentWithIssues struct {
 	Incident       Incident     `json:"incident"`
@@ -28,23 +34,80 @@ type Issue struct {
 type Incident struct {
 	TraceId                string    `json:"trace_id"`
 	Spans                  []*Span   `json:"spans"`
+	IssueHash              string    `json:"issue_hash"`
 	IncidentCollectionTime time.Time `json:"incident_collection_time"`
 }
 
 type Span struct {
-	SpanId          string          `json:"span_id"`
-	TraceId         string          `json:"trace_id"`
-	ParentSpanId    string          `json:"parent_span_id"`
-	Source          string          `json:"source"`
-	Destination     string          `json:"destination"`
-	WorkloadIdList  []string        `json:"workload_id_list"`
-	Metadata        Metadata        `json:"metadata"`
-	LatencyNs       *float32        `json:"latency_ns"`
-	Protocol        string          `json:"protocol"`
-	RequestPayload  RequestPayload  `json:"request_payload"`
-	ResponsePayload ResponsePayload `json:"response_payload"`
-	IssueHashList   []string        `json:"issue_hash_list"`
-	Time            time.Time       `json:"time"`
+	TraceID             string    `json:"trace_id"`
+	ParentSpanID        string    `json:"parent_span_id"`
+	SpanID              string    `json:"span_id"`
+	IsRoot              bool      `json:"is_root"`
+	Kind                string    `json:"kind"`
+	StartTime           time.Time `json:"start_time"`
+	Latency             uint64    `json:"latency"`
+	Source              string    `json:"source"`
+	Destination         string    `json:"destination"`
+	WorkloadIDList      []string  `json:"workload_id_list"`
+	Protocol            string    `json:"protocol"`
+	IssueHashList       []string  `json:"issue_hash_list"`
+	RequestPayloadSize  uint64    `json:"request_payload_size"`
+	ResponsePayloadSize uint64    `json:"response_payload_size"`
+	Method              string    `json:"method"`
+	Route               string    `json:"route"`
+	Scheme              string    `json:"scheme"`
+	Path                string    `json:"path"`
+	Query               string    `json:"query"`
+	Status              int       `json:"status"`
+	Username            string    `json:"username"`
+	SourceIP            string    `json:"source_ip"`
+	DestinationIP       string    `json:"destination_ip"`
+	ServiceName         string    `json:"service_name"`
+	Errors              string    `json:"errors"`
+
+	SpanRawData
+	OTelSchemaVersion string
+	EBPFSchemaVersion string
+	SpanAsMap         typedef.GenericMap
+	GroupByMap        GroupByMap
+}
+
+type GroupByValueItem struct {
+	WorkloadId string `json:"workload_id"`
+	Title      string `json:"title"`
+	Hash       string `json:"hash"`
+}
+
+type GroupByValues []*GroupByValueItem
+type ScenarioId string
+type GroupByMap map[ScenarioId]GroupByValues
+
+func (s Span) ToMap() (typedef.GenericMap, error) {
+	if s.SpanAsMap == nil {
+		spanAsString, err := json.Marshal(s)
+		if err != nil {
+			return nil, err
+		}
+
+		var spanAsMap typedef.GenericMap
+		err = json.Unmarshal(spanAsString, &spanAsMap)
+		if err != nil {
+			return nil, err
+		}
+
+		s.SpanAsMap = spanAsMap
+	}
+	return s.SpanAsMap, nil
+}
+
+type SpanRawData struct {
+	TraceID     string `json:"trace_id"`
+	SpanID      string `json:"span_id"`
+	ReqHeaders  string `json:"req_headers"`
+	RespHeaders string `json:"resp_headers"`
+	IsTruncated bool   `json:"is_truncated"`
+	ReqBody     string `json:"req_body"`
+	RespBody    string `json:"resp_body"`
 }
 
 type ResponsePayload interface {
@@ -56,35 +119,7 @@ type RequestPayload interface {
 	GetString() string
 }
 
-type HTTPResponsePayload struct {
-	RespStatus  string `json:"resp_status"`
-	RespMessage string `json:"resp_message"`
-	RespHeaders string `json:"resp_headers"`
-	RespBody    string `json:"resp_body"`
-}
-
-type HTTPRequestPayload struct {
-	ReqPath    string `json:"req_path"`
-	ReqMethod  string `json:"req_method"`
-	ReqHeaders string `json:"req_headers"`
-	ReqBody    string `json:"req_body"`
-}
-
-func (res HTTPResponsePayload) GetStatus() string {
-	return res.RespStatus
-}
-
-func (res HTTPRequestPayload) GetString() string {
-	x, _ := json.Marshal(res)
-	return string(x)
-}
-
-func (res HTTPResponsePayload) GetString() string {
-	x, _ := json.Marshal(res)
-	return string(x)
-}
-
-type Metadata map[string]interface{}
+type Metadata typedef.GenericMap
 
 // Value Make the Attrs struct implement the driver.Valuer interface. This method
 // simply returns the JSON-encoded representation of the struct.

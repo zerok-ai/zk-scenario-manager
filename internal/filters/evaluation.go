@@ -1,11 +1,13 @@
 package filters
 
 import (
+	"crypto/sha1"
+	"encoding/hex"
 	"fmt"
 	zkLogger "github.com/zerok-ai/zk-utils-go/logs"
 	"github.com/zerok-ai/zk-utils-go/scenario/model"
+	"scenario-manager/config"
 	typedef "scenario-manager/internal"
-	"scenario-manager/internal/config"
 	"scenario-manager/internal/stores"
 	"sort"
 	"strconv"
@@ -45,14 +47,15 @@ func NewTraceEvaluator(cfg config.AppConfigs, scenario *model.Scenario, traceSto
 }
 
 func (te TraceEvaluator) EvalScenario() ([]typedef.TTraceid, error) {
-	zkLogger.Debug(LoggerTagEvaluation, "Evaluating scenario ", te.scenario.Id)
 	resultKey, err := te.evalFilter(te.scenario.Filter)
 	if err != nil {
 		return nil, err
 	}
 
 	if !te.traceStore.SetExists(*resultKey) {
-		return nil, fmt.Errorf("resultset: %s for scenario %v doesn't exist", *resultKey, te.scenario.Id)
+		strError := fmt.Sprintf("No trace of interest for scenario: %v for scenario. Result key:%v doesn't exist", te.scenario.Id, *resultKey)
+		zkLogger.Info(LoggerTagEvaluation, strError)
+		return nil, fmt.Errorf(strError)
 	}
 
 	// get all the traceIds from the traceStore
@@ -192,7 +195,7 @@ func uniqueStringFromStringSet(condition model.Condition, set []string) string {
 	if len(copied) > 1 {
 		combined = "(" + combined + ")"
 	}
-	/*/
+	/**/
 	// Hash the combined string using SHA1 calculating hash. avoiding sha256 for performance reasons
 	hash := sha1.Sum([]byte(combined))
 

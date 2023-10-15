@@ -5,46 +5,241 @@ import (
 	"fmt"
 	"github.com/redis/go-redis/v9"
 	zkLogger "github.com/zerok-ai/zk-utils-go/logs"
+	"github.com/zerok-ai/zk-utils-go/storage/redis/clientDBNames"
 	"github.com/zerok-ai/zk-utils-go/storage/redis/config"
 	typedef "scenario-manager/internal"
 	tracePersistenceModel "scenario-manager/internal/tracePersistence/model"
-	"time"
+	"strconv"
 )
 
-type OTelStore struct {
+type TWorkLoadIdToSpan map[typedef.TWorkloadId]*tracePersistenceModel.Span
+type TWorkLoadIdToSpanArray map[typedef.TWorkloadId][]*tracePersistenceModel.Span
+
+type OTelDataHandler struct {
 	redisClient *redis.Client
 }
 
-func (t OTelStore) initialize() *OTelStore {
+func (t OTelDataHandler) initialize() *OTelDataHandler {
 	return &t
 }
 
-func (t OTelStore) Close() {
-	t.redisClient.Close()
+func (t OTelDataHandler) Close() {
+	err := t.redisClient.Close()
+	if err != nil {
+		return
+	}
 }
 
-func GetOTelStore(redisConfig *config.RedisConfig) *OTelStore {
-	dbName := "otel"
+func GetOTelStore(redisConfig config.RedisConfig) *OTelDataHandler {
+	dbName := clientDBNames.TraceDBName
 	zkLogger.Debug(LoggerTag, "GetOTelStore: config=", redisConfig, "dbName=", dbName, "dbID=", redisConfig.DBs[dbName])
-	readTimeout := time.Duration(redisConfig.ReadTimeout) * time.Second
-	_redisClient := redis.NewClient(&redis.Options{
-		Addr:        fmt.Sprint(redisConfig.Host, ":", redisConfig.Port),
-		Password:    "",
-		DB:          redisConfig.DBs[dbName],
-		ReadTimeout: readTimeout,
-	})
+	_redisClient := config.GetRedisConnection(dbName, redisConfig)
+	return OTelDataHandler{redisClient: _redisClient}.initialize()
+}
 
-	return OTelStore{redisClient: _redisClient}.initialize()
+type OTelError struct {
+	ErrorType     string `json:"error_type"`
+	ExceptionType string `json:"exception_type"`
+	Hash          string `json:"hash"`
+	Message       string `json:"message"`
 }
 
 type SpanFromOTel struct {
 	TraceID      typedef.TTraceid
 	SpanID       typedef.TSpanId
-	RawSpan      *tracePersistenceModel.Span
-	Kind         string          `json:"spanKind"`
-	Protocol     string          `json:"protocol"`
-	ParentSpanID typedef.TSpanId `json:"parentSpanID"`
-	Children     []SpanFromOTel
+	ParentSpanID typedef.TSpanId `json:"parent_span_id"`
+	Kind         string          `json:"span_kind"`
+	OTelSchema   string          `json:"schema_version"`
+
+	StartTimeNS uint64 `json:"start_ns"`
+	LatencyNS   uint64 `json:"latency_ns"`
+
+	ServiceName string `json:"service_name"`
+	Source      string `json:"source"`
+	SourceIP    string `json:"source_ip"`
+	Destination string `json:"destination"`
+	DestIP      string `json:"destination_ip"`
+
+	Errors []OTelError `json:"errors"`
+
+	GroupByMap tracePersistenceModel.GroupByMap `json:"group_by"`
+
+	WorkloadIDList     []string           `json:"workload_id_list"`
+	Attributes         typedef.GenericMap `json:"attributes"`
+	SpanForPersistence *tracePersistenceModel.Span
+	Children           []SpanFromOTel
+}
+
+func (spanFromOTel *SpanFromOTel) GetStringAttribute(attr string) (string, bool) {
+	var protocol interface{}
+	success := false
+	var stringValue string
+	if protocol, success = spanFromOTel.Attributes[attr]; success {
+		switch v := protocol.(type) {
+		case string:
+			stringValue = v
+		case float64:
+			stringValue = strconv.FormatFloat(v, 'f', -1, 64)
+		case int:
+			stringValue = strconv.Itoa(v)
+		default:
+			stringValue = "Unknown Type"
+			success = false
+			zkLogger.Error(LoggerTag, "getStringAttribute: Unknown Type for ", attr, " value=", protocol)
+		}
+	}
+	return stringValue, success
+}
+
+func (spanFromOTel *SpanFromOTel) getNumberAttribute(attr string) (string, bool) {
+	str := ""
+	success := false
+	if protocol, ok := spanFromOTel.Attributes[attr]; ok {
+		str, success = protocol.(string)
+	}
+	return str, success
+}
+
+func (spanFromOTel *SpanFromOTel) createAndPopulateSpanForPersistence() {
+
+	spanFromOTel.SpanForPersistence = &tracePersistenceModel.Span{
+		TraceID:           string(spanFromOTel.TraceID),
+		SpanID:            string(spanFromOTel.SpanID),
+		OTelSchemaVersion: spanFromOTel.OTelSchema,
+		Kind:              spanFromOTel.Kind,
+		ParentSpanID:      string(spanFromOTel.ParentSpanID),
+		StartTime:         EpochNanoSecondsToTime(spanFromOTel.StartTimeNS),
+		Latency:           spanFromOTel.LatencyNS,
+		WorkloadIDList:    spanFromOTel.WorkloadIDList,
+		GroupByMap:        spanFromOTel.GroupByMap,
+
+		ServiceName:   spanFromOTel.ServiceName,
+		Source:        spanFromOTel.Source,
+		SourceIP:      spanFromOTel.SourceIP,
+		Destination:   spanFromOTel.Destination,
+		DestinationIP: spanFromOTel.DestIP,
+	}
+
+	// set protocol
+	if protocol, ok := spanFromOTel.GetStringAttribute(OTelAttrProtocol); ok {
+		spanFromOTel.SpanForPersistence.Protocol = protocol
+	}
+
+	if !spanFromOTel.populateThroughDBAttributeMap() {
+		spanFromOTel.populateThroughHttpAttributeMap()
+	}
+}
+
+func (spanFromOTel *SpanFromOTel) populateErrorAttributeMap() []string {
+
+	errorIds := make([]string, 0)
+
+	spanForPersistence := spanFromOTel.SpanForPersistence
+	// set protocol for exception
+	if spanFromOTel.Errors != nil && len(spanFromOTel.Errors) > 0 {
+
+		for _, oTelError := range spanFromOTel.Errors {
+			errorIds = append(errorIds, oTelError.Hash)
+		}
+
+		bytesOTelErrors, err := json.Marshal(spanFromOTel.Errors)
+		if err != nil {
+			zkLogger.Error(LoggerTag, "populateErrorAttributeMap: err=", err)
+			return errorIds
+		}
+		spanForPersistence.Errors = string(bytesOTelErrors)
+	}
+	return errorIds
+}
+
+func (spanFromOTel *SpanFromOTel) populateThroughHttpAttributeMap() bool {
+	spanForPersistence := spanFromOTel.SpanForPersistence
+
+	if status, ok := spanFromOTel.GetStringAttribute(OTelAttrHttpStatus); ok {
+		s, err := strconv.Atoi(status)
+		if err != nil {
+			zkLogger.Error(LoggerTag, "populateThroughHttpAttributeMap: status=", status, " err=", err)
+		}
+		spanForPersistence.Status = s
+	}
+
+	//	set route
+	if spanFromOTel.Kind == SERVER {
+		if route, ok := spanFromOTel.GetStringAttribute(OTelHttpAttrRoute); ok {
+			spanForPersistence.Route = route
+		}
+
+		if scheme, ok := spanFromOTel.GetStringAttribute(OTelHttpAttrScheme); ok {
+			spanForPersistence.Scheme = scheme
+		}
+
+		if query, ok := spanFromOTel.GetStringAttribute(OTelHttpAttrQuery); ok {
+			spanForPersistence.Query = query
+		}
+
+		// path
+		if path, ok := spanFromOTel.GetStringAttribute(OTelAttrHttpTarget); ok {
+			spanForPersistence.Path = path
+		}
+
+	} else if spanFromOTel.Kind == CLIENT {
+		if netPeerName, ok := spanFromOTel.GetStringAttribute(OTelHttpAttrNetPeerName); ok {
+			spanForPersistence.Route = netPeerName
+		}
+
+		// path
+		if path, ok := spanFromOTel.GetStringAttribute(OTelAttrHttpUrl); ok {
+			spanForPersistence.Path = path
+		}
+	}
+
+	return true
+}
+
+func (spanFromOTel *SpanFromOTel) populateThroughDBAttributeMap() bool {
+
+	spanForPersistence := spanFromOTel.SpanForPersistence
+	if db, exists := spanFromOTel.GetStringAttribute(OTelAttrDBSystem); exists {
+		spanForPersistence.Protocol = db
+		spanForPersistence.Scheme = db
+	} else {
+		return false
+	}
+
+	// set route
+	spanForPersistence.Route = ""
+	if dbName, ok := spanFromOTel.GetStringAttribute(OTelDBAttrDBName); ok {
+		spanForPersistence.Route += dbName
+	}
+	if dbTableName, ok := spanFromOTel.GetStringAttribute(OTelDBAttrDBSqlTable); ok {
+		spanForPersistence.Route += dbTableName
+	}
+
+	// path
+	if path, ok := spanFromOTel.GetStringAttribute(OTelDBAttrConnectionString); ok {
+		spanForPersistence.Path = path
+	}
+
+	// query
+	if query, ok := spanFromOTel.GetStringAttribute(OTelDBStatement); ok {
+		spanForPersistence.Query = query
+	}
+
+	//username
+	if userName, ok := spanFromOTel.GetStringAttribute(OTelDBAttrUserName); ok {
+		spanForPersistence.Username = userName
+	}
+
+	//method
+	if userName, ok := spanFromOTel.GetStringAttribute(OTelDBAttrOperation); ok {
+		spanForPersistence.Username = userName
+	}
+
+	return true
+}
+
+type SpanAttributes interface {
+	populateThroughAttributeMap()
 }
 
 type TraceFromOTel struct {
@@ -56,7 +251,7 @@ type TraceFromOTel struct {
 // GetSpansForTracesFromDB retrieves the spans for the given traceIds from the database
 // Returns a map of traceId to TraceFromOTel
 // Returns a map of protocol to array of traces
-func (t OTelStore) GetSpansForTracesFromDB(keys []typedef.TTraceid) (map[typedef.TTraceid]*TraceFromOTel, error) {
+func (t OTelDataHandler) GetSpansForTracesFromDB(keys []typedef.TTraceid) (result map[typedef.TTraceid]*TraceFromOTel, oTelErrors []string, err error) {
 
 	redisClient := t.redisClient
 
@@ -69,26 +264,34 @@ func (t OTelStore) GetSpansForTracesFromDB(keys []typedef.TTraceid) (map[typedef
 		hashResults = append(hashResults, hashResult)
 	}
 	// 3. Execute the transaction
-	_, err := pipe.Exec(ctx)
+	_, err = pipe.Exec(ctx)
 	if err != nil {
 		fmt.Println("Error executing transaction:", err)
-		return nil, err
+		return nil, nil, err
 	}
 
 	// 4. Process the results
-	result := map[typedef.TTraceid]*TraceFromOTel{}
-	//tracesForProtocol := make(map[string]ds.Set[string], 0)
+	result, oTelErrors = t.processResult(keys, hashResults)
+
+	return result, oTelErrors, nil
+}
+
+func (t OTelDataHandler) processResult(keys []typedef.TTraceid, hashResults []*redis.MapStringStringCmd) (result map[typedef.TTraceid]*TraceFromOTel, errors []string) {
+
+	result = make(map[typedef.TTraceid]*TraceFromOTel)
+	errors = make([]string, 0)
+
 	for i, hashResult := range hashResults {
 		traceId := keys[i]
-		trace, err := hashResult.Result()
+		trace, err1 := hashResult.Result()
 
-		if err != nil {
-			zkLogger.Error(LoggerTag, "Error retrieving trace:", err)
+		if err1 != nil {
+			zkLogger.Error(LoggerTag, "Error retrieving trace:", err1)
 			continue
 		}
 
 		if len(trace) == 0 {
-			zkLogger.Debug(LoggerTag, "No trace found for traceId:", traceId)
+			zkLogger.DebugF(LoggerTag, "No trace found for traceId: %s in OTel store", traceId)
 			continue
 		}
 
@@ -97,13 +300,18 @@ func (t OTelStore) GetSpansForTracesFromDB(keys []typedef.TTraceid) (map[typedef
 		// 4.1 Unmarshal the Spans
 		for spanId, spanData := range trace {
 			var sp SpanFromOTel
-			err1 := json.Unmarshal([]byte(spanData), &sp)
-			if err1 != nil {
-				zkLogger.ErrorF(LoggerTag, "Error retrieving span:", err)
+			err2 := json.Unmarshal([]byte(spanData), &sp)
+			if err2 != nil {
+				zkLogger.Error(LoggerTag, "Error retrieving span:", err2)
 				continue
 			}
 			sp.TraceID = traceId
 			sp.SpanID = typedef.TSpanId(spanId)
+			sp.createAndPopulateSpanForPersistence()
+
+			// handle exceptions
+			errors = append(errors, sp.populateErrorAttributeMap()...)
+
 			traceFromOTel.Spans[typedef.TSpanId(spanId)] = &sp
 		}
 
@@ -125,62 +333,15 @@ func (t OTelStore) GetSpansForTracesFromDB(keys []typedef.TTraceid) (map[typedef
 		}
 
 		if rootSpan == nil {
-			zkLogger.Debug(LoggerTag, "rootSpanID not found")
+			zkLogger.Debug(LoggerTag, "rootSpanID not found for trace id ", traceId)
 			continue
-		} else if rootSpan.Kind == SERVER {
-			rootClient := SpanFromOTel{
-				TraceID:  rootSpan.TraceID,
-				SpanID:   rootSpan.ParentSpanID,
-				Kind:     CLIENT,
-				Protocol: rootSpan.Protocol,
-				Children: []SpanFromOTel{*rootSpan},
-			}
-			traceFromOTel.Spans[rootSpan.ParentSpanID] = &rootClient
 		}
+
+		rootSpan.SpanForPersistence.IsRoot = true
 		traceFromOTel.RootSpanID = rootSpan.SpanID
 
-		// 4.3 prune the unwanted Spans
-		//prune(traceFromOTel.Spans, rootSpan.SpanID)
-
-		zkLogger.DebugF(LoggerTag, "rootSpanID: %s", rootSpan.SpanID)
 		result[traceId] = traceFromOTel
 	}
 
-	return result, nil
-}
-
-// prune removes the Spans that are not required - typedef Spans and server Spans that are not the root span
-func prune(spans map[typedef.TSpanId]*SpanFromOTel, currentSpanID typedef.TSpanId) ([]typedef.TSpanId, bool) {
-	currentSpan := spans[currentSpanID]
-
-	// call prune on the children
-	newChildSpansArray := make([]SpanFromOTel, 0)
-	newChildIdsArray := make([]typedef.TSpanId, 0)
-	for _, child := range currentSpan.Children {
-		newChildIds, pruned := prune(spans, child.SpanID)
-		if pruned {
-			delete(spans, child.SpanID)
-		}
-		for _, spId := range newChildIds {
-
-			span := spans[spId]
-			span.ParentSpanID = currentSpan.SpanID
-
-			// update the span in the map
-			spans[span.SpanID] = span
-
-			newChildSpansArray = append(newChildSpansArray, *span)
-		}
-
-		newChildIdsArray = append(newChildIdsArray, newChildIds...)
-	}
-	currentSpan.Children = newChildSpansArray
-	spans[currentSpanID] = currentSpan
-
-	parentSpan, isParentSpanPresent := spans[currentSpan.ParentSpanID]
-	if currentSpan.Kind == INTERNAL || (currentSpan.Kind == SERVER && isParentSpanPresent && parentSpan.Kind == CLIENT) {
-		return newChildIdsArray, true
-	}
-
-	return []typedef.TSpanId{currentSpanID}, false
+	return result, errors
 }

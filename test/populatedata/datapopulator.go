@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/zerok-ai/zk-utils-go/scenario/model"
+	"github.com/zerok-ai/zk-utils-go/storage/redis/clientDBNames"
 	"github.com/zerok-ai/zk-utils-go/storage/redis/config"
 	"io"
 	"os"
@@ -19,11 +20,11 @@ func PopulateScenarios(redisConfig config.RedisConfig) {
 		return
 	}
 
-	scenarioPopulator := GetScenarioPopulator("scenarios", redisConfig)
+	scenarioPopulator := GetScenarioPopulator(clientDBNames.ScenariosDBName, redisConfig)
 	err = scenarioPopulator.AddScenario(scenario)
 }
 
-func PopulateTraces(redisConfig *config.RedisConfig) {
+func PopulateTraces(redisConfig config.RedisConfig) {
 	GetSetPopulator(redisConfig, "traces", "idA1", "", 1, 40).PopulateData()
 	GetSetPopulator(redisConfig, "traces", "idA2", "", 76, 15).PopulateData()
 

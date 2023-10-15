@@ -1,26 +1,34 @@
 redis:
   host: 127.0.0.1
+  password: "FuH0jXb9kt"
   port: 6379
   dbs:
-    traces: 1
-    otel: 3
-    scenarios: 6
+    filtered_traces: 1
+    scenarios: 2
+    traces: 3
+    executor_attr: 4
+    pod_details: 7
+    error_details: 8
   readTimeout: 20
 postgres:
   host: 127.0.0.1
   port: 5432
   user: "postgres"
-  password: "dQsibXGVE3"
+  password: "eo1Mgtm6HI"
   dbname: "pl"
+  max_connections: 5
+  max_idle_connections: 5
+  connection_max_lifetime_in_minutes: 10
 logs:
   color: true
   level: DEBUG
 scenarioConfig:
   redisRuleSetCount: 12
   processingIntervalInSeconds: 10
-  vzCloudAddr: "px.loadcloud01.getanton.com:443"
-  vzClusterId: "d6ab4cb1-a202-4c48-ae42-f7e480063663"
-  vzClusterKey: "px-api-466ba2de-43d0-4d51-a678-005a5ecfb1d9"
+  ebpfSchemaVersion: "0.1.1-alpha"
+  vzCloudAddr: "px.devcloud01.getanton.com:443"
+  vzClusterId: "f14c39ad-8796-40a4-8460-b5411b10c1df"
+  vzClusterKey: "px-api-3a8352dc-34f6-44d6-991d-f4a22b9ec6b1"
 server:
   host: localhost
   port: 80

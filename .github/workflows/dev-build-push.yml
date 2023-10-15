@@ -29,7 +29,7 @@ jobs:
       DOCKER_IDENTIFIER: ${{ needs.init.outputs.CLUSTERNAME }}
       PROJECT_ID: ${{ needs.init.outputs.PROJECT_ID }}
     secrets:
-      GKE_SA_KEY: ${{ secrets.GKE_SA_KEY }}
+      GKE_SA_KEY: ${{ secrets.GKE_SA_KEY_DEV }}
     needs: init
 
   # build migration image and push docker image to docker repository
@@ -44,7 +44,7 @@ jobs:
       DOCKER_FILE_NAME: 'Dockerfile-Migration'
       APP_NAME_VAR: 'APP_NAME_MIGRATION'
     secrets:
-      GKE_SA_KEY: ${{ secrets.GKE_SA_KEY }}
+      GKE_SA_KEY: ${{ secrets.GKE_SA_KEY_DEV }}
     needs: init
 
   # build helm charts and publish to helm repository

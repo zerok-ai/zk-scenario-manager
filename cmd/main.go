@@ -6,7 +6,7 @@ import (
 	zkHttpConfig "github.com/zerok-ai/zk-utils-go/http/config"
 	zkLogger "github.com/zerok-ai/zk-utils-go/logs"
 	zkPostgres "github.com/zerok-ai/zk-utils-go/storage/sqlDB/postgres"
-	"scenario-manager/internal/config"
+	"scenario-manager/config"
 	"scenario-manager/internal/filters"
 	"scenario-manager/internal/tracePersistence/repository"
 	"scenario-manager/internal/tracePersistence/service"
@@ -26,17 +26,16 @@ func main() {
 	zkLogger.Info(LogTag, "********* Initializing Application *********")
 	zkHttpConfig.Init(cfg.Http.Debug)
 	zkLogger.Init(cfg.LogsConfig)
+
 	zkPostgresRepo, err := zkPostgres.NewZkPostgresRepo(cfg.Postgres)
 	if err != nil {
 		panic(err)
 	}
 
-	zkLogger.Debug(LogTag, "Parsed Configuration", cfg)
-
 	tpr := repository.NewTracePersistenceRepo(zkPostgresRepo)
 	tps := service.NewScenarioPersistenceService(tpr)
 
-	scenarioManager, err := filters.NewScenarioManager(cfg, tps)
+	scenarioManager, err := filters.NewScenarioManager(cfg, &tps)
 	if err != nil {
 		panic(err)
 	}
@@ -46,7 +45,7 @@ func main() {
 
 	configurator := iris.WithConfiguration(iris.Configuration{
 		DisablePathCorrection: true,
-		LogLevel:              "debug",
+		LogLevel:              cfg.LogsConfig.Level,
 	})
 
 	if err = newApp().Listen(":"+cfg.Server.Port, configurator); err != nil {

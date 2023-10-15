@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/redis/go-redis/v9"
 	zkLogger "github.com/zerok-ai/zk-utils-go/logs"
+	clientDBNames "github.com/zerok-ai/zk-utils-go/storage/redis/clientDBNames"
 	"github.com/zerok-ai/zk-utils-go/storage/redis/config"
 	"time"
 )
@@ -21,19 +22,11 @@ func (t TraceStore) Close() {
 	t.redisClient.Close()
 }
 
-func GetTraceStore(redisConfig *config.RedisConfig, ttlForTransientSets time.Duration) *TraceStore {
-	dbName := "traces"
-	zkLogger.Debug(LoggerTag, "GetTraceStore: config=", redisConfig, "dbName=", dbName, "dbID=", redisConfig.DBs[dbName])
-	readTimeout := time.Duration(redisConfig.ReadTimeout) * time.Second
-	_redisClient := redis.NewClient(&redis.Options{
-		Addr:        fmt.Sprint(redisConfig.Host, ":", redisConfig.Port),
-		Password:    "",
-		DB:          redisConfig.DBs[dbName],
-		ReadTimeout: readTimeout,
-	})
-
+func GetTraceStore(redisConfig config.RedisConfig, ttlForTransientSets time.Duration) *TraceStore {
+	dbName := clientDBNames.FilteredTracesDBName
+	zkLogger.DebugF(LoggerTag, "GetTraceStore: redisConfig=%v", redisConfig)
+	_redisClient := config.GetRedisConnection(dbName, redisConfig)
 	traceStore := TraceStore{redisClient: _redisClient, ttlForTransientSets: ttlForTransientSets}.initialize()
-
 	return traceStore
 }
 
