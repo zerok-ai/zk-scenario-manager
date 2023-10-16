@@ -1,5 +1,5 @@
 ALTER TABLE span
-    ADD COLUMN errors VARCHAR(255);
+    ADD COLUMN errors TEXT;
 
 CREATE TABLE IF NOT EXISTS errors_data
 (

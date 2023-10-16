@@ -49,6 +49,7 @@ type SpanFromOTel struct {
 	SpanID       typedef.TSpanId
 	ParentSpanID typedef.TSpanId `json:"parent_span_id"`
 	Kind         string          `json:"span_kind"`
+	Method       string          `json:"method"`
 	OTelSchema   string          `json:"schema_version"`
 
 	StartTimeNS uint64 `json:"start_ns"`
@@ -112,6 +113,7 @@ func (spanFromOTel *SpanFromOTel) createAndPopulateSpanForPersistence() {
 		Latency:           spanFromOTel.LatencyNS,
 		WorkloadIDList:    spanFromOTel.WorkloadIDList,
 		GroupByMap:        spanFromOTel.GroupByMap,
+		Method:            spanFromOTel.Method,
 
 		ServiceName:   spanFromOTel.ServiceName,
 		Source:        spanFromOTel.Source,

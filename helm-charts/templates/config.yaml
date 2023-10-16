@@ -27,6 +27,9 @@ data:
       redisRuleSetCount: 12
       processingIntervalInSeconds: 10
       ebpfSchemaVersion: "0.1.1-alpha"
+    logs:
+      color: {{ .Values.serviceConfigs.logs.color }}
+      level: {{ .Values.serviceConfigs.logs.level }}
 kind: ConfigMap
 metadata:
   name: {{ include "zk-scenario-manager.fullname" . }}

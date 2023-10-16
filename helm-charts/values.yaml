@@ -5,8 +5,12 @@
 global:
   dockerBase: "us-west1-docker.pkg.dev/zerok-dev/zk-client"
 
-
 replicaCount: 1
+
+serviceConfigs:
+  logs:
+    color: true
+    level: DEBUG
 
 redis:
   host: redis.zk-client.svc.cluster.local
