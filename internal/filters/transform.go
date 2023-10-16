@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"github.com/zerok-ai/zk-rawdata-reader/vzReader/models"
 	zkLogger "github.com/zerok-ai/zk-utils-go/logs"
-	typedef "scenario-manager/internal"
 	tracePersistenceModel "scenario-manager/internal/tracePersistence/model"
 	"strings"
 )
@@ -14,18 +13,11 @@ var (
 )
 
 func convertInterfaceMapToString(i interface{}) string {
-
-	if mapToConvert, ok := i.(typedef.GenericMap); ok {
-		s, err := json.Marshal(mapToConvert)
-		if err != nil {
-			zkLogger.Error("Error while converting interface to string, %v", i, err)
-		}
-		return string(s)
-	} else {
-		zkLogger.Error("Error while converting interface to string, %v", i)
-		return ""
+	s, err := json.Marshal(i)
+	if err != nil {
+		zkLogger.ErrorF(LoggerTag, "Error while converting interface to string, %v", err)
 	}
-
+	return string(s)
 }
 
 func getHttpRawData(value models.HttpRawDataModel) tracePersistenceModel.SpanRawData {
