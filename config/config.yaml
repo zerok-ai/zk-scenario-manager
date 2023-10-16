@@ -1,6 +1,6 @@
 redis:
   host: 127.0.0.1
-  password: "FuH0jXb9kt"
+  password: "7qWwxfGN98"
   port: 6379
   dbs:
     filtered_traces: 1

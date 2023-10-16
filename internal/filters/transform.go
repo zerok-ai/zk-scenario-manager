@@ -18,11 +18,11 @@ func convertInterfaceMapToString(i interface{}) string {
 	if mapToConvert, ok := i.(typedef.GenericMap); ok {
 		s, err := json.Marshal(mapToConvert)
 		if err != nil {
-			zkLogger.Error("Error while converting interface to string, %v", i, err)
+			zkLogger.ErrorF(LoggerTag, "Error while converting interface to string, %v", err)
 		}
 		return string(s)
 	} else {
-		zkLogger.Error("Error while converting interface to string, %v", i)
+		zkLogger.ErrorF(LoggerTag, "Error while converting interface to string, %v", i)
 		return ""
 	}
 
