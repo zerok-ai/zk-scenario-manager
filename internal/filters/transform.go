@@ -1,8 +1,9 @@
 package filters
 
 import (
-	"fmt"
+	"encoding/json"
 	"github.com/zerok-ai/zk-rawdata-reader/vzReader/models"
+	zkLogger "github.com/zerok-ai/zk-utils-go/logs"
 	tracePersistenceModel "scenario-manager/internal/tracePersistence/model"
 	"strings"
 )
@@ -11,10 +12,18 @@ var (
 	mySqlMethod = []string{"Sleep", "Quit", "InitDB", "Query", "FieldList", "CreateDB", "DropDB", "Refresh", "Shutdown", "Statistics", "ProcessInfo", "Connect", "ProcessKill", "Debug", "Ping", "Time", "DelayedInsert", "ChangeUser", "BinlogDump", "TableDump", "ConnectOut", "RegisterSlave", "StmtPrepare", "StmtExecute", "StmtSendLongData", "StmtClose", "StmtReset", "SetOption", "StmtFetch", "Daemon", "BinlogDumpGTID", "ResetConnection"}
 )
 
+func convertInterfaceMapToString(i interface{}) string {
+	s, err := json.Marshal(i)
+	if err != nil {
+		zkLogger.ErrorF(LoggerTag, "Error while converting interface to string, %v", err)
+	}
+	return string(s)
+}
+
 func getHttpRawData(value models.HttpRawDataModel) tracePersistenceModel.SpanRawData {
 
-	reqHeaderStr := fmt.Sprintf("%v", value.ReqHeaders)
-	resHeaderStr := fmt.Sprintf("%v", value.RespHeaders)
+	reqHeaderStr := convertInterfaceMapToString(value.ReqHeaders)
+	resHeaderStr := convertInterfaceMapToString(value.RespHeaders)
 	reqBodyStr, _ := value.ReqBody.(string)
 	resBodyStr, _ := value.RespBody.(string)
 
