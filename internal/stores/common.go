@@ -11,39 +11,6 @@ var (
 
 const (
 	LoggerTag = "stores"
-
-	INTERNAL = "INTERNAL"
-	CLIENT   = "CLIENT"
-	SERVER   = "SERVER"
-
-	PHttp       = "http"
-	PMySQL      = "mysql"
-	PPostgresql = "postgresql"
-
-	ZkOperatorServiceName = "zk-operator"
-
-	HTTPPost = "POST"
-
-	OTelAttrProtocol   = "net.protocol.name"
-	OTelAttrHttpMethod = "http.method"
-	OTelAttrHttpStatus = "http.status_code"
-
-	OTelAttrHttpUrl    = "http.url"
-	OTelAttrHttpTarget = "http.target"
-	OTelHttpAttrRoute  = "http.route"
-	OTelHttpAttrScheme = "http.scheme"
-	OTelHttpAttrQuery  = "url.query"
-
-	OTelHttpAttrServerAddress = "server.address"
-	OTelHttpAttrNetPeerName   = "net.peer.name"
-
-	OTelDBAttrDBName           = "db.name"
-	OTelDBAttrDBSqlTable       = "db.sql.table"
-	OTelAttrDBSystem           = "db.system"
-	OTelDBAttrConnectionString = "db.connection_string"
-	OTelDBStatement            = "db.statement"
-	OTelDBAttrUserName         = "db.user"
-	OTelDBAttrOperation        = "db.operation"
 )
 
 func getNumDigits(timestamp uint64) int {

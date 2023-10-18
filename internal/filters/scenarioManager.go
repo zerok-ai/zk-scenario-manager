@@ -281,7 +281,6 @@ func (scenarioManager *ScenarioManager) addRawDataToSpans(tracesFromOTelStore ma
 	timeRange := timeRangeForRawDataQuery
 
 	// handle http and exception
-	protocol := stores.PHttp
 	spansWithHTTPRawData := scenarioManager.getRawDataForHTTPAndError(timeRange, tracesPerProtocol)
 
 	// we are sorting this slice so that the root is discovered as soon as possible. by doing this
@@ -332,11 +331,6 @@ func (scenarioManager *ScenarioManager) addRawDataToSpans(tracesFromOTelStore ma
 
 				oTelRootSpan.SpanForPersistence.IsRoot = false
 
-				// set protocol
-				if _protocol, ok := rootClient.GetStringAttribute(stores.OTelAttrProtocol); ok {
-					rootClient.SpanForPersistence.Protocol = _protocol
-				}
-
 				traceFromOTel.Spans[oTelRootSpan.ParentSpanID] = &rootClient
 				traceFromOTel.RootSpanID = rootClient.SpanID
 				oTelRootSpan = &rootClient
@@ -359,8 +353,7 @@ func (scenarioManager *ScenarioManager) addRawDataToSpans(tracesFromOTelStore ma
 	}
 
 	// mysql
-	protocol = stores.PMySQL
-	mySqlSet, ok := tracesPerProtocol[protocol]
+	mySqlSet, ok := tracesPerProtocol[typedef.ProtocolTypeDB]
 	if ok && mySqlSet != nil {
 		spansWithMySQLRawData := scenarioManager.collectMySQLRawData(timeRange, mySqlSet.GetAll())
 		for index := range spansWithMySQLRawData {
@@ -374,8 +367,7 @@ func (scenarioManager *ScenarioManager) addRawDataToSpans(tracesFromOTelStore ma
 	}
 
 	// postgre
-	protocol = stores.PPostgresql
-	postGreSet, ok := tracesPerProtocol[protocol]
+	postGreSet, ok := tracesPerProtocol[typedef.ProtocolTypeDB]
 	if ok && postGreSet != nil {
 		spansWithPostgresRawData := scenarioManager.collectPostgresRawData(timeRange, postGreSet.GetAll())
 		for index := range spansWithPostgresRawData {
@@ -386,18 +378,22 @@ func (scenarioManager *ScenarioManager) addRawDataToSpans(tracesFromOTelStore ma
 			}
 			spanFromOTel.SpanForPersistence = enrichSpanFromPostgresRawData(spanFromOTel.SpanForPersistence, spanWithRawData)
 		}
-
 	}
-
 }
 
 func (scenarioManager *ScenarioManager) getRawDataForHTTPAndError(timeRange string, tracesPerProtocol typedef.TTraceIdSetPerProtocol) []models.HttpRawDataModel {
 	// get the raw data for traces for HTTP and Exception
-	httpSet, ok := tracesPerProtocol[stores.PHttp]
-	if !ok || httpSet == nil {
-		httpSet = make(ds.Set[string])
+	httpProtocolSet, ok := tracesPerProtocol[typedef.ProtocolTypeHTTP]
+	if !ok || httpProtocolSet == nil {
+		httpProtocolSet = make(ds.Set[string])
 	}
 
+	grpcProtocolSet, ok := tracesPerProtocol[typedef.ProtocolTypeGRPC]
+	if !ok || grpcProtocolSet == nil {
+		grpcProtocolSet = make(ds.Set[string])
+	}
+
+	httpSet := httpProtocolSet.Union(grpcProtocolSet)
 	return scenarioManager.collectHTTPRawData(httpSet.GetAll(), timeRange)
 }
 

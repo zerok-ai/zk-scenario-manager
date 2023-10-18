@@ -119,7 +119,7 @@ func ConvertIncidentIssuesToIssueDto(s model.IncidentWithIssues) (IssuesDetailDt
 			Source:              span.Source,
 			Destination:         span.Destination,
 			WorkloadIDList:      span.WorkloadIDList,
-			Protocol:            span.Protocol,
+			Protocol:            string(span.Protocol),
 			IssueHashList:       span.IssueHashList,
 			RequestPayloadSize:  span.RequestPayloadSize,
 			ResponsePayloadSize: span.ResponsePayloadSize,

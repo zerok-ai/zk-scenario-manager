@@ -61,7 +61,8 @@ type SpanFromOTel struct {
 	Destination string `json:"destination"`
 	DestIP      string `json:"destination_ip"`
 
-	Errors []OTelError `json:"errors"`
+	Errors   []OTelError          `json:"errors"`
+	Protocol typedef.ProtocolType `json:"protocol"`
 
 	GroupByMap tracePersistenceModel.GroupByMap `json:"group_by"`
 
@@ -69,6 +70,14 @@ type SpanFromOTel struct {
 	Attributes         typedef.GenericMap `json:"attributes"`
 	SpanForPersistence *tracePersistenceModel.Span
 	Children           []SpanFromOTel
+
+	// Protocol properties.
+	Route    string   `json:"route"`
+	Scheme   string   `json:"scheme"`
+	Path     string   `json:"path"`
+	Query    string   `json:"query"`
+	Status   *float64 `json:"status"`
+	Username string   `json:"username"`
 }
 
 func (spanFromOTel *SpanFromOTel) GetStringAttribute(attr string) (string, bool) {
@@ -120,15 +129,14 @@ func (spanFromOTel *SpanFromOTel) createAndPopulateSpanForPersistence() {
 		SourceIP:      spanFromOTel.SourceIP,
 		Destination:   spanFromOTel.Destination,
 		DestinationIP: spanFromOTel.DestIP,
-	}
+		Protocol:      spanFromOTel.Protocol,
 
-	// set protocol
-	if protocol, ok := spanFromOTel.GetStringAttribute(OTelAttrProtocol); ok {
-		spanFromOTel.SpanForPersistence.Protocol = protocol
-	}
-
-	if !spanFromOTel.populateThroughDBAttributeMap() {
-		spanFromOTel.populateThroughHttpAttributeMap()
+		Status:   spanFromOTel.Status,
+		Route:    spanFromOTel.Route,
+		Scheme:   spanFromOTel.Scheme,
+		Query:    spanFromOTel.Query,
+		Path:     spanFromOTel.Path,
+		Username: spanFromOTel.Username,
 	}
 }
 
@@ -152,92 +160,6 @@ func (spanFromOTel *SpanFromOTel) populateErrorAttributeMap() []string {
 		spanForPersistence.Errors = string(bytesOTelErrors)
 	}
 	return errorIds
-}
-
-func (spanFromOTel *SpanFromOTel) populateThroughHttpAttributeMap() bool {
-	spanForPersistence := spanFromOTel.SpanForPersistence
-
-	if status, ok := spanFromOTel.GetStringAttribute(OTelAttrHttpStatus); ok {
-		s, err := strconv.Atoi(status)
-		if err != nil {
-			zkLogger.Error(LoggerTag, "populateThroughHttpAttributeMap: status=", status, " err=", err)
-		}
-		spanForPersistence.Status = s
-	}
-
-	//	set route
-	if spanFromOTel.Kind == SERVER {
-		if route, ok := spanFromOTel.GetStringAttribute(OTelHttpAttrRoute); ok {
-			spanForPersistence.Route = route
-		}
-
-		if scheme, ok := spanFromOTel.GetStringAttribute(OTelHttpAttrScheme); ok {
-			spanForPersistence.Scheme = scheme
-		}
-
-		if query, ok := spanFromOTel.GetStringAttribute(OTelHttpAttrQuery); ok {
-			spanForPersistence.Query = query
-		}
-
-		// path
-		if path, ok := spanFromOTel.GetStringAttribute(OTelAttrHttpTarget); ok {
-			spanForPersistence.Path = path
-		}
-
-	} else if spanFromOTel.Kind == CLIENT {
-		if netPeerName, ok := spanFromOTel.GetStringAttribute(OTelHttpAttrNetPeerName); ok {
-			spanForPersistence.Route = netPeerName
-		}
-
-		// path
-		if path, ok := spanFromOTel.GetStringAttribute(OTelAttrHttpUrl); ok {
-			spanForPersistence.Path = path
-		}
-	}
-
-	return true
-}
-
-func (spanFromOTel *SpanFromOTel) populateThroughDBAttributeMap() bool {
-
-	spanForPersistence := spanFromOTel.SpanForPersistence
-	if db, exists := spanFromOTel.GetStringAttribute(OTelAttrDBSystem); exists {
-		spanForPersistence.Protocol = db
-		spanForPersistence.Scheme = db
-	} else {
-		return false
-	}
-
-	// set route
-	spanForPersistence.Route = ""
-	if dbName, ok := spanFromOTel.GetStringAttribute(OTelDBAttrDBName); ok {
-		spanForPersistence.Route += dbName
-	}
-	if dbTableName, ok := spanFromOTel.GetStringAttribute(OTelDBAttrDBSqlTable); ok {
-		spanForPersistence.Route += dbTableName
-	}
-
-	// path
-	if path, ok := spanFromOTel.GetStringAttribute(OTelDBAttrConnectionString); ok {
-		spanForPersistence.Path = path
-	}
-
-	// query
-	if query, ok := spanFromOTel.GetStringAttribute(OTelDBStatement); ok {
-		spanForPersistence.Query = query
-	}
-
-	//username
-	if userName, ok := spanFromOTel.GetStringAttribute(OTelDBAttrUserName); ok {
-		spanForPersistence.Username = userName
-	}
-
-	//method
-	if userName, ok := spanFromOTel.GetStringAttribute(OTelDBAttrOperation); ok {
-		spanForPersistence.Username = userName
-	}
-
-	return true
 }
 
 type SpanAttributes interface {

@@ -25,7 +25,7 @@ type SpanTableDto struct {
 	Scheme              string         `json:"scheme"`
 	Path                string         `json:"path"`
 	Query               string         `json:"query"`
-	Status              int            `json:"status"`
+	Status              *float64       `json:"status"`
 	Username            string         `json:"username"`
 	SourceIP            string         `json:"source_ip"`
 	DestinationIP       string         `json:"destination_ip"`

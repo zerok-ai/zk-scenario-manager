@@ -15,7 +15,16 @@ type TIssueHash string
 
 type TProtocol string
 
-type TTraceIdSetPerProtocol map[string]ds.Set[string]
+type ProtocolType string
+
+const (
+	ProtocolTypeHTTP    ProtocolType = "HTTP"
+	ProtocolTypeDB      ProtocolType = "DB"
+	ProtocolTypeGRPC    ProtocolType = "GRPC"
+	ProtocolTypeUnknown ProtocolType = "UNKNOWN"
+)
+
+type TTraceIdSetPerProtocol map[ProtocolType]ds.Set[string]
 
 type TScenarioID string
 type ScenarioTraces struct {
