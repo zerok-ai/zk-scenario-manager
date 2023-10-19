@@ -301,8 +301,7 @@ func (scenarioManager *ScenarioManager) addRawDataToSpans(tracesFromOTelStore ma
 			rootSpanIdFromOTel := traceFromOTel.RootSpanID
 			oTelRootSpan := traceFromOTel.Spans[rootSpanIdFromOTel]
 
-			if oTelRootSpan != nil && oTelRootSpan.Kind == SERVER && string(oTelRootSpan.ParentSpanID) == pixieSpanId &&
-				spanWithRawDataFromPixie.SourceIp == oTelRootSpan.SourceIP && spanWithRawDataFromPixie.DestIp == oTelRootSpan.DestIP {
+			if oTelRootSpan != nil && oTelRootSpan.Kind == SERVER && string(oTelRootSpan.ParentSpanID) == pixieSpanId {
 
 				rootSpanByteArr, err := json.Marshal(oTelRootSpan)
 				if err != nil {
@@ -325,7 +324,7 @@ func (scenarioManager *ScenarioManager) addRawDataToSpans(tracesFromOTelStore ma
 				rootClient.SpanForPersistence.SpanID = string(rootClient.SpanID)
 				rootClient.SpanForPersistence.Kind = rootClient.Kind
 				rootClient.SpanForPersistence.ParentSpanID = string(rootClient.ParentSpanID)
-				rootClient.SpanForPersistence.Destination = spanWithRawDataFromPixie.Destination
+				rootClient.SpanForPersistence.Destination = oTelRootSpan.Source
 				rootClient.SpanForPersistence.Source = ""
 				rootClient.StartTimeNS = oTelRootSpan.StartTimeNS
 

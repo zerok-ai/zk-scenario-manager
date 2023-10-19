@@ -241,18 +241,12 @@ func (t OTelDataHandler) processResult(keys []typedef.TTraceid, hashResults []*r
 
 		// 4.2 set the parent-child relationships and find root span
 		var rootSpan *SpanFromOTel
-		rootFound := false
 		for _, spanFromOTel := range traceFromOTel.Spans {
 			parentSpan, ok := traceFromOTel.Spans[spanFromOTel.ParentSpanID]
 			if ok {
 				parentSpan.Children = append(parentSpan.Children, *spanFromOTel)
 			} else {
-				if rootFound {
-					rootSpan = nil
-					break
-				}
 				rootSpan = spanFromOTel
-				rootFound = true
 			}
 		}
 
