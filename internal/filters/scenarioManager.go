@@ -122,7 +122,7 @@ func (scenarioManager *ScenarioManager) processAllScenarios() {
 
 	// 3. get all the traceIds from the traceStore for all the scenarios
 	allTraceIds, scenarioWithTraces := scenarioManager.getAllTraceIDs(scenarios, namesOfAllSets)
-	zkLogger.DebugF(LoggerTag, "Number of available traceIds: %d", len(allTraceIds))
+	zkLogger.Info(LoggerTag, "TraceIds to be processed: %d", len(allTraceIds))
 
 	// 4. process all traces against all scenarios
 	scenarioManager.processTraceIDsAgainstScenarios(allTraceIds, scenarioWithTraces)
@@ -177,14 +177,14 @@ func (scenarioManager *ScenarioManager) processTraceIDsAgainstScenarios(traceIds
 		}
 
 		// e. zkRedis the trace data in the persistence zkRedis
-		zkLogger.DebugF(LoggerTag, "Before sending incidents for persistence, incident count: %d", len(newIncidentList))
+		zkLogger.Info(LoggerTag, "Before sending incidents for persistence, incident count: %d", len(newIncidentList))
 		startTime := time.Now()
 		saveError := (*scenarioManager.tracePersistenceService).SaveIncidents(newIncidentList)
 		if saveError != nil {
 			zkLogger.Error(LoggerTag, "Error saving incidents", saveError)
 		}
 		endTime := time.Now()
-		zkLogger.Info(LoggerTag, "Time taken to zkRedis data in pe]rsistent storage ", endTime.Sub(startTime))
+		zkLogger.Info(LoggerTag, "Time taken to save zkRedis data in persistent storage ", endTime.Sub(startTime))
 
 		zkLogger.Info(LoggerTag, "processed batch", batch)
 	}
