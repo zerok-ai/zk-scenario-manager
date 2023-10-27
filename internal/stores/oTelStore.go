@@ -70,9 +70,9 @@ type SpanFromOTel struct {
 	WorkloadIDList []string `json:"workload_id_list"`
 
 	// attributes
-	//SpanAttributes     typedef.GenericMap `json:"attributes"`
-	//ResourceAttributes typedef.GenericMap `json:"resource_attributes"`
-	//ScopeAttributes    typedef.GenericMap `json:"scope_attributes"`
+	SpanAttributes     typedef.GenericMap `json:"attributes"`
+	ResourceAttributes typedef.GenericMap `json:"resource_attributes"`
+	ScopeAttributes    typedef.GenericMap `json:"scope_attributes"`
 
 	SpanForPersistence *tracePersistenceModel.Span
 	Children           []SpanFromOTel
@@ -107,6 +107,10 @@ func (spanFromOTel *SpanFromOTel) createAndPopulateSpanForPersistence() {
 		Destination:   spanFromOTel.Destination,
 		DestinationIP: spanFromOTel.DestIP,
 		Protocol:      spanFromOTel.Protocol,
+
+		SpanAttributes:     spanFromOTel.SpanAttributes,
+		ResourceAttributes: spanFromOTel.ResourceAttributes,
+		ScopeAttributes:    spanFromOTel.ScopeAttributes,
 
 		Status:   spanFromOTel.Status,
 		Route:    spanFromOTel.Route,

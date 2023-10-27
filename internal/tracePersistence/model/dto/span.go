@@ -2,6 +2,7 @@ package dto
 
 import (
 	"github.com/lib/pq"
+	"scenario-manager/internal"
 	"time"
 )
 
@@ -32,8 +33,15 @@ type SpanTableDto struct {
 	DestinationIP       string         `json:"destination_ip"`
 	ServiceName         string         `json:"service_name"`
 	Errors              string         `json:"errors"`
+
+	SpanAttributes     internal.GenericMap `json:"span_attributes"`
+	ResourceAttributes internal.GenericMap `json:"resource_attributes"`
+	ScopeAttributes    internal.GenericMap `json:"scope_attributes"`
 }
 
 func (t SpanTableDto) GetAllColumns() []any {
-	return []any{t.TraceID, t.ParentSpanID, t.SpanID, t.SpanName, t.IsRoot, t.Kind, t.StartTime, t.Latency, t.Source, t.Destination, t.WorkloadIDList, t.Protocol, t.IssueHashList, t.RequestPayloadSize, t.ResponsePayloadSize, t.Method, t.Route, t.Scheme, t.Path, t.Query, t.Status, t.Username, t.SourceIP, t.DestinationIP, t.ServiceName, t.Errors}
+	return []any{t.TraceID, t.ParentSpanID, t.SpanID, t.SpanName, t.IsRoot, t.Kind, t.StartTime, t.Latency, t.Source,
+		t.Destination, t.WorkloadIDList, t.Protocol, t.IssueHashList, t.RequestPayloadSize, t.ResponsePayloadSize,
+		t.Method, t.Route, t.Scheme, t.Path, t.Query, t.Status, t.Username, t.SourceIP, t.DestinationIP, t.ServiceName,
+		t.Errors, t.SpanAttributes, t.ResourceAttributes, t.ScopeAttributes}
 }

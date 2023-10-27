@@ -66,6 +66,10 @@ type Span struct {
 	ServiceName         string               `json:"service_name"`
 	Errors              string               `json:"errors"`
 
+	SpanAttributes     typedef.GenericMap `json:"span_attributes"`
+	ResourceAttributes typedef.GenericMap `json:"resource_attributes"`
+	ScopeAttributes    typedef.GenericMap `json:"scope_attributes"`
+
 	SpanRawData
 	OTelSchemaVersion string
 	EBPFSchemaVersion string
