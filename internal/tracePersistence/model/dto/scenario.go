@@ -111,6 +111,7 @@ func ConvertIncidentIssuesToIssueDto(s model.IncidentWithIssues) (IssuesDetailDt
 		spanDataDto := SpanTableDto{
 			TraceID:             traceId,
 			SpanID:              span.SpanID,
+			SpanName:            span.SpanName,
 			ParentSpanID:        span.ParentSpanID,
 			IsRoot:              span.IsRoot,
 			Kind:                span.Kind,

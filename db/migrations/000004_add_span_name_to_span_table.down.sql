@@ -1,0 +1,1 @@
+ALTER TABLE span DROP COLUMN span_name;
