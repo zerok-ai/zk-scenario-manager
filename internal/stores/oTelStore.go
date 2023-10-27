@@ -70,7 +70,7 @@ type SpanFromOTel struct {
 	WorkloadIDList []string `json:"workload_id_list"`
 
 	// attributes
-	//SpanAttributes     typedef.GenericMap `json:"span_attributes"`
+	//SpanAttributes     typedef.GenericMap `json:"attributes"`
 	//ResourceAttributes typedef.GenericMap `json:"resource_attributes"`
 	//ScopeAttributes    typedef.GenericMap `json:"scope_attributes"`
 
