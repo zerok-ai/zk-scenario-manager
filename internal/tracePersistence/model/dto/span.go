@@ -2,7 +2,7 @@ package dto
 
 import (
 	"github.com/lib/pq"
-	"scenario-manager/internal"
+	zkCommon "github.com/zerok-ai/zk-utils-go/common"
 	"time"
 )
 
@@ -34,9 +34,9 @@ type SpanTableDto struct {
 	ServiceName         string         `json:"service_name"`
 	Errors              string         `json:"errors"`
 
-	SpanAttributes     internal.GenericMap `json:"span_attributes"`
-	ResourceAttributes internal.GenericMap `json:"resource_attributes"`
-	ScopeAttributes    internal.GenericMap `json:"scope_attributes"`
+	SpanAttributes     zkCommon.GenericMap `json:"span_attributes"`
+	ResourceAttributes zkCommon.GenericMap `json:"resource_attributes"`
+	ScopeAttributes    zkCommon.GenericMap `json:"scope_attributes"`
 }
 
 func (t SpanTableDto) GetAllColumns() []any {

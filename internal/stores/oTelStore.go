@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/redis/go-redis/v9"
+	zkCommon "github.com/zerok-ai/zk-utils-go/common"
 	zkLogger "github.com/zerok-ai/zk-utils-go/logs"
 	"github.com/zerok-ai/zk-utils-go/storage/redis/clientDBNames"
 	"github.com/zerok-ai/zk-utils-go/storage/redis/config"
@@ -70,9 +71,9 @@ type SpanFromOTel struct {
 	WorkloadIDList []string `json:"workload_id_list"`
 
 	// attributes
-	SpanAttributes     typedef.GenericMap `json:"attributes"`
-	ResourceAttributes typedef.GenericMap `json:"resource_attributes"`
-	ScopeAttributes    typedef.GenericMap `json:"scope_attributes"`
+	SpanAttributes     zkCommon.GenericMap `json:"attributes"`
+	ResourceAttributes zkCommon.GenericMap `json:"resource_attributes"`
+	ScopeAttributes    zkCommon.GenericMap `json:"scope_attributes"`
 
 	SpanForPersistence *tracePersistenceModel.Span
 	Children           []SpanFromOTel
