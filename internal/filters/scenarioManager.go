@@ -282,6 +282,7 @@ func (scenarioManager *ScenarioManager) addRawDataToSpans(tracesFromOTelStore ma
 
 	// handle http and exception
 	spansWithHTTPRawData := scenarioManager.getRawDataForHTTPAndError(timeRange, tracesPerProtocol)
+	zkLogger.Info(LoggerTag, "Number of spans with HTTP raw data: %v", len(spansWithHTTPRawData))
 
 	// we are sorting this slice so that the root is discovered as soon as possible. by doing this
 	// we will ensure that the isRoot block in enrichWithRawDataForHTTPAndException is executed only for the root span and just once.
@@ -393,6 +394,8 @@ func (scenarioManager *ScenarioManager) getRawDataForHTTPAndError(timeRange stri
 	}
 
 	httpSet := httpProtocolSet.Union(grpcProtocolSet)
+
+	zkLogger.Info(LoggerTag, "Number of traceId requested: %v", len(httpSet))
 	return scenarioManager.collectHTTPRawData(httpSet.GetAll(), timeRange)
 }
 
