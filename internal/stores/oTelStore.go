@@ -197,7 +197,7 @@ func (t OTelDataHandler) processResult(keys []typedef.TTraceid, hashResults []*r
 		}
 
 		if len(trace) == 0 {
-			zkLogger.DebugF(LoggerTag, "No trace found for traceId: %s in OTel store", traceId)
+			zkLogger.DebugF(LoggerTag, "No trace data found for traceId: %s in OTel store", traceId)
 			continue
 		}
 

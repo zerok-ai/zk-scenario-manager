@@ -178,7 +178,7 @@ func (scenarioManager *ScenarioManager) processTraceIDsAgainstScenarios(traceIds
 		}
 
 		// e. zkRedis the trace data in the persistence zkRedis
-		zkLogger.Info(LoggerTag, "Before sending incidents for persistence, incident count: %d", len(newIncidentList))
+		zkLogger.InfoF(LoggerTag, "Sending incidents for persistence, incident count: %d", len(newIncidentList))
 		startTime := time.Now()
 		saveError := (*scenarioManager.tracePersistenceService).SaveIncidents(newIncidentList)
 		if saveError != nil {
@@ -283,7 +283,7 @@ func (scenarioManager *ScenarioManager) addRawDataToSpans(tracesFromOTelStore ma
 
 	// handle http and exception
 	spansWithHTTPRawData := scenarioManager.getRawDataForHTTPAndError(timeRange, tracesPerProtocol)
-	zkLogger.Info(LoggerTag, "Number of spans with HTTP raw data: %v", len(spansWithHTTPRawData))
+	zkLogger.InfoF(LoggerTag, "Number of spans with HTTP raw data: %v", len(spansWithHTTPRawData))
 
 	// we are sorting this slice so that the root is discovered as soon as possible. by doing this
 	// we will ensure that the isRoot block in enrichWithRawDataForHTTPAndException is executed only for the root span and just once.
