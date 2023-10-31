@@ -81,6 +81,7 @@ func (scenarioManager *ScenarioManager) Init() *ScenarioManager {
 	duration := time.Duration(scenarioManager.cfg.ScenarioConfig.ProcessingIntervalInSeconds) * time.Second
 
 	// trigger recurring processing of trace data against filters
+	zkLogger.DebugF(LoggerTag, "Starting to process all scenarios every %v", duration)
 	tickerTask := ticker.GetNewTickerTask("filter-processor", duration, scenarioManager.processAllScenarios)
 	tickerTask.Start()
 	return scenarioManager
