@@ -123,7 +123,7 @@ func (scenarioManager *ScenarioManager) processAllScenarios() {
 
 	// 3. get all the traceIds from the traceStore for all the scenarios
 	allTraceIds, scenarioWithTraces := scenarioManager.getAllTraceIDs(scenarios, namesOfAllSets)
-	zkLogger.Info(LoggerTag, "TraceIds to be processed: %d", len(allTraceIds))
+	zkLogger.Info(LoggerTag, "TraceIds to be processed: ", len(allTraceIds))
 
 	// 4. process all traces against all scenarios
 	scenarioManager.processTraceIDsAgainstScenarios(allTraceIds, scenarioWithTraces)
@@ -396,7 +396,7 @@ func (scenarioManager *ScenarioManager) getRawDataForHTTPAndError(timeRange stri
 
 	httpSet := httpProtocolSet.Union(grpcProtocolSet)
 
-	zkLogger.Info(LoggerTag, "Number of traceId requested: %v", len(httpSet))
+	zkLogger.Info(LoggerTag, "Number of traceId requested: ", len(httpSet))
 	return scenarioManager.collectHTTPRawData(httpSet.GetAll(), timeRange)
 }
 

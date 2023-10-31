@@ -156,10 +156,10 @@ func ConvertIncidentIssuesToIssueDto(s model.IncidentWithIssues) (IssuesDetailDt
 
 	}
 
-	zkLogger.Info(LogTag, "issueDtoList len: ", len(issueDtoList))
-	zkLogger.Info(LogTag, "incidentDtoList len: ", len(incidentDtoList))
-	zkLogger.Info(LogTag, "spanDtoList len: ", len(spanDtoList))
-	zkLogger.Info(LogTag, "spanRawDataDtoList len: ", len(spanRawDataDtoList))
+	zkLogger.Debug(LogTag, "issueDtoList len: ", len(issueDtoList))
+	zkLogger.Debug(LogTag, "incidentDtoList len: ", len(incidentDtoList))
+	zkLogger.Debug(LogTag, "spanDtoList len: ", len(spanDtoList))
+	zkLogger.Debug(LogTag, "spanRawDataDtoList len: ", len(spanRawDataDtoList))
 
 	response = IssuesDetailDto{
 		IssueTableDtoList:    issueDtoList,
