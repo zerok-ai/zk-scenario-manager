@@ -139,6 +139,7 @@ func ConvertIncidentIssuesToIssueDto(s model.IncidentWithIssues) (IssuesDetailDt
 			SpanAttributes:     span.SpanAttributes,
 			ResourceAttributes: span.ResourceAttributes,
 			ScopeAttributes:    span.ScopeAttributes,
+			HasRawData:         !utils.IsEmpty(span.ReqBody) || !utils.IsEmpty(span.RespBody) || !utils.IsEmpty(span.ReqHeaders) || !utils.IsEmpty(span.RespHeaders),
 		}
 
 		spanRawDataDto := SpanRawDataTableDto{
