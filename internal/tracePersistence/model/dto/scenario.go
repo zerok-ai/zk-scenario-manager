@@ -141,20 +141,21 @@ func ConvertIncidentIssuesToIssueDto(s model.IncidentWithIssues) (IssuesDetailDt
 			ScopeAttributes:    span.ScopeAttributes,
 			HasRawData:         !utils.IsEmpty(span.ReqBody) || !utils.IsEmpty(span.RespBody) || !utils.IsEmpty(span.ReqHeaders) || !utils.IsEmpty(span.RespHeaders),
 		}
-
-		spanRawDataDto := SpanRawDataTableDto{
-			TraceID:     traceId,
-			SpanID:      span.SpanID,
-			ReqHeaders:  span.ReqHeaders,
-			RespHeaders: span.RespHeaders,
-			IsTruncated: span.IsTruncated,
-			ReqBody:     requestCompressedStr,
-			RespBody:    responseCompressedStr,
-		}
-
 		spanDtoList = append(spanDtoList, spanDataDto)
-		spanRawDataDtoList = append(spanRawDataDtoList, spanRawDataDto)
 
+		if spanDataDto.HasRawData {
+			spanRawDataDto := SpanRawDataTableDto{
+				TraceID:     traceId,
+				SpanID:      span.SpanID,
+				ReqHeaders:  span.ReqHeaders,
+				RespHeaders: span.RespHeaders,
+				IsTruncated: span.IsTruncated,
+				ReqBody:     requestCompressedStr,
+				RespBody:    responseCompressedStr,
+			}
+
+			spanRawDataDtoList = append(spanRawDataDtoList, spanRawDataDto)
+		}
 	}
 
 	zkLogger.Debug(LogTag, "issueDtoList len: ", len(issueDtoList))
