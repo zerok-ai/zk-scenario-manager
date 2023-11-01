@@ -37,11 +37,12 @@ type SpanTableDto struct {
 	SpanAttributes     zkCommon.GenericMap `json:"span_attributes"`
 	ResourceAttributes zkCommon.GenericMap `json:"resource_attributes"`
 	ScopeAttributes    zkCommon.GenericMap `json:"scope_attributes"`
+	HasRawData         bool                `json:"has_raw_data"`
 }
 
 func (t SpanTableDto) GetAllColumns() []any {
 	return []any{t.TraceID, t.ParentSpanID, t.SpanID, t.SpanName, t.IsRoot, t.Kind, t.StartTime, t.Latency, t.Source,
 		t.Destination, t.WorkloadIDList, t.Protocol, t.IssueHashList, t.RequestPayloadSize, t.ResponsePayloadSize,
 		t.Method, t.Route, t.Scheme, t.Path, t.Query, t.Status, t.Username, t.SourceIP, t.DestinationIP, t.ServiceName,
-		t.Errors, t.SpanAttributes, t.ResourceAttributes, t.ScopeAttributes}
+		t.Errors, t.SpanAttributes, t.ResourceAttributes, t.ScopeAttributes, t.HasRawData}
 }
