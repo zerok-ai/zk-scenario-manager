@@ -48,7 +48,7 @@ image:
   migrationRepo: "zk-scenario-manager-migration"
   migrationTag: "latest"
 
-obfuscator-image:
+obfuscatorImage:
   repo: "zk-obfuscator"
   tag: "latest"
   imagePullPolicy: IfNotPresent
