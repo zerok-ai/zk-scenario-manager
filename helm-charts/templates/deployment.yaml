@@ -44,6 +44,25 @@ spec:
               drop:
                 - ALL
       containers:
+      - name: zk-obfuscator
+        image: "{{ .Values.global.dockerBase}}/{{ .Values.obfuscator-image.repo}}:{{ .Values.obfuscator-image.tag}}"
+        imagePullPolicy: Always
+        ports:
+          - containerPort: 9103
+        volumeMounts:
+          - name: obfuscator-config
+            mountPath: /zk/config
+        env:
+          - name: ZK_REDIS_PASSWORD # Setting Redis password from Secret
+            valueFrom:
+              secretKeyRef:
+                name: redis
+                key: redis-password
+          - name: ZK_REDIS_HOST # Setting Redis password from Config
+            valueFrom:
+              configMapKeyRef:
+                name: zk-redis-config
+                key: redisHost
       - image: "{{ .Values.global.dockerBase}}/{{ .Values.image.repo}}:{{ .Values.image.tag}}"
         imagePullPolicy: {{ .Values.image.imagePullPolicy }}
         name: zk-scenario-manager
@@ -78,3 +97,6 @@ spec:
       - configMap:
           name: {{ include "zk-scenario-manager.fullname" . }}
         name: config
+      - name: obfuscator-config
+        configMap:
+          name: zk-obfuscator
