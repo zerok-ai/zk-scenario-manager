@@ -45,5 +45,3 @@ type IssuesCounter struct {
 type IssueRateMap map[TScenarioID][]IssuesCounter
 
 type ExecutorToSchemaVersionMap map[scenarioGeneratorModel.ExecutorName]string
-
-type GenericMap map[string]interface{}

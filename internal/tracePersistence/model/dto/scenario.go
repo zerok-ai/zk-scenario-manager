@@ -111,6 +111,7 @@ func ConvertIncidentIssuesToIssueDto(s model.IncidentWithIssues) (IssuesDetailDt
 		spanDataDto := SpanTableDto{
 			TraceID:             traceId,
 			SpanID:              span.SpanID,
+			SpanName:            span.SpanName,
 			ParentSpanID:        span.ParentSpanID,
 			IsRoot:              span.IsRoot,
 			Kind:                span.Kind,
@@ -134,27 +135,33 @@ func ConvertIncidentIssuesToIssueDto(s model.IncidentWithIssues) (IssuesDetailDt
 			DestinationIP:       span.DestinationIP,
 			ServiceName:         span.ServiceName,
 			Errors:              span.Errors,
-		}
 
-		spanRawDataDto := SpanRawDataTableDto{
-			TraceID:     traceId,
-			SpanID:      span.SpanID,
-			ReqHeaders:  span.ReqHeaders,
-			RespHeaders: span.RespHeaders,
-			IsTruncated: span.IsTruncated,
-			ReqBody:     requestCompressedStr,
-			RespBody:    responseCompressedStr,
+			SpanAttributes:     span.SpanAttributes,
+			ResourceAttributes: span.ResourceAttributes,
+			ScopeAttributes:    span.ScopeAttributes,
+			HasRawData:         !utils.IsEmpty(span.ReqBody) || !utils.IsEmpty(span.RespBody) || !utils.IsEmpty(span.ReqHeaders) || !utils.IsEmpty(span.RespHeaders),
 		}
-
 		spanDtoList = append(spanDtoList, spanDataDto)
-		spanRawDataDtoList = append(spanRawDataDtoList, spanRawDataDto)
 
+		if spanDataDto.HasRawData {
+			spanRawDataDto := SpanRawDataTableDto{
+				TraceID:     traceId,
+				SpanID:      span.SpanID,
+				ReqHeaders:  span.ReqHeaders,
+				RespHeaders: span.RespHeaders,
+				IsTruncated: span.IsTruncated,
+				ReqBody:     requestCompressedStr,
+				RespBody:    responseCompressedStr,
+			}
+
+			spanRawDataDtoList = append(spanRawDataDtoList, spanRawDataDto)
+		}
 	}
 
-	zkLogger.Info(LogTag, "issueDtoList len: ", len(issueDtoList))
-	zkLogger.Info(LogTag, "incidentDtoList len: ", len(incidentDtoList))
-	zkLogger.Info(LogTag, "spanDtoList len: ", len(spanDtoList))
-	zkLogger.Info(LogTag, "spanRawDataDtoList len: ", len(spanRawDataDtoList))
+	zkLogger.Debug(LogTag, "issueDtoList len: ", len(issueDtoList))
+	zkLogger.Debug(LogTag, "incidentDtoList len: ", len(incidentDtoList))
+	zkLogger.Debug(LogTag, "spanDtoList len: ", len(spanDtoList))
+	zkLogger.Debug(LogTag, "spanRawDataDtoList len: ", len(spanRawDataDtoList))
 
 	response = IssuesDetailDto{
 		IssueTableDtoList:    issueDtoList,

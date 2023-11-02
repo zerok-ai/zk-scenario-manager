@@ -1,14 +1,12 @@
 package model
 
 import (
-	"database/sql/driver"
 	"encoding/json"
-	"errors"
 	typedef "scenario-manager/internal"
 	"time"
-)
 
-var LogTag = "zk_trace_model"
+	zkCommon "github.com/zerok-ai/zk-utils-go/common"
+)
 
 type ErrorData struct {
 	Id   string `json:"id"`
@@ -34,7 +32,6 @@ type Issue struct {
 type Incident struct {
 	TraceId                string    `json:"trace_id"`
 	Spans                  []*Span   `json:"spans"`
-	IssueHash              string    `json:"issue_hash"`
 	IncidentCollectionTime time.Time `json:"incident_collection_time"`
 }
 
@@ -42,6 +39,7 @@ type Span struct {
 	TraceID             string               `json:"trace_id"`
 	ParentSpanID        string               `json:"parent_span_id"`
 	SpanID              string               `json:"span_id"`
+	SpanName            string               `json:"span_name"`
 	IsRoot              bool                 `json:"is_root"`
 	Kind                string               `json:"kind"`
 	StartTime           time.Time            `json:"start_time"`
@@ -65,10 +63,14 @@ type Span struct {
 	ServiceName         string               `json:"service_name"`
 	Errors              string               `json:"errors"`
 
+	SpanAttributes     zkCommon.GenericMap `json:"span_attributes"`
+	ResourceAttributes zkCommon.GenericMap `json:"resource_attributes"`
+	ScopeAttributes    zkCommon.GenericMap `json:"scope_attributes"`
+
 	SpanRawData
 	OTelSchemaVersion string
 	EBPFSchemaVersion string
-	SpanAsMap         typedef.GenericMap
+	SpanAsMap         zkCommon.GenericMap
 	GroupByMap        GroupByMap
 }
 
@@ -82,14 +84,14 @@ type GroupByValues []*GroupByValueItem
 type ScenarioId string
 type GroupByMap map[ScenarioId]GroupByValues
 
-func (s Span) ToMap() (typedef.GenericMap, error) {
+func (s Span) ToMap() (zkCommon.GenericMap, error) {
 	if s.SpanAsMap == nil {
 		spanAsString, err := json.Marshal(s)
 		if err != nil {
 			return nil, err
 		}
 
-		var spanAsMap typedef.GenericMap
+		var spanAsMap zkCommon.GenericMap
 		err = json.Unmarshal(spanAsString, &spanAsMap)
 		if err != nil {
 			return nil, err
@@ -117,23 +119,4 @@ type ResponsePayload interface {
 
 type RequestPayload interface {
 	GetString() string
-}
-
-type Metadata typedef.GenericMap
-
-// Value Make the Attrs struct implement the driver.Valuer interface. This method
-// simply returns the JSON-encoded representation of the struct.
-func (a Metadata) Value() (driver.Value, error) {
-	return json.Marshal(a)
-}
-
-// Scan Make the Attrs struct implement the sql.Scanner interface. This method
-// simply decodes a JSON-encoded value into the struct fields.
-func (a *Metadata) Scan(value interface{}) error {
-	b, ok := value.([]byte)
-	if !ok {
-		return errors.New("type assertion to []byte failed")
-	}
-
-	return json.Unmarshal(b, &a)
 }

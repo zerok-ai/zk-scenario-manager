@@ -4,12 +4,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/redis/go-redis/v9"
+	zkCommon "github.com/zerok-ai/zk-utils-go/common"
 	zkLogger "github.com/zerok-ai/zk-utils-go/logs"
 	"github.com/zerok-ai/zk-utils-go/storage/redis/clientDBNames"
 	"github.com/zerok-ai/zk-utils-go/storage/redis/config"
 	typedef "scenario-manager/internal"
 	tracePersistenceModel "scenario-manager/internal/tracePersistence/model"
-	"strconv"
 )
 
 type TWorkLoadIdToSpan map[typedef.TWorkloadId]*tracePersistenceModel.Span
@@ -48,9 +48,11 @@ type SpanFromOTel struct {
 	TraceID      typedef.TTraceid
 	SpanID       typedef.TSpanId
 	ParentSpanID typedef.TSpanId `json:"parent_span_id"`
-	Kind         string          `json:"span_kind"`
-	Method       string          `json:"method"`
-	OTelSchema   string          `json:"schema_version"`
+
+	SpanName   string `json:"span_name"`
+	Kind       string `json:"span_kind"`
+	Method     string `json:"method"`
+	OTelSchema string `json:"schema_version"`
 
 	StartTimeNS uint64 `json:"start_ns"`
 	LatencyNS   uint64 `json:"latency_ns"`
@@ -66,8 +68,13 @@ type SpanFromOTel struct {
 
 	GroupByMap tracePersistenceModel.GroupByMap `json:"group_by"`
 
-	WorkloadIDList     []string           `json:"workload_id_list"`
-	Attributes         typedef.GenericMap `json:"attributes"`
+	WorkloadIDList []string `json:"workload_id_list"`
+
+	// attributes
+	SpanAttributes     zkCommon.GenericMap `json:"attributes"`
+	ResourceAttributes zkCommon.GenericMap `json:"resource_attributes"`
+	ScopeAttributes    zkCommon.GenericMap `json:"scope_attributes"`
+
 	SpanForPersistence *tracePersistenceModel.Span
 	Children           []SpanFromOTel
 
@@ -80,41 +87,12 @@ type SpanFromOTel struct {
 	Username string   `json:"username"`
 }
 
-func (spanFromOTel *SpanFromOTel) GetStringAttribute(attr string) (string, bool) {
-	var protocol interface{}
-	success := false
-	var stringValue string
-	if protocol, success = spanFromOTel.Attributes[attr]; success {
-		switch v := protocol.(type) {
-		case string:
-			stringValue = v
-		case float64:
-			stringValue = strconv.FormatFloat(v, 'f', -1, 64)
-		case int:
-			stringValue = strconv.Itoa(v)
-		default:
-			stringValue = "Unknown Type"
-			success = false
-			zkLogger.Error(LoggerTag, "getStringAttribute: Unknown Type for ", attr, " value=", protocol)
-		}
-	}
-	return stringValue, success
-}
-
-func (spanFromOTel *SpanFromOTel) getNumberAttribute(attr string) (string, bool) {
-	str := ""
-	success := false
-	if protocol, ok := spanFromOTel.Attributes[attr]; ok {
-		str, success = protocol.(string)
-	}
-	return str, success
-}
-
 func (spanFromOTel *SpanFromOTel) createAndPopulateSpanForPersistence() {
 
 	spanFromOTel.SpanForPersistence = &tracePersistenceModel.Span{
 		TraceID:           string(spanFromOTel.TraceID),
 		SpanID:            string(spanFromOTel.SpanID),
+		SpanName:          spanFromOTel.SpanName,
 		OTelSchemaVersion: spanFromOTel.OTelSchema,
 		Kind:              spanFromOTel.Kind,
 		ParentSpanID:      string(spanFromOTel.ParentSpanID),
@@ -130,6 +108,10 @@ func (spanFromOTel *SpanFromOTel) createAndPopulateSpanForPersistence() {
 		Destination:   spanFromOTel.Destination,
 		DestinationIP: spanFromOTel.DestIP,
 		Protocol:      spanFromOTel.Protocol,
+
+		SpanAttributes:     spanFromOTel.SpanAttributes,
+		ResourceAttributes: spanFromOTel.ResourceAttributes,
+		ScopeAttributes:    spanFromOTel.ScopeAttributes,
 
 		Status:   spanFromOTel.Status,
 		Route:    spanFromOTel.Route,
@@ -215,7 +197,7 @@ func (t OTelDataHandler) processResult(keys []typedef.TTraceid, hashResults []*r
 		}
 
 		if len(trace) == 0 {
-			zkLogger.DebugF(LoggerTag, "No trace found for traceId: %s in OTel store", traceId)
+			zkLogger.DebugF(LoggerTag, "No trace data found for traceId: %s in OTel store", traceId)
 			continue
 		}
 
