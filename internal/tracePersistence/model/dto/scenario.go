@@ -1,11 +1,15 @@
 package dto
 
 import (
+	"bytes"
+	"encoding/json"
 	"github.com/zerok-ai/zk-rawdata-reader/vzReader/utils"
 	"github.com/zerok-ai/zk-utils-go/common"
 	zkCrypto "github.com/zerok-ai/zk-utils-go/crypto"
+	zkHttp "github.com/zerok-ai/zk-utils-go/http"
 	zkLogger "github.com/zerok-ai/zk-utils-go/logs"
 	"github.com/zerok-ai/zk-utils-go/zkerrors"
+	"io"
 	"scenario-manager/internal/tracePersistence/model"
 	"time"
 )
@@ -92,22 +96,6 @@ func ConvertIncidentIssuesToIssueDto(s model.IncidentWithIssues) (IssuesDetailDt
 	}
 
 	for _, span := range s.Incident.Spans {
-		var requestCompressedStr, responseCompressedStr []byte
-		var err error
-		if !utils.IsEmpty(span.ReqBody) {
-			requestCompressedStr, err = zkCrypto.CompressStringGzip(span.ReqBody)
-			if err != nil {
-				return response, &err
-			}
-		}
-
-		if !utils.IsEmpty(span.RespBody) {
-			responseCompressedStr, err = zkCrypto.CompressStringGzip(span.RespBody)
-			if err != nil {
-				return response, &err
-			}
-		}
-
 		spanDataDto := SpanTableDto{
 			TraceID:             traceId,
 			SpanID:              span.SpanID,
@@ -144,12 +132,30 @@ func ConvertIncidentIssuesToIssueDto(s model.IncidentWithIssues) (IssuesDetailDt
 		spanDtoList = append(spanDtoList, spanDataDto)
 
 		if spanDataDto.HasRawData {
+			obfuscatedRawdata := obfuscateRawData(span.SpanRawData)
+
+			var requestCompressedStr, responseCompressedStr []byte
+			var err error
+			if !utils.IsEmpty(obfuscatedRawdata.ReqBody) {
+				requestCompressedStr, err = zkCrypto.CompressStringGzip(obfuscatedRawdata.ReqBody)
+				if err != nil {
+					return response, &err
+				}
+			}
+
+			if !utils.IsEmpty(obfuscatedRawdata.RespBody) {
+				responseCompressedStr, err = zkCrypto.CompressStringGzip(obfuscatedRawdata.RespBody)
+				if err != nil {
+					return response, &err
+				}
+			}
+
 			spanRawDataDto := SpanRawDataTableDto{
 				TraceID:     traceId,
-				SpanID:      span.SpanID,
-				ReqHeaders:  span.ReqHeaders,
-				RespHeaders: span.RespHeaders,
-				IsTruncated: span.IsTruncated,
+				SpanID:      obfuscatedRawdata.SpanID,
+				ReqHeaders:  obfuscatedRawdata.ReqHeaders,
+				RespHeaders: obfuscatedRawdata.RespHeaders,
+				IsTruncated: obfuscatedRawdata.IsTruncated,
 				ReqBody:     requestCompressedStr,
 				RespBody:    responseCompressedStr,
 			}
@@ -234,45 +240,53 @@ func ValidateAndSanitiseIssue(s model.IncidentWithIssues) (bool, model.IncidentW
 	resp.Incident = s.Incident
 	return true, resp, nil
 
-	//for _, span := range s.Incident.Spans {
-	//	if span.SpanId == "" {
-	//		zkLogger.Error(LogTag, "span_id empty")
-	//		return false, common.ToPtr(zkerrors.ZkErrorBuilder{}.Build(zkerrors.ZkErrorBadRequest, "invalid data"))
-	//	}
-	//
-	//	if span.Protocol == "" {
-	//		zkLogger.Error(LogTag, "protocol empty")
-	//		return false, common.ToPtr(zkerrors.ZkErrorBuilder{}.Build(zkerrors.ZkErrorBadRequest, "invalid data"))
-	//	}
-	//
-	//	if span.Source == "" {
-	//		zkLogger.Error(LogTag, "source empty")
-	//		return false, common.ToPtr(zkerrors.ZkErrorBuilder{}.Build(zkerrors.ZkErrorBadRequest, "invalid data"))
-	//	}
-	//
-	//	if span.Destination == "" {
-	//		zkLogger.Error(LogTag, "destination empty")
-	//		return false, common.ToPtr(zkerrors.ZkErrorBuilder{}.Build(zkerrors.ZkErrorBadRequest, "invalid data"))
-	//	}
-	//
-	//	if span.LatencyNs == nil {
-	//		zkLogger.Error(LogTag, "latency_ns empty")
-	//		return false, common.ToPtr(zkerrors.ZkErrorBuilder{}.Build(zkerrors.ZkErrorBadRequest, "invalid data"))
-	//	}
-	//
-	//	if span.RequestPayload.GetString() == "" {
-	//		zkLogger.Error(LogTag, "request payload empty")
-	//		return false, common.ToPtr(zkerrors.ZkErrorBuilder{}.Build(zkerrors.ZkErrorBadRequest, "invalid data"))
-	//	}
-	//
-	//	if span.ResponsePayload.GetString() == "" {
-	//		zkLogger.Error(LogTag, "response payload empty")
-	//		return false, common.ToPtr(zkerrors.ZkErrorBuilder{}.Build(zkerrors.ZkErrorBadRequest, "invalid data"))
-	//	}
-	//
-	//	if span.IssueHashList == nil || len(span.IssueHashList) == 0 {
-	//		zkLogger.Error(LogTag, "issue hash list empty")
-	//		return false, common.ToPtr(zkerrors.ZkErrorBuilder{}.Build(zkerrors.ZkErrorBadRequest, "invalid data"))
-	//	}
-	//}
+}
+
+func obfuscateRawData(rawData model.SpanRawData) model.SpanRawData {
+	var responseRawData model.SpanRawData
+	responseRawData.SpanID = rawData.SpanID
+	responseRawData.TraceID = rawData.TraceID
+
+	rawData.TraceID = ""
+	rawData.SpanID = ""
+
+	requestBody := struct {
+		Data     model.SpanRawData `json:"data"`
+		Language string            `json:"language"`
+	}{
+		Data:     rawData,
+		Language: "en",
+	}
+
+	jsonBody, err := json.Marshal(requestBody)
+	if err != nil {
+		zkLogger.Error(LogTag, "Cannot Marshal data, encountered Err", err)
+		return responseRawData
+	}
+
+	bodyReader := bytes.NewReader(jsonBody)
+	response, zkErr := zkHttp.Create().Go("POST", "http://localhost:9103/i/obfuscate", bodyReader)
+	if zkErr != nil {
+		zkLogger.Error(LogTag, "Cannot obfuscate data, encountered Err in prisidio call", zkErr)
+		return responseRawData
+	}
+
+	type rawDataStruct struct {
+		Data model.SpanRawData `json:"data"`
+	}
+
+	responseBody, err := io.ReadAll(response.Body)
+	var responseMap map[string]rawDataStruct
+	err = json.Unmarshal(responseBody, &responseMap)
+	if err != nil {
+		zkLogger.Error(LogTag, "Cannot Unmarshal data, encountered Err", err)
+		return responseRawData
+	}
+
+	o := responseMap["payload"].Data
+	responseRawData.ReqBody = o.ReqBody
+	responseRawData.RespBody = o.RespBody
+	responseRawData.ReqHeaders = o.ReqHeaders
+	responseRawData.RespHeaders = o.RespHeaders
+	return responseRawData
 }
