@@ -22,7 +22,6 @@ var LogTag = "main"
 func main() {
 
 	obfuscateEnv := os.Getenv("OBFUSCATE")
-	obfuscateEnv = "false"
 	zkLogger.Info(LogTag, "OBFUSCATE: %s", obfuscateEnv)
 	shouldObfuscate, err := strconv.ParseBool(obfuscateEnv)
 	if err != nil {

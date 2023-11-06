@@ -27,8 +27,6 @@ spec:
               do echo "waiting for ${URL}"; sleep 2; done;'
           name: operator-wait
           env:
-            - name: OBFUSCATE
-              value: "{{ .Values.obfuscate}}"
             - name: SERVICE_NAME
               value: zk-operator.zk-client.svc.cluster.local
             - name: SERVICE_PORT
@@ -55,6 +53,8 @@ spec:
           - name: obfuscator-config
             mountPath: /zk/config
         env:
+          - name: OBFUSCATE
+            value: "{{ .Values.obfuscate}}"
           - name: ZK_REDIS_PASSWORD # Setting Redis password from Secret
             valueFrom:
               secretKeyRef:
