@@ -53,8 +53,6 @@ spec:
           - name: obfuscator-config
             mountPath: /zk/config
         env:
-          - name: OBFUSCATE
-            value: "{{ .Values.obfuscate}}"
           - name: ZK_REDIS_PASSWORD # Setting Redis password from Secret
             valueFrom:
               secretKeyRef:
@@ -80,6 +78,8 @@ spec:
         - mountPath: /zk/config
           name: config
         env: # Setting Enviornmental Variables
+          - name: OBFUSCATE
+            value: "{{ .Values.obfuscate}}"
           - name: PL_POSTGRES_PASSWORD # Setting Database password from Secret
             valueFrom:
               secretKeyRef:
