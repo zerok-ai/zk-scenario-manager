@@ -28,7 +28,7 @@ spec:
           name: operator-wait
           env:
             - name: OBFUSCATE
-              value: {{ .Values.obfuscate}}
+              value: "{{ .Values.obfuscate}}"
             - name: SERVICE_NAME
               value: zk-operator.zk-client.svc.cluster.local
             - name: SERVICE_PORT
