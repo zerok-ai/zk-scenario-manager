@@ -16,8 +16,8 @@ type TracePersistenceService interface {
 	Close() error
 }
 
-func NewScenarioPersistenceService(repo repository.TracePersistenceRepo) TracePersistenceService {
-	return tracePersistenceService{repo: repo}
+func NewScenarioPersistenceService(repo repository.TracePersistenceRepo, obfuscate bool) TracePersistenceService {
+	return tracePersistenceService{repo: repo, obfuscate: obfuscate}
 }
 
 func (s tracePersistenceService) Close() error {
@@ -25,7 +25,8 @@ func (s tracePersistenceService) Close() error {
 }
 
 type tracePersistenceService struct {
-	repo repository.TracePersistenceRepo
+	repo      repository.TracePersistenceRepo
+	obfuscate bool
 }
 
 func (s tracePersistenceService) SaveIncidents(issuesDetails []model.IncidentWithIssues) *zkErrors.ZkError {
@@ -39,7 +40,7 @@ func (s tracePersistenceService) SaveIncidents(issuesDetails []model.IncidentWit
 			continue
 		}
 
-		v, err := dto.ConvertIncidentIssuesToIssueDto(validIssueDetail)
+		v, err := dto.ConvertIncidentIssuesToIssueDto(validIssueDetail, s.obfuscate)
 		if err != nil {
 			zkLogger.Error(LogTag, err)
 			continue

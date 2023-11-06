@@ -68,7 +68,7 @@ func ConvertErrorToErrorDto(errorData model.ErrorData) (ErrorsDataTableDto, *err
 	return errorDto, nil
 }
 
-func ConvertIncidentIssuesToIssueDto(s model.IncidentWithIssues) (IssuesDetailDto, *error) {
+func ConvertIncidentIssuesToIssueDto(s model.IncidentWithIssues, obfuscate bool) (IssuesDetailDto, *error) {
 	var response IssuesDetailDto
 	var issueDtoList []IssueTableDto
 	var incidentDtoList []IncidentTableDto
@@ -132,19 +132,22 @@ func ConvertIncidentIssuesToIssueDto(s model.IncidentWithIssues) (IssuesDetailDt
 		spanDtoList = append(spanDtoList, spanDataDto)
 
 		if spanDataDto.HasRawData {
-			obfuscatedRawdata := obfuscateRawData(span.SpanRawData)
+			rawdata := span.SpanRawData
+			if obfuscate {
+				rawdata = obfuscateRawData(span.SpanRawData)
+			}
 
 			var requestCompressedStr, responseCompressedStr []byte
 			var err error
-			if !utils.IsEmpty(obfuscatedRawdata.ReqBody) {
-				requestCompressedStr, err = zkCrypto.CompressStringGzip(obfuscatedRawdata.ReqBody)
+			if !utils.IsEmpty(rawdata.ReqBody) {
+				requestCompressedStr, err = zkCrypto.CompressStringGzip(rawdata.ReqBody)
 				if err != nil {
 					return response, &err
 				}
 			}
 
-			if !utils.IsEmpty(obfuscatedRawdata.RespBody) {
-				responseCompressedStr, err = zkCrypto.CompressStringGzip(obfuscatedRawdata.RespBody)
+			if !utils.IsEmpty(rawdata.RespBody) {
+				responseCompressedStr, err = zkCrypto.CompressStringGzip(rawdata.RespBody)
 				if err != nil {
 					return response, &err
 				}
@@ -152,10 +155,10 @@ func ConvertIncidentIssuesToIssueDto(s model.IncidentWithIssues) (IssuesDetailDt
 
 			spanRawDataDto := SpanRawDataTableDto{
 				TraceID:     traceId,
-				SpanID:      obfuscatedRawdata.SpanID,
-				ReqHeaders:  obfuscatedRawdata.ReqHeaders,
-				RespHeaders: obfuscatedRawdata.RespHeaders,
-				IsTruncated: obfuscatedRawdata.IsTruncated,
+				SpanID:      rawdata.SpanID,
+				ReqHeaders:  rawdata.ReqHeaders,
+				RespHeaders: rawdata.RespHeaders,
+				IsTruncated: rawdata.IsTruncated,
 				ReqBody:     requestCompressedStr,
 				RespBody:    responseCompressedStr,
 			}
