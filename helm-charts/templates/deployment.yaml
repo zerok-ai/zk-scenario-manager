@@ -46,7 +46,7 @@ spec:
       containers:
       - name: zk-obfuscator
         image:  us-west1-docker.pkg.dev/zerok-dev/stage/zk-obfuscator:fastApi
-        imagePullPolicy: Always
+        imagePullPolicy: IfNotPresent
         ports:
           - containerPort: 9103
         volumeMounts:
