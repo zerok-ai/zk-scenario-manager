@@ -15,6 +15,7 @@ const (
 	UpsertIncidentQuery    = "INSERT INTO incident (trace_id, issue_hash, incident_collection_time) VALUES ($1, $2, $3) ON CONFLICT (issue_hash, trace_id) DO NOTHING"
 	UpsertSpanQuery        = "INSERT INTO span (trace_id, parent_span_id, span_id, span_name, is_root, kind, start_time, latency, source, destination, workload_id_list, protocol, issue_hash_list, request_payload_size, response_payload_size, method, route, scheme, path, query, status, username, source_ip, destination_ip, service_name, errors, span_attributes, resource_attributes, scope_attributes, has_raw_data) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30) ON CONFLICT (trace_id, span_id) DO NOTHING"
 	UpsertSpanRawDataQuery = "INSERT INTO span_raw_data (trace_id, span_id, req_headers, resp_headers, is_truncated, req_body, resp_body) VALUES ($1, $2, $3, $4, $5, $6, $7) ON CONFLICT (trace_id, span_id) DO UPDATE SET req_headers = excluded.req_headers, resp_headers = excluded.resp_headers, is_truncated = excluded.is_truncated, req_body = excluded.req_body, resp_body = excluded.resp_body"
+	UpdateWorkloadIdList   = "UPDATE span SET workload_id_list = ARRAY(SELECT DISTINCT UNNEST(workload_id_list || $1))WHERE trace_id=$2 AND span_id=$3"
 )
 
 var LogTag = "zk_trace_persistence_repo"
@@ -22,7 +23,7 @@ var LogTag = "zk_trace_persistence_repo"
 type TracePersistenceRepo interface {
 	SaveTraceList([]dto.IssuesDetailDto) error
 	SaveErrors(errors []dto.ErrorsDataTableDto) error
-	SaveRawData(rawData []dto.SpanRawDataTableDto) error
+	SaveRawData(rawData []dto.SpanRawDataTableDto, list []dto.SpanTableDto) error
 	Close() error
 }
 
@@ -125,21 +126,34 @@ func (z tracePersistenceRepo) SaveErrors(errors []dto.ErrorsDataTableDto) error 
 	return nil
 }
 
-func (z tracePersistenceRepo) SaveRawData(rawDataDtoList []dto.SpanRawDataTableDto) error {
+func (z tracePersistenceRepo) SaveRawData(rawData []dto.SpanRawDataTableDto, list []dto.SpanTableDto) error {
 	uniqueRawData := make(map[string]bool)
 	data := make([]interfaces.DbArgs, 0)
-	for _, v := range rawDataDtoList {
-		key := v.TraceID + "_" + v.SpanID
-		if _, ok := uniqueRawData[key]; !ok {
-			uniqueRawData[key] = true
-			data = append(data, v)
-		}
-	}
 
 	tx, err := z.dbRepo.CreateTransaction()
 	if err != nil {
 		zkLogger.Info(LogTag, "Error Creating transaction")
 		return err
+	}
+
+	stmt := z.dbRepo.CreateStatement(UpdateWorkloadIdList)
+	for i, v := range list {
+		result, err := z.dbRepo.Update(stmt, []any{list[i].WorkloadIDList, v.TraceID, v.SpanID})
+		if err != nil {
+			zkLogger.Error(LogTag, "Error in bulk upsert for raw data table", err)
+			tx.Rollback()
+			return err
+		} else {
+			zkLogger.Info(LogTag, "Update workload id list count:", result)
+		}
+	}
+
+	for _, v := range rawData {
+		key := v.TraceID + "_" + v.SpanID
+		if _, ok := uniqueRawData[key]; !ok {
+			uniqueRawData[key] = true
+			data = append(data, v)
+		}
 	}
 
 	err = bulkUpsert(tx, z.dbRepo, UpsertSpanRawDataQuery, data)
