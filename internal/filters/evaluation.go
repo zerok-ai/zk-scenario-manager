@@ -51,19 +51,20 @@ func (te TraceEvaluator) EvalScenario() ([]typedef.TTraceid, error) {
 	if err != nil {
 		return nil, err
 	}
+	traceSetForScenario := *resultKey
 
-	if !te.traceStore.SetExists(*resultKey) {
+	if !te.traceStore.SetExists(traceSetForScenario) {
 		strError := fmt.Sprintf("No trace of interest for scenario: %v for scenario. Result key:%v doesn't exist", te.scenario.Id, *resultKey)
 		zkLogger.Info(LoggerTagEvaluation, strError)
 		return nil, fmt.Errorf(strError)
 	}
 
 	// get all the traceIds from the traceStore
-	traceIds, err := te.traceStore.GetAllValuesFromSet(*resultKey)
+	traceIds, err := te.traceStore.GetAllValuesFromSet(traceSetForScenario)
 	if err != nil {
 		return nil, err
 	}
-	te.traceStore.DeleteSet([]string{*resultKey})
+	te.traceStore.DeleteSet([]string{traceSetForScenario})
 
 	result := make([]typedef.TTraceid, len(traceIds))
 	for i, traceId := range traceIds {
@@ -71,7 +72,7 @@ func (te TraceEvaluator) EvalScenario() ([]typedef.TTraceid, error) {
 	}
 
 	// cleanup the old sets
-	te.DeleteOldSets(te.namesOfAllSets, te.cfg.ScenarioConfig.RedisRuleSetCount)
+	//te.DeleteOldSets(te.namesOfAllSets, te.cfg.ScenarioConfig.RedisRuleSetCount)
 
 	return result, err
 }
@@ -83,15 +84,17 @@ func (te TraceEvaluator) evalFilter(f model.Filter) (*string, error) {
 	if f.Type == model.WORKLOAD {
 
 		// shortlist the sets matching the prefixes
-		matchingSets := matchPrefixesButNotEquals(*f.WorkloadIds, te.namesOfAllSets)
+		matchingSets := getHSetsOfInterest(*f.WorkloadIds, te.namesOfAllSets)
 
 		// loop on matchingSets and union them
+		workloadTraceSetNames = make([]string, 0)
 		for workloadId, sets := range matchingSets {
-			if err := te.evalCondition(model.CONDITION_OR, sets, workloadId); err != nil {
+			resultSetName := workloadId
+			if err := te.unionSets(sets, resultSetName); err != nil {
 				return nil, err
 			}
+			workloadTraceSetNames = append(workloadTraceSetNames, resultSetName)
 		}
-		workloadTraceSetNames = *f.WorkloadIds
 	} else if f.Type == model.FILTER {
 		ret, err := te.evalFilters(*f.Filters)
 		if err != nil {
@@ -120,6 +123,10 @@ func (te TraceEvaluator) evalFilters(f model.Filters) (*[]string, error) {
 		return nil, fmt.Errorf("something went wrong while evaluating filters: %v", f)
 	}
 	return &results, nil
+}
+
+func (te TraceEvaluator) unionSets(dataSetNames []string, resultSetName string) error {
+	return te.evalCondition(model.CONDITION_OR, dataSetNames, resultSetName)
 }
 
 func (te TraceEvaluator) evalCondition(c model.Condition, dataSetNames []string, resultSetName string) error {
@@ -164,6 +171,15 @@ func (te TraceEvaluator) DeleteOldSets(sets []string, maxSetCount int) {
 		}
 	}
 	te.traceStore.DeleteSet(keysToDelete)
+}
+
+func getHSetsOfInterest(prefixes, keys []string) map[string][]string {
+
+	// get all the workload sets except the latest
+	setsOfWorkloadId := matchPrefixesButNotEquals(prefixes, keys)
+
+	setsToReturn := setsOfWorkloadId
+	return setsToReturn
 }
 
 func matchPrefixesButNotEquals(prefixes, keys []string) map[string][]string {

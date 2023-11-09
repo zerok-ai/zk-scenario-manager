@@ -10,7 +10,7 @@ import (
 	"scenario-manager/config"
 )
 
-func getLRUCacheStore(redisConfig storage.RedisConfig, csh zkRedis.CacheStoreHook[string]) *zkRedis.LocalCacheKVStore[string] {
+func GetLRUCacheStore(redisConfig storage.RedisConfig, csh zkRedis.CacheStoreHook[string]) *zkRedis.LocalCacheKVStore[string] {
 
 	dbName := clientDBNames.ErrorDetailDBName
 	cache := ds.GetLRUCache[string](cacheSize)
@@ -20,7 +20,7 @@ func getLRUCacheStore(redisConfig storage.RedisConfig, csh zkRedis.CacheStoreHoo
 	return localCache
 }
 
-func getNewVZReader(cfg config.AppConfigs) (*vzReader.VzReader, error) {
+func GetNewVZReader(cfg config.AppConfigs) (*vzReader.VzReader, error) {
 	reader := vzReader.VzReader{
 		CloudAddr:  cfg.ScenarioConfig.VZCloudAddr,
 		ClusterId:  cfg.ScenarioConfig.VZClusterId,

@@ -9,6 +9,9 @@ import (
 	"time"
 )
 
+const lastProcessedKeySuffix = "LPV"
+const currentProcessingWorkerKeySuffix = "CPV"
+
 type TraceStore struct {
 	redisClient         *redis.Client
 	ttlForTransientSets time.Duration
@@ -30,14 +33,94 @@ func GetTraceStore(redisConfig config.RedisConfig, ttlForTransientSets time.Dura
 	return traceStore
 }
 
-func (t TraceStore) GetAllKeys() ([]string, error) {
+func (t TraceStore) GetIndexOfScenarioToProcess() (int64, error) {
+	key := "current_scenario"
+	result, err := t.redisClient.Incr(ctx, key).Result()
+	if err != nil {
+		return 0, err
+	}
+	return result, nil
+}
+
+func (t TraceStore) AllowedToProcessScenarioId(scenarioId, scenarioProcessorId string, scenarioProcessingTime time.Duration) bool {
+
+	result := t.getCurrentlyProcessingWorker(scenarioId)
+	if result == "" || result != scenarioProcessorId {
+		err := t.setCurrentlyProcessingWorker(scenarioId, scenarioProcessorId, scenarioProcessingTime)
+		if err != nil {
+			zkLogger.Error(LoggerTag, "Error setting last processed workload set:", err)
+			return false
+		}
+		return true
+	}
+	return false
+}
+
+func (t TraceStore) getCurrentlyProcessingWorker(scenarioId string) string {
+	key := fmt.Sprintf("%s_%s", scenarioId, currentProcessingWorkerKeySuffix)
+	result, err := t.redisClient.Get(ctx, key).Result()
+	if err != nil {
+		return ""
+	}
+	return result
+}
+
+func (t TraceStore) setCurrentlyProcessingWorker(scenarioId, scenarioProcessorId string, scenarioProcessingTime time.Duration) error {
+	key := fmt.Sprintf("%s_%s", scenarioId, currentProcessingWorkerKeySuffix)
+	err := t.redisClient.Set(ctx, key, scenarioProcessorId, scenarioProcessingTime).Err()
+	return err
+}
+
+func (t TraceStore) deleteCurrentlyProcessingWorker(scenarioId, scenarioProcessorId string) error {
+	key := fmt.Sprintf("%s_%s", scenarioId, currentProcessingWorkerKeySuffix)
+	err := t.redisClient.Del(ctx, key, scenarioProcessorId).Err()
+	return err
+}
+
+func (t TraceStore) FinishedProcessingScenario(scenarioId, scenarioProcessorId, lastProcessedSets string) {
+
+	// set the value of the last processed workload set
+	if lastProcessedSets != "" {
+		t.SetNameOfLastProcessedWorkloadSets(scenarioId, lastProcessedSets)
+	}
+
+	// remove the key for currently processing worker
+	result := t.getCurrentlyProcessingWorker(scenarioId)
+	if result != scenarioProcessorId {
+		return
+	}
+	err := t.deleteCurrentlyProcessingWorker(scenarioId, scenarioProcessorId)
+	if err != nil {
+		zkLogger.Error(LoggerTag, "Error deleting currently processing worker:", err)
+		return
+	}
+}
+
+func (t TraceStore) GetNameOfLastProcessedWorkloadSets(scenarioId string) string {
+	key := fmt.Sprintf("%s_%s", scenarioId, lastProcessedKeySuffix)
+	result, err := t.redisClient.Get(ctx, key).Result()
+	if err != nil {
+		result = ""
+	}
+	return result
+}
+
+func (t TraceStore) SetNameOfLastProcessedWorkloadSets(scenarioId, lastProcessedSets string) {
+	key := fmt.Sprintf("%s_%s", scenarioId, lastProcessedKeySuffix)
+	err := t.redisClient.Set(ctx, key, lastProcessedSets, 0).Err()
+	if err != nil {
+		zkLogger.Error(LoggerTag, "Error setting last processed workload set:", err)
+	}
+}
+
+func (t TraceStore) GetAllKeys(match string) ([]string, error) {
 	var cursor uint64
 	var allKeys []string
 	var err error
 
 	for {
 		var scanResult []string
-		scanResult, cursor, err = t.redisClient.Scan(ctx, cursor, "*", 0).Result()
+		scanResult, cursor, err = t.redisClient.Scan(ctx, cursor, match, 0).Result()
 		if err != nil {
 			fmt.Println("Error scanning keys:", err)
 			return nil, err

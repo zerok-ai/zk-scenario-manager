@@ -63,8 +63,8 @@ func NewScenarioManager(cfg config.AppConfigs, tps *tracePersistence.TracePersis
 	}
 	fp.errorCacheSaveHooks = ErrorCacheSaveHooks[string]{scenarioManager: &fp}
 
-	fp.errorStoreReader = getLRUCacheStore(cfg.Redis, &fp.errorCacheSaveHooks)
-	reader, err := getNewVZReader(cfg)
+	fp.errorStoreReader = GetLRUCacheStore(cfg.Redis, &fp.errorCacheSaveHooks)
+	reader, err := GetNewVZReader(cfg)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to get new VZ reader")
 	}
@@ -114,7 +114,7 @@ func (scenarioManager *ScenarioManager) processAllScenarios() {
 	}
 
 	// 2. get all traceId sets from traceStore
-	namesOfAllSets, err := scenarioManager.traceStore.GetAllKeys()
+	namesOfAllSets, err := scenarioManager.traceStore.GetAllKeys("*")
 	zkLogger.DebugF(LoggerTag, "Number of available scenarios: %d, workloads in db: %d", len(scenarios), len(namesOfAllSets))
 	if err != nil {
 		zkLogger.Error(LoggerTag, "Error getting all keys from traceStore ", err)
