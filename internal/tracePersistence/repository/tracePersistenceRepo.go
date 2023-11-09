@@ -22,6 +22,7 @@ var LogTag = "zk_trace_persistence_repo"
 type TracePersistenceRepo interface {
 	SaveTraceList([]dto.IssuesDetailDto) error
 	SaveErrors(errors []dto.ErrorsDataTableDto) error
+	SaveRawData(rawData []dto.SpanRawDataTableDto) error
 	Close() error
 }
 
@@ -116,7 +117,34 @@ func (z tracePersistenceRepo) SaveErrors(errors []dto.ErrorsDataTableDto) error 
 
 	err = bulkUpsert(tx, z.dbRepo, UpsertErrorQuery, errorData)
 	if err != nil {
-		zkLogger.Error(LogTag, "Error in bulk upsert for incident table", err)
+		zkLogger.Error(LogTag, "Error in bulk upsert for errors table", err)
+		tx.Rollback()
+		return err
+	}
+	tx.Commit()
+	return nil
+}
+
+func (z tracePersistenceRepo) SaveRawData(rawDataDtoList []dto.SpanRawDataTableDto) error {
+	uniqueRawData := make(map[string]bool)
+	data := make([]interfaces.DbArgs, 0)
+	for _, v := range rawDataDtoList {
+		key := v.TraceID + "_" + v.SpanID
+		if _, ok := uniqueRawData[key]; !ok {
+			uniqueRawData[key] = true
+			data = append(data, v)
+		}
+	}
+
+	tx, err := z.dbRepo.CreateTransaction()
+	if err != nil {
+		zkLogger.Info(LogTag, "Error Creating transaction")
+		return err
+	}
+
+	err = bulkUpsert(tx, z.dbRepo, UpsertSpanRawDataQuery, data)
+	if err != nil {
+		zkLogger.Error(LogTag, "Error in bulk upsert for raw data table", err)
 		tx.Rollback()
 		return err
 	}
