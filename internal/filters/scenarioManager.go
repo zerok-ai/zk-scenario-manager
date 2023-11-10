@@ -64,7 +64,7 @@ func NewScenarioManager(cfg config.AppConfigs, tps *tracePersistence.TracePersis
 	fp.errorCacheSaveHooks = ErrorCacheSaveHooks[string]{scenarioManager: &fp}
 
 	fp.errorStoreReader = getLRUCacheStore(cfg.Redis, &fp.errorCacheSaveHooks)
-	reader, err := getNewVZReader(cfg)
+	reader, err := GetNewVZReader(cfg)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to get new VZ reader")
 	}

@@ -20,7 +20,7 @@ func getLRUCacheStore(redisConfig storage.RedisConfig, csh zkRedis.CacheStoreHoo
 	return localCache
 }
 
-func getNewVZReader(cfg config.AppConfigs) (*vzReader.VzReader, error) {
+func GetNewVZReader(cfg config.AppConfigs) (*vzReader.VzReader, error) {
 	reader := vzReader.VzReader{
 		CloudAddr:  cfg.ScenarioConfig.VZCloudAddr,
 		ClusterId:  cfg.ScenarioConfig.VZClusterId,
