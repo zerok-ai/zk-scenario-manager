@@ -34,7 +34,7 @@ func NewUPIDToServiceMapWorker(cfg config.AppConfigs) (*UPIDToServiceMapWorker, 
 		return nil, errors.Wrap(err, "failed to get new VZ reader")
 	}
 	tw.vzReader = reader
-	tw.tickerTask = ticker.GetNewTickerTask(upid_ticker_name, tickerInterval, tw.PopulateUPIDToServiceMap)
+	tw.tickerTask = ticker.GetNewTickerTask(upid_ticker_name, tickerInterval, tw.populateUPIDToServiceMap)
 	tw.tickerTask.Start()
 	tw.podDetailsStore = stores.GetPodDetailsStore(cfg.Redis)
 	return &tw, nil
@@ -44,7 +44,7 @@ func (tw *UPIDToServiceMapWorker) Close() {
 	tw.tickerTask.Stop()
 }
 
-func (tw *UPIDToServiceMapWorker) PopulateUPIDToServiceMap() {
+func (tw *UPIDToServiceMapWorker) populateUPIDToServiceMap() {
 	upidToServiceMapResponse, err := tw.vzReader.GetUPIDToServiceMap()
 	if err != nil {
 		return
