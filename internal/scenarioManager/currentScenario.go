@@ -3,7 +3,6 @@ package scenarioManager
 import (
 	zkLogger "github.com/zerok-ai/zk-utils-go/logs"
 	"github.com/zerok-ai/zk-utils-go/scenario/model"
-	typedef "scenario-manager/internal"
 	"scenario-manager/internal/filters"
 	"strconv"
 	"strings"
@@ -17,36 +16,24 @@ func (scenarioProcessor *ScenarioProcessor) processScenario(scenario *model.Scen
 		return
 	}
 
+	// get all the workload sets to process for the current scenario
 	namesOfAllSets, lastWorkloadSetsToProcess := scenarioProcessor.getWorkLoadSetsToProcess(scenario)
 
 	// evaluate scenario and get all traceIds
-	allTraceIds := scenarioProcessor.getAllTraceIDs(scenario, namesOfAllSets)
+	allTraceIds := filters.NewTraceEvaluator(scenarioProcessor.cfg, scenario, scenarioProcessor.traceStore, namesOfAllSets, filters.TTLForScenarioSets).EvalScenario()
 	if allTraceIds == nil || len(allTraceIds) == 0 {
 		zkLogger.Info(LoggerTag, "No traces satisfying the scenario")
 	}
 
-	zkLogger.Error(LoggerTag, "failed to create trace evaluator")
-
-	scenarioProcessor.markProcessingEnd(scenario, lastWorkloadSetsToProcess)
-}
-
-// getAllTraceIDs gets all the traceIds from the traceStore for all the scenarios
-func (scenarioProcessor *ScenarioProcessor) getAllTraceIDs(scenario *model.Scenario, namesOfAllSets []string) []typedef.TTraceid {
-
-	// a. evaluate the scenario and get the qualified traceIDs
-	traceEvaluator := filters.NewTraceEvaluator(scenarioProcessor.cfg, scenario, scenarioProcessor.traceStore, namesOfAllSets, filters.TTLForScenarioSets)
-	if traceEvaluator == nil {
-		zkLogger.ErrorF(LoggerTag, "Failed to create trace evaluator")
-		return nil
-	}
-
-	tIds, err := traceEvaluator.EvalScenario()
+	// publish all traceIds to OTel queue for processing
+	message := OTelMessage{Traces: allTraceIds, ProducerId: scenarioProcessor.id}
+	err := scenarioProcessor.oTelProducer.PublishTracesToQueue(message)
 	if err != nil {
-		zkLogger.ErrorF(LoggerTag, "Error in evaluating scenario %v", err)
-		return nil
+		return
 	}
 
-	return tIds
+	// mark the processing end for the current scenario
+	scenarioProcessor.markProcessingEnd(scenario, lastWorkloadSetsToProcess)
 }
 
 // getWorkLoadSetsToProcess gets all the workload sets to process for the current scenario
@@ -133,9 +120,4 @@ func (scenarioProcessor *ScenarioProcessor) getLastProcessedWorkLoadIdIndex(scen
 	}
 
 	return processedWorkLoads
-}
-
-func (scenarioProcessor *ScenarioProcessor) findEligibleSetsForScenario(scenarioID string) []string {
-	//TODO
-	return make([]string, 0)
 }

@@ -13,6 +13,7 @@ type ErrorData struct {
 	Data string `json:"data"`
 }
 
+// TODO change this data structure by removing IssueGroupList to IssueGroup
 type IncidentWithIssues struct {
 	Incident       Incident     `json:"incident"`
 	IssueGroupList []IssueGroup `json:"issue_group_list"`

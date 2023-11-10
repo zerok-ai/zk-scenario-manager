@@ -1,6 +1,7 @@
-package filters
+package scenarioManager
 
 import (
+	"context"
 	"fmt"
 	"github.com/zerok-ai/zk-rawdata-reader/vzReader"
 	"github.com/zerok-ai/zk-utils-go/ds"
@@ -10,7 +11,11 @@ import (
 	"scenario-manager/config"
 )
 
-func GetLRUCacheStore(redisConfig storage.RedisConfig, csh zkRedis.CacheStoreHook[string]) *zkRedis.LocalCacheKVStore[string] {
+const (
+	cacheSize int = 20
+)
+
+func GetLRUCacheStore(redisConfig storage.RedisConfig, csh zkRedis.CacheStoreHook[string], ctx context.Context) *zkRedis.LocalCacheKVStore[string] {
 
 	dbName := clientDBNames.ErrorDetailDBName
 	cache := ds.GetLRUCache[string](cacheSize)

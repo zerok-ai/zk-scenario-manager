@@ -11,12 +11,9 @@ import (
 	zkRedis "github.com/zerok-ai/zk-utils-go/storage/redis"
 	"github.com/zerok-ai/zk-utils-go/storage/redis/clientDBNames"
 	ticker "github.com/zerok-ai/zk-utils-go/ticker"
-	zkErrors "github.com/zerok-ai/zk-utils-go/zkerrors"
 	"scenario-manager/config"
 	typedef "scenario-manager/internal"
-	"scenario-manager/internal/filters"
 	"scenario-manager/internal/stores"
-	tracePersistenceModel "scenario-manager/internal/tracePersistence/model"
 	tracePersistence "scenario-manager/internal/tracePersistence/service"
 	"sort"
 	"strconv"
@@ -33,8 +30,7 @@ type ScenarioProcessor struct {
 	tracePersistenceService *tracePersistence.TracePersistenceService
 	traceStore              *stores.TraceStore
 	oTelStore               *stores.OTelDataHandler
-	errorCacheSaveHooks     ErrorCacheSaveHooks[string]
-	errorStoreReader        *zkRedis.LocalCacheKVStore[string]
+	oTelProducer            *stores.OTelQueue
 	traceRawDataCollector   *vzReader.VzReader
 	issueRateMap            typedef.IssueRateMap
 	mutex                   sync.Mutex
@@ -47,17 +43,21 @@ func NewScenarioProcessor(cfg config.AppConfigs, tps *tracePersistence.TracePers
 		return nil, err
 	}
 
+	otelProducer, err := stores.GetOTelProducer(cfg.Redis)
+	if err != nil {
+		return nil, err
+	}
+
 	fp := ScenarioProcessor{
 		id:                      uuid.New().String(),
 		scenarioStore:           vs,
 		traceStore:              stores.GetTraceStore(cfg.Redis, TTLForTransientSets),
+		oTelProducer:            otelProducer,
 		tracePersistenceService: tps,
 		cfg:                     cfg,
 	}
-	fp.errorCacheSaveHooks = ErrorCacheSaveHooks[string]{scenarioManager: &fp}
 
-	fp.errorStoreReader = filters.GetLRUCacheStore(cfg.Redis, &fp.errorCacheSaveHooks)
-	reader, err := filters.GetNewVZReader(cfg)
+	reader, err := GetNewVZReader(cfg)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to get new VZ reader")
 	}
@@ -68,10 +68,6 @@ func NewScenarioProcessor(cfg config.AppConfigs, tps *tracePersistence.TracePers
 }
 
 func (scenarioProcessor *ScenarioProcessor) Init() *ScenarioProcessor {
-
-	//TODO handle rate limit
-	//rateLimitTickerTask := ticker.GetNewTickerTask("rate-limit-processor", RateLimitTickerDuration, scenarioProcessor.processRateLimit)
-	//rateLimitTickerTask.Start()
 
 	// trigger recurring processing of one of the scenarios for available traces of interest
 	duration := time.Duration(scenarioProcessor.cfg.ScenarioConfig.ProcessingIntervalInSeconds) * time.Second
@@ -136,18 +132,4 @@ func (scenarioProcessor *ScenarioProcessor) findScenarioToProcess() *model.Scena
 
 func (scenarioProcessor *ScenarioProcessor) markProcessingEnd(scenario *model.Scenario, processedWorkloadSets string) {
 	scenarioProcessor.traceStore.FinishedProcessingScenario(scenario.Id, scenarioProcessor.id, processedWorkloadSets)
-}
-
-type ErrorCacheSaveHooks[T any] struct {
-	scenarioManager *ScenarioProcessor
-}
-
-func (errorCacheSaveHooks *ErrorCacheSaveHooks[T]) PreCacheSaveHookAsync(key string, value *T) *zkErrors.ZkError {
-
-	if value != nil {
-		strToSave := fmt.Sprintf("%v", *value)
-		return (*errorCacheSaveHooks.scenarioManager.tracePersistenceService).SaveErrors([]tracePersistenceModel.ErrorData{{Id: key, Data: strToSave}})
-	}
-
-	return nil
 }

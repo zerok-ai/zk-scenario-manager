@@ -56,6 +56,94 @@ func (t TraceStore) AllowedToProcessScenarioId(scenarioId, scenarioProcessorId s
 	return false
 }
 
+type RedisEntry struct {
+	Key        string
+	Value      string
+	ExpiryTime time.Duration
+}
+
+func (t TraceStore) SetKeysIfDoNotExist(entries []RedisEntry) bool {
+
+	// Create a transaction pipeline
+	pipe := t.redisClient.TxPipeline()
+
+	// Queue commands within the transaction
+	for _, entry := range entries {
+		pipe.SetNX(ctx, entry.Key, entry.Value, entry.ExpiryTime)
+	}
+
+	// Execute the transaction
+	_, err := pipe.Exec(ctx)
+
+	if err != nil {
+		fmt.Printf("Error executing transaction: %v\n", err)
+		return false
+	}
+	return true
+}
+
+type RedisDecrByEntry struct {
+	Key       string
+	Decrement int
+}
+
+func (t TraceStore) DecrementKeys(entries []RedisDecrByEntry) bool {
+
+	// Create a transaction pipeline
+	pipe := t.redisClient.TxPipeline()
+
+	// Queue commands within the transaction
+	for _, entry := range entries {
+		pipe.DecrBy(ctx, entry.Key, int64(entry.Decrement))
+	}
+
+	// Execute the transaction
+	_, err := pipe.Exec(ctx)
+
+	if err != nil {
+		fmt.Printf("Error executing transaction: %v\n", err)
+		return false
+	}
+	return true
+}
+
+func (t TraceStore) GetValuesForKeys(keyPattern string) (map[string]string, error) {
+
+	// Use the SCAN command to get all keys matching the pattern
+	iter := t.redisClient.Scan(ctx, 0, keyPattern, 0).Iterator()
+
+	// Start a transaction
+	pipe := t.redisClient.TxPipeline()
+
+	// Iterate over the matched keys
+	for iter.Next(ctx) {
+		key := iter.Val()
+
+		// Queue a GET command for each Key in the transaction
+		pipe.Get(ctx, key)
+	}
+
+	// Execute the transaction
+	results, err := pipe.Exec(ctx)
+	if err != nil {
+		fmt.Printf("Error executing transaction: %v\n", err)
+		return nil, err
+	}
+
+	// Process the results
+	resultMap := make(map[string]string)
+	for _, result := range results {
+		if result.Err() == nil {
+			key := iter.Val()
+			value := result.(*redis.StringCmd).Val()
+			fmt.Printf("Key: %s, Value: %s\n", key, value)
+			resultMap[key] = value
+		}
+	}
+
+	return resultMap, nil
+}
+
 func (t TraceStore) getCurrentlyProcessingWorker(scenarioId string) string {
 	key := fmt.Sprintf("%s_%s", scenarioId, currentProcessingWorkerKeySuffix)
 	result, err := t.redisClient.Get(ctx, key).Result()
@@ -79,12 +167,12 @@ func (t TraceStore) deleteCurrentlyProcessingWorker(scenarioId, scenarioProcesso
 
 func (t TraceStore) FinishedProcessingScenario(scenarioId, scenarioProcessorId, lastProcessedSets string) {
 
-	// set the value of the last processed workload set
+	// set the Value of the last processed workload set
 	if lastProcessedSets != "" {
 		t.SetNameOfLastProcessedWorkloadSets(scenarioId, lastProcessedSets)
 	}
 
-	// remove the key for currently processing worker
+	// remove the Key for currently processing worker
 	result := t.getCurrentlyProcessingWorker(scenarioId)
 	if result != scenarioProcessorId {
 		return
@@ -122,7 +210,7 @@ func (t TraceStore) GetAllKeys(match string) ([]string, error) {
 		var scanResult []string
 		scanResult, cursor, err = t.redisClient.Scan(ctx, cursor, match, 0).Result()
 		if err != nil {
-			fmt.Println("Error scanning keys:", err)
+			zkLogger.Error(LoggerTag, "Error scanning keys:", err)
 			return nil, err
 		}
 
@@ -136,12 +224,21 @@ func (t TraceStore) GetAllKeys(match string) ([]string, error) {
 }
 
 func (t TraceStore) Add(setName string, key string) error {
-	// set a value in a set
+	// set a Value in a set
 	_, err := t.redisClient.SAdd(ctx, setName, key).Result()
 	if err != nil {
-		fmt.Printf("Error setting the key %s in set %s : %v\n", key, setName, err)
+		zkLogger.ErrorF(LoggerTag, "Error setting the Key %s in set %s : %v\n", key, setName, err)
 	}
 	return err
+}
+
+func (t TraceStore) GetValuesAfterSetDiff(setLeft, setRight string) []string {
+	// Calculate the set difference: setLeft - setRight
+	result, err := t.redisClient.SDiff(ctx, setLeft, setRight).Result()
+	if err != nil {
+		zkLogger.ErrorF(LoggerTag, "Failed to calculate the set difference: %v", err)
+	}
+	return result
 }
 
 func (t TraceStore) GetAllValuesFromSet(setName string) ([]string, error) {
@@ -149,34 +246,43 @@ func (t TraceStore) GetAllValuesFromSet(setName string) ([]string, error) {
 	return t.redisClient.SMembers(ctx, setName).Result()
 }
 
-func (t TraceStore) NewUnionSet(resultKey string, keys ...string) error {
+func (t TraceStore) NewUnionSet(resultKey string, keys ...string) bool {
 
 	if !t.readyForSetAction(resultKey, keys...) {
-		return nil
+		return false
 	}
 
 	// Perform union of sets and store the result in a new set
-	_, err := t.redisClient.SUnionStore(ctx, resultKey, keys...).Result()
-	if err != nil {
-		fmt.Println("Error performing union and store:", err)
+	result, err := t.redisClient.SUnionStore(ctx, resultKey, keys...).Result()
+	if err == nil && result > 0 {
+		t.SetExpiryForSet(resultKey, t.ttlForTransientSets)
+		return true
 	}
-	return t.SetExpiryForSet(resultKey, t.ttlForTransientSets)
+
+	if err != nil {
+		zkLogger.Error("Error performing union and store:", err)
+	}
+	return false
 }
 
-func (t TraceStore) NewIntersectionSet(resultKey string, keys ...string) error {
+func (t TraceStore) NewIntersectionSet(resultKey string, keys ...string) bool {
 
 	if !t.readyForSetAction(resultKey, keys...) {
-		return nil
+		return false
 	}
 
 	// Perform intersection of sets and store the result in a new set
-	_, err := t.redisClient.SInterStore(ctx, resultKey, keys...).Result()
-	if err != nil {
-		fmt.Println("Error performing intersection and store:", err)
-		return err
+	result, err := t.redisClient.SInterStore(ctx, resultKey, keys...).Result()
+	if err == nil && result > 0 {
+		t.SetExpiryForSet(resultKey, t.ttlForTransientSets)
+		return true
 	}
 
-	return t.SetExpiryForSet(resultKey, t.ttlForTransientSets)
+	if err != nil {
+		zkLogger.Error("Error performing intersection and store:", err)
+	}
+	return false
+
 }
 
 func (t TraceStore) readyForSetAction(resultSet string, keys ...string) bool {
@@ -199,27 +305,28 @@ func (t TraceStore) readyForSetAction(resultSet string, keys ...string) bool {
 	return true
 }
 
-func (t TraceStore) SetExpiryForSet(resultKey string, expiration time.Duration) error {
+func (t TraceStore) SetExpiryForSet(resultKey string, expiration time.Duration) bool {
 	_, err := t.redisClient.Expire(ctx, resultKey, expiration).Result()
 	if err != nil {
-		fmt.Println("Error setting expiry for set :", resultKey, err)
+		zkLogger.Error(LoggerTag, "Error setting expiry for set :", resultKey, err)
+		return false
 	}
-	return err
+	return true
 }
 
-func (t TraceStore) RenameSet(key, newKey string) error {
+func (t TraceStore) RenameSet(key, newKey string) bool {
 	_, err := t.redisClient.Rename(ctx, key, newKey).Result()
 	if err != nil {
-		fmt.Println("Renaming set:", key, "to", newKey)
-		zkLogger.Error(LoggerTag, "Error renaming set:", err, key)
+		zkLogger.ErrorF(LoggerTag, "Error renaming set:%s to %s err=%v", key, newKey, err)
+		return false
 	}
-	return err
+	return true
 }
 
 func (t TraceStore) SetExists(key string) bool {
 	exists, err := t.redisClient.Exists(ctx, key).Result()
 	if err != nil {
-		zkLogger.Error(LoggerTag, "Error checking if set exists:", err)
+		zkLogger.ErrorF(LoggerTag, "Error checking if set %s exists: %v", key, err)
 	}
 	return exists == 1
 }

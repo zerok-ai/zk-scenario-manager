@@ -12,7 +12,6 @@ package dto
 //		want2 []SpanRawDataTableDto
 //		want3 *error
 //	}{
-//		// TODO: Add test cases.
 //	}
 //	for _, tt := range tests {
 //		t.Run(tt.name, func(t *testing.T) {
@@ -103,7 +102,6 @@ package dto
 //		want  bool
 //		want1 *zkerrors.ZkError
 //	}{
-//		// TODO: Add test cases.
 //	}
 //	for _, tt := range tests {
 //		t.Run(tt.name, func(t *testing.T) {

@@ -54,6 +54,9 @@ func main() {
 	tps := service.NewScenarioPersistenceService(tpr, shouldObfuscate)
 
 	scenarioManager, err := filters.NewScenarioManager(cfg, &tps)
+
+	//TODO start scenario processor and otel consumer
+
 	if err != nil {
 		panic(err)
 	}

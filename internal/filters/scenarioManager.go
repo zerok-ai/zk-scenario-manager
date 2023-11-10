@@ -18,6 +18,7 @@ import (
 	zkErrors "github.com/zerok-ai/zk-utils-go/zkerrors"
 	"scenario-manager/config"
 	typedef "scenario-manager/internal"
+	"scenario-manager/internal/scenarioManager"
 	"scenario-manager/internal/stores"
 	tracePersistenceModel "scenario-manager/internal/tracePersistence/model"
 	tracePersistence "scenario-manager/internal/tracePersistence/service"
@@ -63,8 +64,8 @@ func NewScenarioManager(cfg config.AppConfigs, tps *tracePersistence.TracePersis
 	}
 	fp.errorCacheSaveHooks = ErrorCacheSaveHooks[string]{scenarioManager: &fp}
 
-	fp.errorStoreReader = GetLRUCacheStore(cfg.Redis, &fp.errorCacheSaveHooks)
-	reader, err := GetNewVZReader(cfg)
+	fp.errorStoreReader = scenarioManager.GetLRUCacheStore(cfg.Redis, &fp.errorCacheSaveHooks, ctx)
+	reader, err := scenarioManager.GetNewVZReader(cfg)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to get new VZ reader")
 	}
@@ -206,9 +207,14 @@ func (scenarioManager *ScenarioManager) getAllTraceIDs(scenarios map[string]*sce
 		if traceEvaluator == nil {
 			zkLogger.Error(LoggerTag, "failed to create trace evaluator")
 		}
-		tIds, err := traceEvaluator.EvalScenario()
-		if err != nil || tIds == nil || len(tIds) == 0 {
+		_tIds := traceEvaluator.EvalScenario()
+		if _tIds == nil || len(_tIds) == 0 {
 			continue
+		}
+
+		tIds := make([]typedef.TTraceid, len(_tIds))
+		for i, traceId := range _tIds {
+			tIds[i] = typedef.TTraceid(traceId)
 		}
 
 		zkLogger.InfoF(LoggerTag, "No of trace ids for scenario %v is %v", scenario.Id, len(tIds))
