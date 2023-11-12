@@ -68,6 +68,42 @@ func ConvertErrorToErrorDto(errorData model.ErrorData) (ErrorsDataTableDto, *err
 	return errorDto, nil
 }
 
+func GetRawDataDto(rawData model.SpanRawData, obfuscate bool) (SpanRawDataTableDto, *error) {
+	var response SpanRawDataTableDto
+	if obfuscate {
+		rawData = obfuscateRawData(rawData)
+	}
+
+	var requestCompressedStr, responseCompressedStr []byte
+	var err error
+	if !utils.IsEmpty(rawData.ReqBody) {
+		requestCompressedStr, err = zkCrypto.CompressStringGzip(rawData.ReqBody)
+		if err != nil {
+			return response, &err
+		}
+	}
+
+	if !utils.IsEmpty(rawData.RespBody) {
+		responseCompressedStr, err = zkCrypto.CompressStringGzip(rawData.RespBody)
+		if err != nil {
+			return response, &err
+		}
+	}
+
+	response = SpanRawDataTableDto{
+		TraceID:     rawData.TraceID,
+		SpanID:      rawData.SpanID,
+		ReqHeaders:  rawData.ReqHeaders,
+		RespHeaders: rawData.RespHeaders,
+		IsTruncated: rawData.IsTruncated,
+		ReqBody:     requestCompressedStr,
+		RespBody:    responseCompressedStr,
+	}
+
+	return response, nil
+
+}
+
 func ConvertIncidentIssuesToIssueDto(s model.IncidentWithIssues, obfuscate bool) (IssuesDetailDto, *error) {
 	var response IssuesDetailDto
 	var issueDtoList []IssueTableDto
@@ -132,38 +168,13 @@ func ConvertIncidentIssuesToIssueDto(s model.IncidentWithIssues, obfuscate bool)
 		spanDtoList = append(spanDtoList, spanDataDto)
 
 		if spanDataDto.HasRawData {
-			rawdata := span.SpanRawData
-			if obfuscate {
-				rawdata = obfuscateRawData(span.SpanRawData)
+			rawDataDto, err := GetRawDataDto(span.SpanRawData, obfuscate)
+			if err != nil {
+				zkLogger.Error(LogTag, err)
+				return response, err
 			}
 
-			var requestCompressedStr, responseCompressedStr []byte
-			var err error
-			if !utils.IsEmpty(rawdata.ReqBody) {
-				requestCompressedStr, err = zkCrypto.CompressStringGzip(rawdata.ReqBody)
-				if err != nil {
-					return response, &err
-				}
-			}
-
-			if !utils.IsEmpty(rawdata.RespBody) {
-				responseCompressedStr, err = zkCrypto.CompressStringGzip(rawdata.RespBody)
-				if err != nil {
-					return response, &err
-				}
-			}
-
-			spanRawDataDto := SpanRawDataTableDto{
-				TraceID:     traceId,
-				SpanID:      rawdata.SpanID,
-				ReqHeaders:  rawdata.ReqHeaders,
-				RespHeaders: rawdata.RespHeaders,
-				IsTruncated: rawdata.IsTruncated,
-				ReqBody:     requestCompressedStr,
-				RespBody:    responseCompressedStr,
-			}
-
-			spanRawDataDtoList = append(spanRawDataDtoList, spanRawDataDto)
+			spanRawDataDtoList = append(spanRawDataDtoList, rawDataDto)
 		}
 	}
 
