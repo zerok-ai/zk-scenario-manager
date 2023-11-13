@@ -10,7 +10,7 @@ import (
 	"net/http"
 	"os"
 	"scenario-manager/config"
-	"scenario-manager/internal/filters"
+	sm "scenario-manager/internal/scenarioManager"
 	"scenario-manager/internal/tracePersistence/repository"
 	"scenario-manager/internal/tracePersistence/service"
 	"strconv"
@@ -53,16 +53,19 @@ func main() {
 	tpr := repository.NewTracePersistenceRepo(zkPostgresRepo)
 	tps := service.NewScenarioPersistenceService(tpr, shouldObfuscate)
 
-	scenarioManager, err := filters.NewScenarioManager(cfg, &tps)
-
-	//TODO start scenario processor and otel consumer
-
+	scenarioProcessor, err := sm.NewScenarioProcessor(cfg, &tps)
 	if err != nil {
 		panic(err)
 	}
+	defer scenarioProcessor.Close()
 
-	defer scenarioManager.Close()
-	scenarioManager.Init()
+	// start OTel worker
+	oTelWorker := sm.GetQueueWorkerOTel(cfg, &tps)
+	defer oTelWorker.Close()
+
+	// start EBPF worker
+	ebpfWorker := sm.GetQueueWorkerEBPF(cfg)
+	defer ebpfWorker.Close()
 
 	configurator := iris.WithConfiguration(iris.Configuration{
 		DisablePathCorrection: true,

@@ -1,4 +1,4 @@
-package filters
+package scenarioManager
 
 import (
 	"encoding/json"

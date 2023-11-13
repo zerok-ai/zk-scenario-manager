@@ -120,7 +120,7 @@ func getPostLastUnderScoreValue(input string) string {
 	return suffix
 }
 
-func (consumer *OTelMessageConsumer) rateLimitIncidents(incidents []tracePersistenceModel.IncidentWithIssues, scenario model.Scenario) []tracePersistenceModel.IncidentWithIssues {
+func (worker *QueueWorkerOTel) rateLimitIncidents(incidents []tracePersistenceModel.IncidentWithIssues, scenario model.Scenario) []tracePersistenceModel.IncidentWithIssues {
 
 	newIncidentList := make([]tracePersistenceModel.IncidentWithIssues, 0)
 
@@ -145,7 +145,7 @@ func (consumer *OTelMessageConsumer) rateLimitIncidents(incidents []tracePersist
 	savedIssuesCount := make(map[string]IssueLimit)
 	for _, issueHash := range issueHashList {
 		keyPattern := fmt.Sprintf("ratelimit_%s_*", issueHash)
-		result, err := consumer.traceStore.GetValuesForKeys(keyPattern)
+		result, err := worker.traceStore.GetValuesForKeys(keyPattern)
 		if err != nil {
 			zkLogger.DebugF(RateLimitLoggerTag, "Error getting rate limits for issue: %v", issueHash)
 		}
@@ -192,8 +192,8 @@ func (consumer *OTelMessageConsumer) rateLimitIncidents(incidents []tracePersist
 		}
 	}
 
-	consumer.addLimits(limitsToAdd)
-	consumer.decrementLimits(limitsToDecrement)
+	worker.addLimits(limitsToAdd)
+	worker.decrementLimits(limitsToDecrement)
 
 	return newIncidentList
 }
@@ -216,7 +216,7 @@ func getLimitForIssue(scenario model.Scenario) (NewLimit, IssueLimit) {
 	return newLimit, issueLimit
 }
 
-func (consumer *OTelMessageConsumer) addLimits(limitsToAdd map[string]NewLimit) {
+func (worker *QueueWorkerOTel) addLimits(limitsToAdd map[string]NewLimit) {
 
 	redisEntries := make([]stores.RedisEntry, 0)
 
@@ -228,10 +228,10 @@ func (consumer *OTelMessageConsumer) addLimits(limitsToAdd map[string]NewLimit) 
 		}
 	}
 
-	consumer.traceStore.SetKeysIfDoNotExist(redisEntries)
+	worker.traceStore.SetKeysIfDoNotExist(redisEntries)
 }
 
-func (consumer *OTelMessageConsumer) decrementLimits(limitsToDecrement map[string]int) {
+func (worker *QueueWorkerOTel) decrementLimits(limitsToDecrement map[string]int) {
 
 	redisEntries := make([]stores.RedisDecrByEntry, 0)
 
@@ -240,5 +240,5 @@ func (consumer *OTelMessageConsumer) decrementLimits(limitsToDecrement map[strin
 		redisEntries = append(redisEntries, entry)
 	}
 
-	consumer.traceStore.DecrementKeys(redisEntries)
+	worker.traceStore.DecrementKeys(redisEntries)
 }

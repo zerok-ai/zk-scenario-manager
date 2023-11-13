@@ -174,13 +174,13 @@ func (z tracePersistenceRepo) SaveRawData(rawData []dto.SpanRawDataTableDto, lis
 //		return err
 //	}
 //
-//	err = bulkInsert(tx, dbRepo, IncidentTablePostgres, []string{TraceId, IssueHash, IncidentCollectionTime, EntryService, Endpoint, Protocol, RootSpanTime, LatencyNs}, traceData)
+//	err = bulkInsert(tx, dbRepo, IncidentTablePostgres, []string{TraceId, IssueHash, IncidentCollectionTime, EntryService, Endpoint, ProtocolTraces, RootSpanTime, LatencyNs}, traceData)
 //	if err != nil {
 //		zkLogger.Info(LogTag, "Error in bulk insert trace table", err)
 //		return err
 //	}
 //
-//	cols := []string{TraceId, SpanId, ParentSpanId, Source, Destination, WorkloadIdList, Status, Metadata, LatencyNs, Protocol, IssueHashList, Time}
+//	cols := []string{TraceId, SpanId, ParentSpanId, Source, Destination, WorkloadIdList, Status, Metadata, LatencyNs, ProtocolTraces, IssueHashList, Time}
 //
 //	err = bulkInsert(tx, dbRepo, SpanTablePostgres, cols, span)
 //	if err != nil {

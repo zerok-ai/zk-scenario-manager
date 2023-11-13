@@ -76,7 +76,7 @@ package dto
 //		WorkloadIdList: []string{"id1", "id2"},
 //		Metadata:       "{'k':'value}",
 //		LatencyNs:      67.9,
-//		Protocol:       "HTTP",
+//		ProtocolTraces:       "HTTP",
 //	}
 //
 //	c := s.GetAllColumns()
@@ -89,7 +89,7 @@ package dto
 //	assert.Equal(t1, c[5], s.WorkloadIdList)
 //	assert.Equal(t1, c[6], s.Metadata)
 //	assert.Equal(t1, c[7], s.LatencyNs)
-//	assert.Equal(t1, c[8], s.Protocol)
+//	assert.Equal(t1, c[8], s.ProtocolTraces)
 //}
 
 //func TestValidateScenario(t *testing.T) {
