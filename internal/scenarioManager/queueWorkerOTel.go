@@ -96,14 +96,12 @@ func (worker *QueueWorkerOTel) handleMessage(oTelMessage OTELTraceMessage) {
 		return
 	}
 
-	// 4. zkRedis the trace data in the persistence zkRedis
+	// 4. save incidents in persistent storage
 	zkLogger.InfoF(LoggerTag, "Sending incidents for persistence, incident count: %d", len(newIncidentList))
-	startTime := time.Now()
 	saveError := (*worker.tracePersistenceService).SaveIncidents(newIncidentList)
 	if saveError != nil {
 		zkLogger.Error(LoggerTag, "Error saving incidents", saveError)
 	}
-	endTime := time.Now()
 
 	// 5. publish traces to ebpf queue
 	traceMessage := EBPFTraceMessage{
@@ -132,9 +130,6 @@ func (worker *QueueWorkerOTel) handleMessage(oTelMessage OTELTraceMessage) {
 		zkLogger.Error(LoggerTag, "Error publishing traces to raw data queue", err)
 	}
 
-	//TODO: store data
-
-	zkLogger.Info(LoggerTag, "Time taken to save zkRedis data in persistent storage ", endTime.Sub(startTime))
 }
 
 func getRootSpanFromIncident(incident tracePersistenceModel.Incident) *tracePersistenceModel.Span {
@@ -425,7 +420,11 @@ func (worker *QueueWorkerOTel) Consume(delivery rmq.Delivery) {
 
 	// perform task
 	zkLogger.DebugF(LoggerTag, "got message %v", oTelMessage)
+
+	startTime := time.Now()
 	worker.handleMessage(oTelMessage)
+	endTime := time.Now()
+	zkLogger.Info(LoggerTag, "Time taken to to process oTel message ", endTime.Sub(startTime))
 
 	if err := delivery.Ack(); err != nil {
 		// handle ack error

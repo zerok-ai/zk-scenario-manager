@@ -14,7 +14,7 @@ var LogTag = "zk_trace_persistence_service"
 type TracePersistenceService interface {
 	SaveIncidents([]model.IncidentWithIssues) *zkErrors.ZkError
 	SaveErrors([]model.ErrorData) *zkErrors.ZkError
-	SaveRawData([]model.Span) *zkErrors.ZkError
+	SaveEBPFData([]model.Span) *zkErrors.ZkError
 	Close() error
 }
 
@@ -101,7 +101,7 @@ func (s tracePersistenceService) SaveErrors(errors []model.ErrorData) *zkErrors.
 	return nil
 }
 
-func (s tracePersistenceService) SaveRawData(data []model.Span) *zkErrors.ZkError {
+func (s tracePersistenceService) SaveEBPFData(data []model.Span) *zkErrors.ZkError {
 	sanitizedSpanData := make([]model.Span, 0)
 	for _, spanRawData := range data {
 		if !utils.IsEmpty(spanRawData.ReqBody) || !utils.IsEmpty(spanRawData.RespBody) || !utils.IsEmpty(spanRawData.ReqHeaders) || !utils.IsEmpty(spanRawData.RespHeaders) {
@@ -131,7 +131,7 @@ func (s tracePersistenceService) SaveRawData(data []model.Span) *zkErrors.ZkErro
 		spanTableDtoList = append(spanTableDtoList, spanTableDto)
 	}
 
-	err := s.repo.SaveRawData(rawDataTableDtoList, spanTableDtoList)
+	err := s.repo.SaveEBPFData(rawDataTableDtoList, spanTableDtoList)
 	if err != nil {
 		zkLogger.Error(LogTag, "Failed to save raw data", err)
 		zkErr := zkErrors.ZkErrorBuilder{}.Build(zkErrors.ZkErrorDbError, nil)

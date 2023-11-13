@@ -10,23 +10,26 @@ import (
 	"scenario-manager/config"
 	"scenario-manager/internal/stores"
 	tracePersistenceModel "scenario-manager/internal/tracePersistence/model"
+	tracePersistence "scenario-manager/internal/tracePersistence/service"
 )
 
 type QueueWorkerEBPF struct {
-	id                    string
-	ebpfConsumer          *stores.TraceQueue
-	traceRawDataCollector *vzReader.VzReader
-	eBPFSchemaVersion     string
+	id                      string
+	ebpfConsumer            *stores.TraceQueue
+	traceRawDataCollector   *vzReader.VzReader
+	eBPFSchemaVersion       string
+	tracePersistenceService *tracePersistence.TracePersistenceService
 }
 
-func GetQueueWorkerEBPF(cfg config.AppConfigs) *QueueWorkerEBPF {
+func GetQueueWorkerEBPF(cfg config.AppConfigs, tps *tracePersistence.TracePersistenceService) *QueueWorkerEBPF {
 
 	var err error
 
 	// initialize worker
 	worker := QueueWorkerEBPF{
-		id:                "E" + uuid.New().String(),
-		eBPFSchemaVersion: cfg.ScenarioConfig.EBPFSchemaVersion,
+		id:                      "E" + uuid.New().String(),
+		eBPFSchemaVersion:       cfg.ScenarioConfig.EBPFSchemaVersion,
+		tracePersistenceService: tps,
 	}
 	worker.traceRawDataCollector, err = GetNewVZReader(cfg)
 	if err != nil {
@@ -79,10 +82,14 @@ func (worker *QueueWorkerEBPF) handleMessage(traceMessage EBPFTraceMessage) {
 		}
 	}
 
-	//TODO: store data in OTel
+	//TODO: 1. save new spans 2. update existing spans so as to remove the isRoot flag
 
-	//TODO: store request-response headers and body
-
+	// store request-response headers and body
+	saveError := (*worker.tracePersistenceService).SaveEBPFData(spansToUpdateInOTel)
+	if saveError != nil {
+		zkLogger.Error(LoggerTag, "Error saving EBPF data", saveError)
+		return
+	}
 }
 
 func (worker *QueueWorkerEBPF) getSpanForPersistence(ebpfSpan models.HttpRawDataModel) tracePersistenceModel.Span {

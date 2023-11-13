@@ -23,7 +23,7 @@ var LogTag = "zk_trace_persistence_repo"
 type TracePersistenceRepo interface {
 	SaveTraceList([]dto.IssuesDetailDto) error
 	SaveErrors(errors []dto.ErrorsDataTableDto) error
-	SaveRawData(rawData []dto.SpanRawDataTableDto, list []dto.SpanTableDto) error
+	SaveEBPFData(rawData []dto.SpanRawDataTableDto, list []dto.SpanTableDto) error
 	Close() error
 }
 
@@ -126,7 +126,7 @@ func (z tracePersistenceRepo) SaveErrors(errors []dto.ErrorsDataTableDto) error 
 	return nil
 }
 
-func (z tracePersistenceRepo) SaveRawData(rawData []dto.SpanRawDataTableDto, list []dto.SpanTableDto) error {
+func (z tracePersistenceRepo) SaveEBPFData(rawData []dto.SpanRawDataTableDto, list []dto.SpanTableDto) error {
 	uniqueRawData := make(map[string]bool)
 	data := make([]interfaces.DbArgs, 0)
 

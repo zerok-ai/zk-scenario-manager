@@ -65,7 +65,7 @@ func main() {
 	defer oTelWorker.Close()
 
 	// start EBPF worker
-	ebpfWorker := sm.GetQueueWorkerEBPF(cfg)
+	ebpfWorker := sm.GetQueueWorkerEBPF(cfg, &tps)
 	defer ebpfWorker.Close()
 
 	configurator := iris.WithConfiguration(iris.Configuration{
