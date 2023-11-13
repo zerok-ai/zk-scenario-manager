@@ -132,39 +132,7 @@ func ConvertIncidentIssuesToIssueDto(s model.IncidentWithIssues, obfuscate bool)
 	}
 
 	for _, span := range s.Incident.Spans {
-		spanDataDto := SpanTableDto{
-			TraceID:             traceId,
-			SpanID:              span.SpanID,
-			SpanName:            span.SpanName,
-			ParentSpanID:        span.ParentSpanID,
-			IsRoot:              span.IsRoot,
-			Kind:                span.Kind,
-			StartTime:           span.StartTime,
-			Latency:             span.Latency,
-			Source:              span.Source,
-			Destination:         span.Destination,
-			WorkloadIDList:      span.WorkloadIDList,
-			Protocol:            string(span.Protocol),
-			IssueHashList:       span.IssueHashList,
-			RequestPayloadSize:  span.RequestPayloadSize,
-			ResponsePayloadSize: span.ResponsePayloadSize,
-			Method:              span.Method,
-			Route:               span.Route,
-			Scheme:              span.Scheme,
-			Path:                span.Path,
-			Query:               span.Query,
-			Status:              span.Status,
-			Username:            span.Username,
-			SourceIP:            span.SourceIP,
-			DestinationIP:       span.DestinationIP,
-			ServiceName:         span.ServiceName,
-			Errors:              span.Errors,
-
-			SpanAttributes:     span.SpanAttributes,
-			ResourceAttributes: span.ResourceAttributes,
-			ScopeAttributes:    span.ScopeAttributes,
-			HasRawData:         !utils.IsEmpty(span.ReqBody) || !utils.IsEmpty(span.RespBody) || !utils.IsEmpty(span.ReqHeaders) || !utils.IsEmpty(span.RespHeaders),
-		}
+		spanDataDto := SpanToSpanDto(*span, traceId)
 		spanDtoList = append(spanDtoList, spanDataDto)
 
 		if spanDataDto.HasRawData {
@@ -191,6 +159,44 @@ func ConvertIncidentIssuesToIssueDto(s model.IncidentWithIssues, obfuscate bool)
 	}
 
 	return response, nil
+}
+
+func SpanToSpanDto(span model.Span, traceId string) SpanTableDto {
+	s := SpanTableDto{
+		TraceID:             traceId,
+		SpanID:              span.SpanID,
+		SpanName:            span.SpanName,
+		ParentSpanID:        span.ParentSpanID,
+		IsRoot:              span.IsRoot,
+		Kind:                span.Kind,
+		StartTime:           span.StartTime,
+		Latency:             span.Latency,
+		Source:              span.Source,
+		Destination:         span.Destination,
+		WorkloadIDList:      span.WorkloadIDList,
+		Protocol:            string(span.Protocol),
+		IssueHashList:       span.IssueHashList,
+		RequestPayloadSize:  span.RequestPayloadSize,
+		ResponsePayloadSize: span.ResponsePayloadSize,
+		Method:              span.Method,
+		Route:               span.Route,
+		Scheme:              span.Scheme,
+		Path:                span.Path,
+		Query:               span.Query,
+		Status:              span.Status,
+		Username:            span.Username,
+		SourceIP:            span.SourceIP,
+		DestinationIP:       span.DestinationIP,
+		ServiceName:         span.ServiceName,
+		Errors:              span.Errors,
+
+		SpanAttributes:     span.SpanAttributes,
+		ResourceAttributes: span.ResourceAttributes,
+		ScopeAttributes:    span.ScopeAttributes,
+		HasRawData:         !utils.IsEmpty(span.ReqBody) || !utils.IsEmpty(span.RespBody) || !utils.IsEmpty(span.ReqHeaders) || !utils.IsEmpty(span.RespHeaders),
+	}
+
+	return s
 }
 
 func ValidateAndSanitiseIssue(s model.IncidentWithIssues) (bool, model.IncidentWithIssues, *zkerrors.ZkError) {
