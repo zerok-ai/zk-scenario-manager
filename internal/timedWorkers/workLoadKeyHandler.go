@@ -52,6 +52,11 @@ func NewWorkloadKeyHandler(cfg *config.AppConfigs, store *zkredis.VersionedStore
 
 // manageWorkloadKeys retrieves scenarios from scenario store and calls ManageWorkloadKey for all workloads.
 func (wh *WorkloadKeyHandler) manageWorkloadKeys() {
+	err := wh.RedisHandler.CheckRedisConnection()
+	if err != nil {
+		logger.Error(workloadLogTag, "Error caught while checking redis connection.")
+		return
+	}
 	scenarios := wh.scenarioStore.GetAllValues()
 	for _, scenario := range scenarios {
 		if scenario == nil || scenario.Workloads == nil {

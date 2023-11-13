@@ -19,4 +19,5 @@ type RedisHandlerInterface interface {
 	RenameKeyWithTTL(oldKey string, newKey string, ttl time.Duration) error
 	SetNXPipeline(key string, value interface{}, expiration time.Duration) error
 	SAddPipeline(key string, value interface{}, expiration time.Duration) error
+	CheckRedisConnection() error
 }
