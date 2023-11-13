@@ -32,7 +32,7 @@ func NewWorkloadKeyHandler(cfg *config.AppConfigs, store *zkredis.VersionedStore
 	// Generate a new ID for the instance
 	uniqueId := uuid.New().String()
 
-	redisHandler, err := redis.NewRedisHandlerWithoutTicker(&cfg.Redis, clientDBNames.FilteredTracesDBName, workloadLogTag)
+	redisHandler, err := redis.NewRedisHandler(&cfg.Redis, clientDBNames.FilteredTracesDBName)
 	if err != nil {
 		logger.Error(workloadLogTag, "Error while creating resource redis handler:", err)
 		return nil, err
@@ -138,4 +138,5 @@ func (wh *WorkloadKeyHandler) ManageWorkloadKey(workloadID string) error {
 
 func (wh *WorkloadKeyHandler) Close() {
 	wh.ticker.Stop()
+	wh.RedisHandler.Shutdown()
 }
