@@ -7,7 +7,7 @@ import (
 	logger "github.com/zerok-ai/zk-utils-go/logs"
 	ticker "github.com/zerok-ai/zk-utils-go/ticker"
 	"scenario-manager/config"
-	"scenario-manager/internal/filters"
+	"scenario-manager/internal/scenarioManager"
 	"scenario-manager/internal/stores"
 	"time"
 )
@@ -29,7 +29,7 @@ func NewUPIDToServiceMapWorker(cfg config.AppConfigs) (*UPIDToServiceMapWorker, 
 		cfg: cfg,
 	}
 
-	reader, err := filters.GetNewVZReader(cfg)
+	reader, err := scenarioManager.GetNewVZReader(cfg)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to get new VZ reader")
 	}
