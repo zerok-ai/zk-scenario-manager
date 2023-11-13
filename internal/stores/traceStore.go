@@ -267,7 +267,7 @@ func (t TraceStore) NewUnionSet(resultKey string, keys ...string) bool {
 
 func (t TraceStore) NewIntersectionSet(resultKey string, keys ...string) bool {
 
-	if !t.readyForSetAction(resultKey, keys...) {
+	if len(keys) == 0 || !t.readyForSetAction(resultKey, keys...) {
 		return false
 	}
 

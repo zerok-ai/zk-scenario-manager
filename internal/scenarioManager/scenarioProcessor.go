@@ -69,6 +69,10 @@ func NewScenarioProcessor(cfg config.AppConfigs, tps *tracePersistence.TracePers
 	return returnValue, nil
 }
 
+func (scenarioProcessor *ScenarioProcessor) GetScenarioStore() *zkRedis.VersionedStore[model.Scenario] {
+	return scenarioProcessor.scenarioStore
+}
+
 func (scenarioProcessor *ScenarioProcessor) Close() {
 	scenarioProcessor.scenarioStore.Close()
 	scenarioProcessor.traceStore.Close()

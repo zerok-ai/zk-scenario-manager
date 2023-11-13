@@ -22,7 +22,7 @@ var LogTag = "main"
 
 func main() {
 
-	obfuscateEnv := os.Getenv("OBFUSCATE")
+	obfuscateEnv := "false" //os.Getenv("OBFUSCATE")
 	zkLogger.Info(LogTag, "OBFUSCATE: %s", obfuscateEnv)
 	shouldObfuscate, err := strconv.ParseBool(obfuscateEnv)
 	if err != nil {
@@ -79,7 +79,7 @@ func main() {
 		zkLogger.Info(LogTag, "Failed to start UPIDToServiceMapWorker")
 	}
 
-	workloadKeyHandler, err := timedWorkers.NewWorkloadKeyHandler(&cfg, scenarioManager.GetScenarioStore())
+	workloadKeyHandler, err := timedWorkers.NewWorkloadKeyHandler(&cfg, scenarioProcessor.GetScenarioStore())
 	if err != nil {
 		zkLogger.Info(LogTag, "Failed to start workloadKeyHandler")
 	}
