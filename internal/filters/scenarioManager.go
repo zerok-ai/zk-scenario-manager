@@ -48,6 +48,10 @@ type ScenarioManager struct {
 	mutex                   sync.Mutex
 }
 
+func (scenarioManager *ScenarioManager) GetScenarioStore() *zkRedis.VersionedStore[scenarioGeneratorModel.Scenario] {
+	return scenarioManager.scenarioStore
+}
+
 func NewScenarioManager(cfg config.AppConfigs, tps *tracePersistence.TracePersistenceService) (*ScenarioManager, error) {
 
 	vs, err := zkRedis.GetVersionedStore[scenarioGeneratorModel.Scenario](&cfg.Redis, clientDBNames.ScenariosDBName, ScenarioRefreshInterval)

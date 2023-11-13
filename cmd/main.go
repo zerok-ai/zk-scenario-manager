@@ -72,6 +72,13 @@ func main() {
 	if err != nil {
 		zkLogger.Info(LogTag, "Failed to start UPIDToServiceMapWorker")
 	}
+
+	workloadKeyHandler, err := timedWorkers.NewWorkloadKeyHandler(&cfg, scenarioManager.GetScenarioStore())
+	if err != nil {
+		zkLogger.Info(LogTag, "Failed to start workloadKeyHandler")
+	}
+	defer workloadKeyHandler.Close()
+
 	defer upidToServiceWorker.Close()
 
 	if err = newApp().Listen(":"+cfg.Server.Port, configurator); err != nil {
