@@ -13,7 +13,6 @@ import (
 	ticker "github.com/zerok-ai/zk-utils-go/ticker"
 	"scenario-manager/config"
 	typedef "scenario-manager/internal"
-	"scenario-manager/internal/filters"
 	"scenario-manager/internal/stores"
 	tracePersistence "scenario-manager/internal/tracePersistence/service"
 	"sort"
@@ -157,7 +156,7 @@ func (scenarioProcessor *ScenarioProcessor) processScenario(scenario *model.Scen
 	namesOfAllSets, lastWorkloadSetsToProcess := scenarioProcessor.getWorkLoadSetsToProcess(scenario)
 
 	// evaluate scenario and get all traceIds
-	allTraceIds := filters.NewTraceEvaluator(scenarioProcessor.cfg, scenario, scenarioProcessor.traceStore, namesOfAllSets, filters.TTLForScenarioSets).EvalScenario()
+	allTraceIds := NewTraceEvaluator(scenarioProcessor.cfg, scenario, scenarioProcessor.traceStore, namesOfAllSets, TTLForScenarioSets).EvalScenario()
 	if allTraceIds == nil || len(allTraceIds) == 0 {
 		zkLogger.Info(LoggerTag, "No traces satisfying the scenario")
 	}
