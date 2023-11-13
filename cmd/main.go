@@ -11,6 +11,7 @@ import (
 	"os"
 	"scenario-manager/config"
 	sm "scenario-manager/internal/scenarioManager"
+	"scenario-manager/internal/timedWorkers"
 	"scenario-manager/internal/tracePersistence/repository"
 	"scenario-manager/internal/tracePersistence/service"
 	"strconv"
@@ -71,6 +72,13 @@ func main() {
 		DisablePathCorrection: true,
 		LogLevel:              cfg.LogsConfig.Level,
 	})
+
+	// Start all timed workers
+	upidToServiceWorker, err := timedWorkers.NewUPIDToServiceMapWorker(cfg)
+	if err != nil {
+		zkLogger.Info(LogTag, "Failed to start UPIDToServiceMapWorker")
+	}
+	defer upidToServiceWorker.Close()
 
 	if err = newApp().Listen(":"+cfg.Server.Port, configurator); err != nil {
 		panic(err)
