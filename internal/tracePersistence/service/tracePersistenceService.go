@@ -16,6 +16,8 @@ type TracePersistenceService interface {
 	SaveErrors([]model.ErrorData) *zkErrors.ZkError
 	SaveEBPFData([]model.Span) *zkErrors.ZkError
 	Close() error
+	UpdateIsRootSpan(data []model.Span)
+	SaveSpan(data []model.Span) *zkErrors.ZkError
 }
 
 func NewScenarioPersistenceService(repo repository.TracePersistenceRepo, obfuscate bool) TracePersistenceService {
@@ -138,5 +140,43 @@ func (s tracePersistenceService) SaveEBPFData(data []model.Span) *zkErrors.ZkErr
 		return &zkErr
 	}
 
+	return nil
+}
+
+func (s tracePersistenceService) UpdateIsRootSpan(data []model.Span) {
+	if len(data) == 0 {
+		zkLogger.Error(LogTag, "Empty span list for updating root span")
+	}
+
+	spanTableDtoList := make([]dto.SpanTableDto, 0)
+	for _, spanData := range data {
+		spanTableDto := dto.SpanTableDto{TraceID: spanData.TraceID, SpanID: spanData.SpanID, IsRoot: spanData.IsRoot}
+		spanTableDtoList = append(spanTableDtoList, spanTableDto)
+	}
+
+	s.repo.UpdateIsRootSpan(spanTableDtoList)
+}
+
+func (s tracePersistenceService) SaveSpan(data []model.Span) *zkErrors.ZkError {
+	if len(data) == 0 {
+		zkLogger.Error(LogTag, "Empty span list for saving span")
+		zkErr := zkErrors.ZkErrorBuilder{}.Build(zkErrors.ZkErrorBadRequest, nil)
+		return &zkErr
+	}
+
+	spanTableDtoList := make([]dto.SpanTableDto, 0)
+	for _, spanData := range data {
+		spanTableDto := dto.SpanToSpanDto(spanData, spanData.TraceID)
+		spanTableDtoList = append(spanTableDtoList, spanTableDto)
+	}
+
+	err := s.repo.SaveSpan(spanTableDtoList)
+	if err != nil {
+		zkLogger.Error(LogTag, "Failed to save span", err)
+		zkErr := zkErrors.ZkErrorBuilder{}.Build(zkErrors.ZkErrorDbError, nil)
+		return &zkErr
+	}
+
+	zkLogger.Info(LogTag, "Successfully saved span")
 	return nil
 }

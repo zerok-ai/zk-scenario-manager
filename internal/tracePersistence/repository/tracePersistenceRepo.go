@@ -14,6 +14,7 @@ const (
 	UpsertIssueQuery       = "INSERT INTO issue (issue_hash, issue_title, scenario_id, scenario_version) VALUES ($1, $2, $3, $4) ON CONFLICT (issue_hash) DO NOTHING"
 	UpsertIncidentQuery    = "INSERT INTO incident (trace_id, issue_hash, incident_collection_time) VALUES ($1, $2, $3) ON CONFLICT (issue_hash, trace_id) DO NOTHING"
 	UpsertSpanQuery        = "INSERT INTO span (trace_id, parent_span_id, span_id, span_name, is_root, kind, start_time, latency, source, destination, workload_id_list, protocol, issue_hash_list, request_payload_size, response_payload_size, method, route, scheme, path, query, status, username, source_ip, destination_ip, service_name, errors, span_attributes, resource_attributes, scope_attributes, has_raw_data) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30) ON CONFLICT (trace_id, span_id) DO NOTHING"
+	UpdateIsRootSpanQuery  = "UPDATE span SET is_root = $1 WHERE trace_id=$2 AND span_id=$3"
 	UpsertSpanRawDataQuery = "INSERT INTO span_raw_data (trace_id, span_id, req_headers, resp_headers, is_truncated, req_body, resp_body) VALUES ($1, $2, $3, $4, $5, $6, $7) ON CONFLICT (trace_id, span_id) DO UPDATE SET req_headers = excluded.req_headers, resp_headers = excluded.resp_headers, is_truncated = excluded.is_truncated, req_body = excluded.req_body, resp_body = excluded.resp_body"
 	UpdateWorkloadIdList   = "UPDATE span SET workload_id_list = ARRAY(SELECT DISTINCT UNNEST(workload_id_list || $1))WHERE trace_id=$2 AND span_id=$3"
 )
@@ -25,6 +26,8 @@ type TracePersistenceRepo interface {
 	SaveErrors(errors []dto.ErrorsDataTableDto) error
 	SaveEBPFData(rawData []dto.SpanRawDataTableDto, list []dto.SpanTableDto) error
 	Close() error
+	UpdateIsRootSpan(data []dto.SpanTableDto)
+	SaveSpan(data []dto.SpanTableDto) error
 }
 
 type tracePersistenceRepo struct {
@@ -164,6 +167,43 @@ func (z tracePersistenceRepo) SaveEBPFData(rawData []dto.SpanRawDataTableDto, li
 	}
 	tx.Commit()
 	return nil
+}
+
+func (z tracePersistenceRepo) UpdateIsRootSpan(data []dto.SpanTableDto) {
+	stmt := z.dbRepo.CreateStatement(UpdateIsRootSpanQuery)
+	for _, v := range data {
+		_, err := z.dbRepo.Update(stmt, []any{v.IsRoot, v.TraceID, v.SpanID})
+		if err != nil {
+			zkLogger.Error(LogTag, "Error in update is root span for traceId and spanId", v.TraceID, v.SpanID, err)
+		}
+	}
+}
+
+func (z tracePersistenceRepo) SaveSpan(data []dto.SpanTableDto) error {
+	tx, err := z.dbRepo.CreateTransaction()
+	if err != nil {
+		zkLogger.Info(LogTag, "Error Creating transaction")
+		return err
+	}
+
+	spanTableData := make([]interfaces.DbArgs, 0)
+	uniqueSpans := make(map[string]bool)
+	for _, v := range data {
+		key := v.TraceID + v.SpanID
+		if _, ok := uniqueSpans[key]; !ok {
+			uniqueSpans[key] = true
+			spanTableData = append(spanTableData, v)
+		}
+	}
+
+	err = bulkUpsert(tx, z.dbRepo, UpsertSpanQuery, spanTableData)
+	if err != nil {
+		zkLogger.Error(LogTag, "Error in bulk upsert for span table", err)
+		return err
+	}
+
+	tx.Rollback()
+	return err
 }
 
 //func doBulkInsertForTraceList(tx *sql.Tx, dbRepo sqlDB.DatabaseRepo, issueData, traceData, span, spanRawData []interfaces.DbArgs) error {
