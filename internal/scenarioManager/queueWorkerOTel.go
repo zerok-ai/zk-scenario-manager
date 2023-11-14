@@ -75,6 +75,8 @@ func (worker *QueueWorkerOTel) Close() {
 
 func (worker *QueueWorkerOTel) handleMessage(oTelMessage OTELTraceMessage) {
 
+	zkLogger.DebugF(LoggerTag, "oTelWorker %v got a message", worker.id)
+
 	// 1. Collect span relation and span data for the traceIDs
 	tracesFromOTelStore := worker.getDataFromOTelStore(oTelMessage.Traces)
 	if tracesFromOTelStore == nil || len(tracesFromOTelStore) == 0 {

@@ -124,6 +124,8 @@ func (worker *QueueWorkerEBPF) collectHTTPRawData(traceIds []string, startTime s
 }
 
 func (worker *QueueWorkerEBPF) Consume(delivery rmq.Delivery) {
+
+	zkLogger.DebugF(LoggerTag, "ebpf worker %v got a message", worker.id)
 	var traceMessage EBPFTraceMessage
 	if err := json.Unmarshal([]byte(delivery.Payload()), &traceMessage); err != nil {
 		// handle json error

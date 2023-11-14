@@ -184,7 +184,7 @@ func (scenarioProcessor *ScenarioProcessor) processScenario(scenario *model.Scen
 	scenarioProcessor.traceStore.SetExpiryForSet(setName, TTLForScenarioSets)
 
 	// publish all traceIds to OTel queue for processing
-	message := OTELTraceMessage{Traces: allTraceIds, ProducerId: scenarioProcessor.id}
+	message := OTELTraceMessage{Scenario: *scenario, Traces: allTraceIds, ProducerId: scenarioProcessor.id}
 	err = scenarioProcessor.oTelProducer.PublishTracesToQueue(message)
 	if err != nil {
 		return
