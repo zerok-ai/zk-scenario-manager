@@ -7,11 +7,8 @@ import (
 	zkLogger "github.com/zerok-ai/zk-utils-go/logs"
 	"github.com/zerok-ai/zk-utils-go/storage/redis/clientDBNames"
 	"github.com/zerok-ai/zk-utils-go/storage/redis/config"
+	"log"
 	"time"
-)
-
-const (
-	queueTag = "Scenario_Manager_Queue"
 )
 
 type TraceQueue struct {
@@ -24,11 +21,11 @@ func (t TraceQueue) Close() {
 }
 
 func GetTraceProducer(redisConfig config.RedisConfig, name string) (*TraceQueue, error) {
-	return initialize(redisConfig, name)
+	return initialize(redisConfig, "producer_"+name, name)
 }
 
 func GetTraceConsumer(redisConfig config.RedisConfig, consumer rmq.Consumer, name string) (*TraceQueue, error) {
-	queue, err := initialize(redisConfig, name)
+	queue, err := initialize(redisConfig, "consumer_"+name, name)
 	if err == nil {
 
 		// 1. Start consuming (yes, you start consuming before setting the consumer)
@@ -41,18 +38,21 @@ func GetTraceConsumer(redisConfig config.RedisConfig, consumer rmq.Consumer, nam
 			return nil, err
 		}
 	}
-	zkLogger.InfoF("Initialized the consumer: %s", name)
+	zkLogger.InfoF(LoggerTag, "Initialized the consumer: %s", name)
 	return queue, err
 }
 
-func initialize(redisConfig config.RedisConfig, queueName string) (*TraceQueue, error) {
+func initialize(redisConfig config.RedisConfig, queueTag, queueName string) (*TraceQueue, error) {
 	dbName := clientDBNames.FilteredTracesDBName
 
 	// 1. get the redis client
 	_redisClient := config.GetRedisConnection(dbName, redisConfig)
 
+	errChan := make(chan error)
+	go logErrors(queueTag, errChan)
+
 	// 2. get the connection and taskQueue
-	connection, err := rmq.OpenConnectionWithRedisClient(queueTag+"_"+queueName, _redisClient, nil)
+	connection, err := rmq.OpenConnectionWithRedisClient(queueTag, _redisClient, errChan)
 	if err != nil {
 		return nil, err
 	}
@@ -64,6 +64,26 @@ func initialize(redisConfig config.RedisConfig, queueName string) (*TraceQueue, 
 	// 3. create the TraceQueue
 	telQueue := TraceQueue{redisClient: _redisClient, taskQueue: queue}
 	return &telQueue, nil
+}
+
+func logErrors(name string, errChan <-chan error) {
+	for e := range errChan {
+		switch err := e.(type) {
+		case *rmq.HeartbeatError:
+			if err.Count == rmq.HeartbeatErrorLimit {
+				log.Print(name, " heartbeat error (limit): ", err)
+			} else {
+				log.Print(name, " heartbeat error: ", err)
+			}
+		case *rmq.ConsumeError:
+			log.Print(name, " consume error: ", err)
+		case *rmq.DeliveryError:
+			log.Print(name, " delivery error: ", err.Delivery, err)
+		default:
+			log.Print(name, " other error: ", err)
+		}
+	}
+	zkLogger.Error(LoggerTag, "logErrors function exited")
 }
 
 func (t TraceQueue) PublishTracesToQueue(message any) error {

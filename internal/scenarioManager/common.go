@@ -17,8 +17,7 @@ const (
 
 	ScenarioRefreshInterval      = 20 * time.Minute
 	TTLForTransientSets          = 120 * time.Second
-	TTLForScenarioSets           = 5 * time.Minute
-	RateLimitTickerDuration      = time.Duration(60) * time.Second
+	TTLForScenarioSets           = 15 * time.Minute
 	batchSizeForRawDataCollector = 20
 	timeRangeForRawDataQuery     = "-5m" // -5m, -10m, -1h etc
 

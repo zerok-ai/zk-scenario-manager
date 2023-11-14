@@ -156,7 +156,9 @@ func (worker *QueueWorkerOTel) rateLimitIncidents(incidents []tracePersistenceMo
 		}
 
 		// add to savedIssuesCount
-		savedIssuesCount[issueHash] = savedCountPerIssue
+		if len(savedCountPerIssue) > 0 {
+			savedIssuesCount[issueHash] = savedCountPerIssue
+		}
 	}
 
 	// rate limit incidents

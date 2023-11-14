@@ -167,12 +167,6 @@ func (t TraceStore) deleteCurrentlyProcessingWorker(scenarioId, scenarioProcesso
 }
 
 func (t TraceStore) FinishedProcessingScenario(scenarioId, scenarioProcessorId, lastProcessedSets string) {
-
-	// set the Value of the last processed workload set
-	if lastProcessedSets != "" {
-		t.SetNameOfLastProcessedWorkloadSets(scenarioId, lastProcessedSets)
-	}
-
 	// remove the Key for currently processing worker
 	result := t.getCurrentlyProcessingWorker(scenarioId)
 	if result != scenarioProcessorId {
@@ -182,23 +176,6 @@ func (t TraceStore) FinishedProcessingScenario(scenarioId, scenarioProcessorId, 
 	if err != nil {
 		zkLogger.Error(LoggerTag, "Error deleting currently processing worker:", err)
 		return
-	}
-}
-
-func (t TraceStore) GetNameOfLastProcessedWorkloadSets(scenarioId string) string {
-	key := fmt.Sprintf("%s_%s", scenarioId, lastProcessedKeySuffix)
-	result, err := t.redisClient.Get(ctx, key).Result()
-	if err != nil {
-		result = ""
-	}
-	return result
-}
-
-func (t TraceStore) SetNameOfLastProcessedWorkloadSets(scenarioId, lastProcessedSets string) {
-	key := fmt.Sprintf("%s_%s", scenarioId, lastProcessedKeySuffix)
-	err := t.redisClient.Set(ctx, key, lastProcessedSets, 0).Err()
-	if err != nil {
-		zkLogger.Error(LoggerTag, "Error setting last processed workload set:", err)
 	}
 }
 
@@ -217,7 +194,7 @@ func (t TraceStore) GetAllKeysWithPrefixAndRegex(prefix, regex string) ([]string
 	iter := t.redisClient.Scan(ctx, 0, keyPattern, 0).Iterator()
 
 	// Compile the regex pattern
-	re := regexp.MustCompile(`^` + prefix + regex + `$`)
+	re := regexp.MustCompile(prefix + regex)
 
 	if err != nil {
 		zkLogger.Error(LoggerTag, "Error scanning keys:", err)

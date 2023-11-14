@@ -49,7 +49,7 @@ func GetQueueWorkerOTel(cfg config.AppConfigs, tps *tracePersistence.TracePersis
 
 	// oTel consumer and error store
 	var err error
-	worker.oTelConsumer, err = stores.GetTraceConsumer(cfg.Redis, &worker, oTelConsumerName)
+	worker.oTelConsumer, err = stores.GetTraceConsumer(cfg.Redis, &worker, oTelQueue)
 	if err != nil {
 		return nil
 	}
@@ -57,7 +57,7 @@ func GetQueueWorkerOTel(cfg config.AppConfigs, tps *tracePersistence.TracePersis
 	worker.errorStoreReader = GetLRUCacheStore(cfg.Redis, &worker.errorCacheSaveHooks, ctx)
 
 	// ebpf producer
-	worker.ebpfProducer, err = stores.GetTraceProducer(cfg.Redis, ebpfProducerName)
+	worker.ebpfProducer, err = stores.GetTraceProducer(cfg.Redis, ebpfQueue)
 	if err != nil {
 		return nil
 	}

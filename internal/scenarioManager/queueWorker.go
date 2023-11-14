@@ -6,11 +6,11 @@ import (
 )
 
 const (
-	oTelProducerName = "oTel_Producer"
-	oTelConsumerName = "oTel_Consumer"
+	oTelQueue        = "oTel"
+	oTelConsumerName = "oTel"
 
-	ebpfProducerName = "eBPF_Producer"
-	ebpfConsumerName = "eBPF_Consumer"
+	ebpfQueue        = "eBPF"
+	ebpfConsumerName = "eBPF"
 )
 
 type OTELTraceMessage struct {
