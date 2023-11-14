@@ -104,10 +104,6 @@ func (worker *QueueWorkerOTel) handleMessage(oTelMessage OTELTraceMessage) {
 	}
 
 	// 5. publish traces to ebpf queue
-	traceMessage := EBPFTraceMessage{
-		Scenario:   oTelMessage.Scenario,
-		ProducerId: worker.id,
-	}
 	tracesFromOTel := make([]TraceFromOTel, 0)
 	for _, incident := range newIncidentList {
 
@@ -124,7 +120,17 @@ func (worker *QueueWorkerOTel) handleMessage(oTelMessage OTELTraceMessage) {
 
 		tracesFromOTel = append(tracesFromOTel, trace)
 	}
-	traceMessage.Traces = tracesFromOTel
+
+	if len(tracesFromOTel) == 0 {
+		zkLogger.Debug(LoggerTag, "nothing to publish to ebpf queue")
+		return
+	}
+
+	traceMessage := EBPFTraceMessage{
+		Scenario:   oTelMessage.Scenario,
+		ProducerId: worker.id,
+		Traces:     tracesFromOTel,
+	}
 	err := worker.ebpfProducer.PublishTracesToQueue(traceMessage)
 	if err != nil {
 		zkLogger.Error(LoggerTag, "Error publishing traces to raw data queue", err)

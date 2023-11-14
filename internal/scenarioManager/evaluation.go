@@ -49,8 +49,7 @@ func NewTraceEvaluator(cfg config.AppConfigs, scenario *model.Scenario, traceSto
 func (te TraceEvaluator) EvalScenario() []typedef.TTraceid {
 	resultKey := te.evalFilter(te.scenario.Filter)
 	if resultKey == nil {
-		strError := fmt.Sprintf("No trace of interest for scenario: %v for scenario. Result key:%v doesn't exist", te.scenario.Id, *resultKey)
-		zkLogger.Info(LoggerTagEvaluation, strError)
+		zkLogger.InfoF(LoggerTagEvaluation, "No trace of interest for scenario: %v for scenario", te.scenario.Id)
 		return nil
 	}
 
@@ -64,10 +63,9 @@ func (te TraceEvaluator) getValidTracesForProcessing(traceSetForScenario string)
 	finalValueFromInputTraceSet := true
 
 	// remove all the already processed traces from the set of traces to process
-	match := fmt.Sprintf("%s_*_P_[0-9]+", te.scenario.Id)
-	keys, err := te.traceStore.GetAllKeys(match)
+	keys, err := te.traceStore.GetAllKeysWithPrefixAndRegex(te.scenario.Id+"_", `P_*`)
 	if err == nil || len(keys) > 0 {
-		processedTracesKey := fmt.Sprintf("%s_All_P_[0-9]+", te.scenario.Id)
+		processedTracesKey := fmt.Sprintf("%s_All_P_%d", te.scenario.Id, time.Now().UnixMilli())
 		ok := te.unionSets(keys, processedTracesKey)
 		if ok {
 			finalValueFromInputTraceSet = false

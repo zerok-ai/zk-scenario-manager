@@ -64,8 +64,7 @@ func (te TraceEvaluator) getValidTracesForProcessing(traceSetForScenario string)
 	finalValueFromInputTraceSet := true
 
 	// remove all the already processed traces from the set of traces to process
-	match := fmt.Sprintf("%s_*_P_[0-9]+", te.scenario.Id)
-	keys, err := te.traceStore.GetAllKeys(match)
+	keys, err := te.traceStore.GetAllKeysWithPrefixAndRegex(te.scenario.Id+"_", `*_P_[0-9]+`)
 	if err == nil || len(keys) > 0 {
 		processedTracesKey := fmt.Sprintf("%s_All_P_[0-9]+", te.scenario.Id)
 		ok := te.unionSets(keys, processedTracesKey)
@@ -96,7 +95,7 @@ func (te TraceEvaluator) evalFilter(f model.Filter) *string {
 		// shortlist the sets matching the workloadID prefix
 		matchingSets := matchPrefixesButNotEquals(*f.WorkloadIds, te.namesOfAllSets)
 
-		// loop on matchingSets and union them
+		// create a set per workload by doing union of all the discreet sets of a workload
 		workloadTraceSetNames = make([]string, 0)
 		for workloadId, sets := range matchingSets {
 			resultSetName := fmt.Sprintf("U_%s_%s", te.scenario.Id, workloadId)

@@ -150,6 +150,9 @@ func (scenarioProcessor *ScenarioProcessor) markProcessingEnd(scenario *model.Sc
 
 func (scenarioProcessor *ScenarioProcessor) processScenario(scenario *model.Scenario) {
 
+	zkLogger.Debug(LoggerTag, "")
+	zkLogger.DebugF(LoggerTag, "Processing scenario: %v", scenario.Id)
+
 	// check if allowed to process current scenario
 	if !scenarioProcessor.traceStore.AllowedToProcessScenarioId(scenario.Id, scenarioProcessor.id, scenarioProcessingTime) {
 		zkLogger.Info(LoggerTag, "Another processor is already processing the scenario")
@@ -159,21 +162,34 @@ func (scenarioProcessor *ScenarioProcessor) processScenario(scenario *model.Scen
 	// get all the workload sets to process for the current scenario
 	namesOfAllSets, lastWorkloadSetsToProcess := scenarioProcessor.getWorkLoadSetsToProcess(scenario)
 
+	// mark the processing end for the current scenario
+	defer scenarioProcessor.markProcessingEnd(scenario, lastWorkloadSetsToProcess)
+
 	// evaluate scenario and get all traceIds
 	allTraceIds := NewTraceEvaluator(scenarioProcessor.cfg, scenario, scenarioProcessor.traceStore, namesOfAllSets, TTLForScenarioSets).EvalScenario()
 	if allTraceIds == nil || len(allTraceIds) == 0 {
 		zkLogger.Info(LoggerTag, "No traces satisfying the scenario")
+		return
 	}
+
+	setName := fmt.Sprintf("%s_P_%d", scenario.Id, time.Now().UnixMilli())
+	membersToAdd := make([]interface{}, 0)
+	for _, traceId := range allTraceIds {
+		membersToAdd = append(membersToAdd, string(traceId))
+	}
+	err := scenarioProcessor.traceStore.Add(setName, membersToAdd)
+	if err != nil {
+		zkLogger.DebugF(LoggerTag, "Error marking traceIds as processed in set %s : %v", setName, err)
+	}
+	scenarioProcessor.traceStore.SetExpiryForSet(setName, TTLForScenarioSets)
 
 	// publish all traceIds to OTel queue for processing
 	message := OTELTraceMessage{Traces: allTraceIds, ProducerId: scenarioProcessor.id}
-	err := scenarioProcessor.oTelProducer.PublishTracesToQueue(message)
+	err = scenarioProcessor.oTelProducer.PublishTracesToQueue(message)
 	if err != nil {
 		return
 	}
 
-	// mark the processing end for the current scenario
-	scenarioProcessor.markProcessingEnd(scenario, lastWorkloadSetsToProcess)
 }
 
 // getWorkLoadSetsToProcess gets all the workload sets to process for the current scenario
@@ -189,7 +205,7 @@ func (scenarioProcessor *ScenarioProcessor) getWorkLoadSetsToProcess(scenario *m
 	for workloadId, _ := range *scenario.Workloads {
 
 		//	 get all the sets from redis with the workloadId prefix
-		setNames, err := scenarioProcessor.traceStore.GetAllKeys(workloadId + "_[0-9]+")
+		setNames, err := scenarioProcessor.traceStore.GetAllKeysWithPrefixAndRegex(workloadId+"_", `[0-9]+$`)
 		if err != nil {
 			zkLogger.DebugF(LoggerTag, "Error getting all keys from redis for workloadId: %v - %v", workloadId, err)
 			continue
@@ -212,13 +228,17 @@ func (scenarioProcessor *ScenarioProcessor) getWorkLoadSetsToProcess(scenario *m
 		// ignore the empty elements in the array till the first non-empty element is found
 		// continue to collect values and break the loop if an empty element is found
 		lastProcessedSetIndex, ok := processedWorkLoads[workloadId]
+		maxLoopCount := MAX_SUFFIX_COUNT
 		if !ok {
 			lastProcessedSetIndex = -1
+		} else {
+			// run the loop for max-1 as you have already processed one element in the last iteration
+			maxLoopCount -= 1
 		}
 
 		foundFirstElement := false
 		var lastSetName string
-		for i := 0; i < MAX_SUFFIX_COUNT; i++ {
+		for i := 0; i < maxLoopCount; i++ {
 			currentIndex := ((lastProcessedSetIndex + 1) + i) % MAX_SUFFIX_COUNT
 			value := allPossibleSets[currentIndex]
 			if value == "" {

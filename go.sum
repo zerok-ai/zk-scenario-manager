@@ -190,8 +190,8 @@ github.com/yuin/gopher-lua v1.1.0 h1:BojcDhfyDWgU2f2TOzYK/g5p2gxMrku8oupLDqlnSqE
 github.com/yuin/gopher-lua v1.1.0/go.mod h1:GBR0iDaNXjAgGg9zfCvksxSRnQx76gclCIb7kdAd1Pw=
 github.com/zerok-ai/zk-rawdata-reader v0.5.3 h1:XBbK4Dm7sI+fcsFFRnprrVQrNSkn1kCWF6aeVc/fusk=
 github.com/zerok-ai/zk-rawdata-reader v0.5.3/go.mod h1:GNFYev1p4/t9IoHMCX43/Yexc6K4j93to/kkcytIsFc=
-github.com/zerok-ai/zk-utils-go v0.5.15 h1:H7iBxWgkbdDCZ+regjNfE6pEf8AMs9SncXQx4ForyqE=
-github.com/zerok-ai/zk-utils-go v0.5.15/go.mod h1:rvHpUbscGLcD5VcY+31a0wNXuT7Ucj+7lxXT8sqvkDA=
+github.com/zerok-ai/zk-utils-go v0.5.17 h1:p60WaerS4KbMUb6q75D/bQ+LiHpf8pWbmbOXdmT0J8w=
+github.com/zerok-ai/zk-utils-go v0.5.17/go.mod h1:rvHpUbscGLcD5VcY+31a0wNXuT7Ucj+7lxXT8sqvkDA=
 golang.org/x/crypto v0.0.0-20190308221718-c2843e01d9a2/go.mod h1:djNgcEr1/C05ACkg1iLfiJU5Ep61QUkGW8qpdssI0+w=
 golang.org/x/crypto v0.0.0-20191011191535-87dc89f01550/go.mod h1:yigFU9vqHzYiE8UmvKecakEJjdnWj3jj499lnFckfCI=
 golang.org/x/crypto v0.0.0-20200622213623-75b288015ac9/go.mod h1:LzIPMQfyMNhhGPhUkYOs5KpL4U8rLKemX1yGLhDgUto=

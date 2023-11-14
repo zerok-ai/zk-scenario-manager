@@ -6,6 +6,7 @@ import (
 	zkLogger "github.com/zerok-ai/zk-utils-go/logs"
 	clientDBNames "github.com/zerok-ai/zk-utils-go/storage/redis/clientDBNames"
 	"github.com/zerok-ai/zk-utils-go/storage/redis/config"
+	"regexp"
 	"time"
 )
 
@@ -201,33 +202,50 @@ func (t TraceStore) SetNameOfLastProcessedWorkloadSets(scenarioId, lastProcessed
 	}
 }
 
-func (t TraceStore) GetAllKeys(match string) ([]string, error) {
-	var cursor uint64
+func (t TraceStore) GetAllKeysWithPrefixAndRegex(prefix, regex string) ([]string, error) {
+	//var cursor uint64
 	var allKeys []string
 	var err error
 
-	for {
-		var scanResult []string
-		scanResult, cursor, err = t.redisClient.Scan(ctx, cursor, match, 0).Result()
-		if err != nil {
-			zkLogger.Error(LoggerTag, "Error scanning keys:", err)
-			return nil, err
-		}
+	//var scanResult []string
+	//
+	//// Specify the key pattern
+	keyPattern := prefix + "*"
+	//scanResult, cursor, err = t.redisClient.Scan(ctx, cursor, keyPattern, 0).Result()
 
-		allKeys = append(allKeys, scanResult...)
+	// Use the SCAN command to get all keys matching the pattern
+	iter := t.redisClient.Scan(ctx, 0, keyPattern, 0).Iterator()
 
-		if cursor == 0 {
-			break
+	// Compile the regex pattern
+	re := regexp.MustCompile(`^` + prefix + regex + `$`)
+
+	if err != nil {
+		zkLogger.Error(LoggerTag, "Error scanning keys:", err)
+		return nil, err
+	}
+
+	// Iterate over the matched keys
+	for iter.Next(ctx) {
+		key := iter.Val()
+
+		// Check if the key matches the pattern
+		if matches := re.FindStringSubmatch(key); matches != nil {
+			allKeys = append(allKeys, key)
 		}
 	}
+
+	if err := iter.Err(); err != nil {
+		fmt.Printf("Error scanning keys: %v\n", err)
+	}
+
 	return allKeys, nil
 }
 
-func (t TraceStore) Add(setName string, key string) error {
+func (t TraceStore) Add(setName string, members []interface{}) error {
 	// set a Value in a set
-	_, err := t.redisClient.SAdd(ctx, setName, key).Result()
+	_, err := t.redisClient.SAdd(ctx, setName, members...).Result()
 	if err != nil {
-		zkLogger.ErrorF(LoggerTag, "Error setting the Key %s in set %s : %v\n", key, setName, err)
+		zkLogger.ErrorF(LoggerTag, "Error setting the Keys %v in set %s : %v\n", members, setName, err)
 	}
 	return err
 }
@@ -248,7 +266,7 @@ func (t TraceStore) GetAllValuesFromSet(setName string) ([]string, error) {
 
 func (t TraceStore) NewUnionSet(resultKey string, keys ...string) bool {
 
-	if !t.readyForSetAction(resultKey, keys...) {
+	if len(keys) == 0 || !t.readyForSetAction(resultKey, keys...) {
 		return false
 	}
 
