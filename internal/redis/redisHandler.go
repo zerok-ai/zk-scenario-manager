@@ -6,6 +6,7 @@ import (
 	"github.com/redis/go-redis/v9"
 	logger "github.com/zerok-ai/zk-utils-go/logs"
 	zkconfig "github.com/zerok-ai/zk-utils-go/storage/redis/config"
+	"strings"
 	"time"
 )
 
@@ -126,7 +127,7 @@ func (h *RedisHandler) RenameKeyWithTTL(oldKey string, newKey string, ttl time.D
 	// Use the RENAME command to rename the key.
 	_, err := h.RedisClient.Rename(h.ctx, oldKey, newKey).Result()
 	if err != nil {
-		if err == redis.Nil {
+		if strings.Contains(err.Error(), "no such key") {
 			logger.Debug(redisHandlerLogTag, "Key does not exist in redis ", oldKey)
 			return nil
 		}
