@@ -17,6 +17,8 @@ const (
 	upid_ticker_name = "upid_ticker"
 )
 
+var LoggerTag = "UPIDToServiceMapWorker"
+
 type UPIDToServiceMapWorker struct {
 	cfg             config.AppConfigs
 	vzReader        *vzReader.VzReader
@@ -47,12 +49,14 @@ func (tw *UPIDToServiceMapWorker) Close() {
 func (tw *UPIDToServiceMapWorker) populateUPIDToServiceMap() {
 	upidToServiceMapResponse, err := tw.vzReader.GetUPIDToServiceMap()
 	if err != nil {
+		logger.Error(LoggerTag, "Error while getting the upidToServiceMapResponse ", err)
 		return
 	}
 
 	existingUPIDToServiceMap, _ := tw.podDetailsStore.GetUPIDToServiceMap()
 	upidChangesMap := tw.getUPIDChangesMap(upidToServiceMapResponse.Results, existingUPIDToServiceMap)
-	if upidChangesMap == nil {
+	if upidChangesMap == nil || len(upidChangesMap) == 0 {
+		logger.Error(LoggerTag, "upidChangesMap is empty or nil")
 		return
 	}
 
@@ -67,6 +71,6 @@ func (tw *UPIDToServiceMapWorker) getUPIDChangesMap(upidToServiceMap []models.UP
 		}
 		upidChangesMap[item.UPID] = item.Service
 	}
-	logger.Debug("UPID changes map: %v", upidChangesMap)
+	logger.Debug(LoggerTag, "UPID changes map: %v", upidChangesMap)
 	return upidChangesMap
 }
