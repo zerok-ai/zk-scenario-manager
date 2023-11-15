@@ -32,7 +32,6 @@ func (t OTelDataHandler) Close() {
 
 func GetOTelStore(redisConfig config.RedisConfig) *OTelDataHandler {
 	dbName := clientDBNames.TraceDBName
-	zkLogger.Debug(LoggerTag, "GetOTelStore: config=", redisConfig, "dbName=", dbName, "dbID=", redisConfig.DBs[dbName])
 	_redisClient := config.GetRedisConnection(dbName, redisConfig)
 	return OTelDataHandler{redisClient: _redisClient}.initialize()
 }

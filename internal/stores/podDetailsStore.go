@@ -25,7 +25,6 @@ func (p PodDetailsStore) Close() {
 
 func GetPodDetailsStore(redisConfig config.RedisConfig) *PodDetailsStore {
 	dbName := clientDBNames.PodDetailsDBName
-	zkLogger.DebugF(LoggerTag, "GetTraceStore: redisConfig=%v", redisConfig)
 	redisHandler, err := redis.NewRedisHandler(&redisConfig, dbName)
 	if err != nil {
 		zkLogger.Error(LoggerTag, "Error while creating resource redis handler:", err)

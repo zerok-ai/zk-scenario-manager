@@ -128,7 +128,6 @@ func (h *RedisHandler) RenameKeyWithTTL(oldKey string, newKey string, ttl time.D
 	_, err := h.RedisClient.Rename(h.ctx, oldKey, newKey).Result()
 	if err != nil {
 		if strings.Contains(err.Error(), "no such key") {
-			logger.Debug(redisHandlerLogTag, "Key does not exist in redis ", oldKey)
 			return nil
 		}
 		return err

@@ -28,7 +28,6 @@ func (t TraceStore) Close() {
 
 func GetTraceStore(redisConfig config.RedisConfig, ttlForTransientSets time.Duration) *TraceStore {
 	dbName := clientDBNames.FilteredTracesDBName
-	zkLogger.DebugF(LoggerTag, "GetTraceStore: redisConfig=%v", redisConfig)
 	_redisClient := config.GetRedisConnection(dbName, redisConfig)
 	traceStore := TraceStore{redisClient: _redisClient, ttlForTransientSets: ttlForTransientSets}.initialize()
 	return traceStore

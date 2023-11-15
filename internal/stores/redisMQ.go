@@ -7,7 +7,6 @@ import (
 	zkLogger "github.com/zerok-ai/zk-utils-go/logs"
 	"github.com/zerok-ai/zk-utils-go/storage/redis/clientDBNames"
 	"github.com/zerok-ai/zk-utils-go/storage/redis/config"
-	"log"
 	"time"
 )
 
@@ -71,16 +70,16 @@ func logErrors(name string, errChan <-chan error) {
 		switch err := e.(type) {
 		case *rmq.HeartbeatError:
 			if err.Count == rmq.HeartbeatErrorLimit {
-				log.Print(name, " heartbeat error (limit): ", err)
+				zkLogger.Error(LoggerTag, name+" heartbeat error (limit): ", err)
 			} else {
-				log.Print(name, " heartbeat error: ", err)
+				zkLogger.Error(LoggerTag, name+" heartbeat error: ", err)
 			}
 		case *rmq.ConsumeError:
-			log.Print(name, " consume error: ", err)
+			zkLogger.Error(LoggerTag, name+" consume error: ", err)
 		case *rmq.DeliveryError:
-			log.Print(name, " delivery error: ", err.Delivery, err)
+			zkLogger.Error(LoggerTag, name+" delivery error: ", err.Delivery, err)
 		default:
-			log.Print(name, " other error: ", err)
+			zkLogger.Error(LoggerTag, name+" other error: ", err)
 		}
 	}
 	zkLogger.Error(LoggerTag, "logErrors function exited")
