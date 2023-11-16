@@ -27,7 +27,7 @@ scenarioConfig:
   processingIntervalInSeconds: 10
   ebpfSchemaVersion: "0.1.1-alpha"
   vzCloudAddr: "px.loadcloud01.getanton.com:443"
-  vzClusterId: "81fd3738-5cf2-4006-b45f-64f854d0c986"
+  vzClusterId: "e38ee038-32af-43a0-8e1b-510d31b0e8c9"
   vzClusterKey: "px-api-f8d4bc05-381d-469b-ab54-82b7128e58ee"
 server:
   host: localhost

@@ -107,9 +107,8 @@ func (s tracePersistenceService) SaveEBPFData(data []model.Span) *zkErrors.ZkErr
 	sanitizedSpanData := make([]model.Span, 0)
 	for _, spanRawData := range data {
 		if !utils.IsEmpty(spanRawData.ReqBody) || !utils.IsEmpty(spanRawData.RespBody) || !utils.IsEmpty(spanRawData.ReqHeaders) || !utils.IsEmpty(spanRawData.RespHeaders) {
-			continue
+			sanitizedSpanData = append(sanitizedSpanData, spanRawData)
 		}
-		sanitizedSpanData = append(sanitizedSpanData, spanRawData)
 	}
 
 	if len(sanitizedSpanData) == 0 {
@@ -129,8 +128,11 @@ func (s tracePersistenceService) SaveEBPFData(data []model.Span) *zkErrors.ZkErr
 		}
 
 		rawDataTableDtoList = append(rawDataTableDtoList, rawDataDto)
-		spanTableDto := dto.SpanTableDto{TraceID: spanData.TraceID, SpanID: spanData.SpanID, WorkloadIDList: spanData.WorkloadIDList}
-		spanTableDtoList = append(spanTableDtoList, spanTableDto)
+
+		if len(spanData.WorkloadIDList) > 0 {
+			spanTableDto := dto.SpanTableDto{TraceID: spanData.TraceID, SpanID: spanData.SpanID, WorkloadIDList: spanData.WorkloadIDList}
+			spanTableDtoList = append(spanTableDtoList, spanTableDto)
+		}
 	}
 
 	err := s.repo.SaveEBPFData(rawDataTableDtoList, spanTableDtoList)

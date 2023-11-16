@@ -139,8 +139,8 @@ func (z tracePersistenceRepo) SaveEBPFData(rawData []dto.SpanRawDataTableDto, li
 		return err
 	}
 
-	stmt := z.dbRepo.CreateStatement(UpdateWorkloadIdList)
 	for i, v := range list {
+		stmt := z.dbRepo.CreateStatement(UpdateWorkloadIdList)
 		result, err := z.dbRepo.Update(stmt, []any{list[i].WorkloadIDList, v.TraceID, v.SpanID})
 		if err != nil {
 			zkLogger.Error(LogTag, "Error in bulk upsert for raw data table", err)

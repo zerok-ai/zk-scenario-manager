@@ -51,7 +51,7 @@ func (worker *QueueWorkerEBPF) Close() {
 	worker.traceRawDataCollector.Close()
 }
 
-func (worker *QueueWorkerEBPF) handleMessage(traceMessage EBPFTraceMessage) {
+func (worker *QueueWorkerEBPF) handleMessage(traceMessage EBPFTraceMessage) bool {
 
 	timeRange := timeRangeForRawDataQuery
 
@@ -65,40 +65,83 @@ func (worker *QueueWorkerEBPF) handleMessage(traceMessage EBPFTraceMessage) {
 	spansFromEBPFStore := worker.collectHTTPRawData(traceIds, timeRange)
 	zkLogger.InfoF(LoggerTag, "Number of spans with HTTP raw data: %v", len(spansFromEBPFStore))
 
-	spansToUpdateInOTel := make([]tracePersistenceModel.Span, 0)
+	spansForUpdatingEBPFData := make([]tracePersistenceModel.Span, 0)
+	spansToAddInOTel := make([]tracePersistenceModel.Span, 0)
+	spansUpdateIsRootOTel := make([]tracePersistenceModel.Span, 0)
 
 	for _, spanWithRawDataFromPixie := range spansFromEBPFStore {
 
-		traceId := spanWithRawDataFromPixie.TraceId
-		spanId := spanWithRawDataFromPixie.SpanId
+		traceIdEbpfSpan := spanWithRawDataFromPixie.TraceId
+		spanIdEbpfSpan := spanWithRawDataFromPixie.SpanId
 
-		trace, ok := tracesFromOTel[traceId]
+		traceOTel, ok := tracesFromOTel[traceIdEbpfSpan]
 		if !ok {
 			continue
 		}
 
-		if trace.RootSpanId != "" && trace.RootSpanKind == SERVER && trace.RootSpanParent == spanId {
-			spansToUpdateInOTel = append(spansToUpdateInOTel, worker.getSpanForPersistence(spanWithRawDataFromPixie))
+		spanForPersistence := worker.getSpanForPersistence(spanWithRawDataFromPixie)
+
+		// MISSING CLIENT SPAN FOR THE ROOT SERVER SPAN:
+		//----------------------------------------------
+		// there could be new span present in the ebpf store which is not present in the oTel store. This is the span
+		// which is the root span for the trace. It should be of the type `client` while the current root span in the
+		// oTel store is of type `server`. We need to update the root span in the oTel store to be of type client.
+		// This client was not captured by oTel because it didn't have the trace id in the request header. The traceId
+		// was added later in the header by oTel and hence EBPF layer captured it while the response was going out.
+		if traceOTel.RootSpanId != "" && traceOTel.RootSpanKind == SERVER && traceOTel.RootSpanParent == spanIdEbpfSpan {
+
+			// mark the current root span as non-root
+			spansUpdateIsRootOTel = append(spansUpdateIsRootOTel, *worker.getSpanForUpdateRoot(traceIdEbpfSpan, traceOTel.RootSpanId, false))
+
+			// add the new span as root
+			spanForPersistence.IsRoot = true
+			spanForPersistence.Kind = CLIENT
+			spansToAddInOTel = append(spansToAddInOTel, spanForPersistence)
 		}
+
+		spansForUpdatingEBPFData = append(spansForUpdatingEBPFData, spanForPersistence)
 	}
 
-	//TODO: 1. save new spans 2. update existing spans so as to remove the isRoot flag
+	// save spans in trace persistence store
+	tps := *worker.tracePersistenceService
 
-	// store request-response headers and body
-	saveError := (*worker.tracePersistenceService).SaveEBPFData(spansToUpdateInOTel)
+	// a. save new spans
+	if len(spansToAddInOTel) > 0 {
+		tps.SaveSpan(spansToAddInOTel)
+	} else {
+		zkLogger.Info(LoggerTag, "No new spans to save")
+	}
+
+	// b. update existing spans to remove the isRoot flag
+	if len(spansUpdateIsRootOTel) > 0 {
+		tps.UpdateIsRootSpan(spansUpdateIsRootOTel)
+	} else {
+		zkLogger.Info(LoggerTag, "No new root spans to update")
+	}
+
+	// c. store request-response headers and body
+	saveError := tps.SaveEBPFData(spansForUpdatingEBPFData)
 	if saveError != nil {
 		zkLogger.Error(LoggerTag, "Error saving EBPF data", saveError)
-		return
+		return false
 	}
+
+	return true
+}
+
+func (worker *QueueWorkerEBPF) getSpanForUpdateRoot(traceId, spanId string, isRoot bool) *tracePersistenceModel.Span {
+	oTelSpanForPersistence := tracePersistenceModel.Span{
+		TraceID: traceId,
+		SpanID:  spanId,
+		IsRoot:  isRoot,
+	}
+	return &oTelSpanForPersistence
 }
 
 func (worker *QueueWorkerEBPF) getSpanForPersistence(ebpfSpan models.HttpRawDataModel) tracePersistenceModel.Span {
 	oTelSpanForPersistence := &tracePersistenceModel.Span{
-		TraceID:      ebpfSpan.TraceId,
-		SpanID:       ebpfSpan.SpanId,
-		IsRoot:       true,
-		ParentSpanID: "",
-		Kind:         CLIENT,
+		TraceID: ebpfSpan.TraceId,
+		SpanID:  ebpfSpan.SpanId,
 	}
 	oTelSpanForPersistence = enrichSpanFromHTTPRawData(oTelSpanForPersistence, &ebpfSpan, worker.eBPFSchemaVersion)
 
@@ -137,7 +180,13 @@ func (worker *QueueWorkerEBPF) Consume(delivery rmq.Delivery) {
 
 	// perform task
 	zkLogger.DebugF(LoggerTag, "got message %v", traceMessage)
-	worker.handleMessage(traceMessage)
+	handled := worker.handleMessage(traceMessage)
+	if !handled {
+		if err := delivery.Reject(); err != nil {
+			// not sure what to do here
+		}
+		return
+	}
 
 	if err := delivery.Ack(); err != nil {
 		// handle ack error
