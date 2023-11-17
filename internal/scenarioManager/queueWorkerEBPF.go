@@ -2,6 +2,7 @@ package scenarioManager
 
 import (
 	"encoding/json"
+	"fmt"
 	"github.com/adjust/rmq/v5"
 	"github.com/google/uuid"
 	"github.com/zerok-ai/zk-rawdata-reader/vzReader"
@@ -11,6 +12,7 @@ import (
 	"scenario-manager/internal/stores"
 	tracePersistenceModel "scenario-manager/internal/tracePersistence/model"
 	tracePersistence "scenario-manager/internal/tracePersistence/service"
+	"time"
 )
 
 type QueueWorkerEBPF struct {
@@ -18,6 +20,7 @@ type QueueWorkerEBPF struct {
 	ebpfConsumer            *stores.TraceQueue
 	traceRawDataCollector   *vzReader.VzReader
 	eBPFSchemaVersion       string
+	traceStore              *stores.TraceStore
 	tracePersistenceService *tracePersistence.TracePersistenceService
 }
 
@@ -30,6 +33,7 @@ func GetQueueWorkerEBPF(cfg config.AppConfigs, tps *tracePersistence.TracePersis
 		id:                      "E" + uuid.New().String(),
 		eBPFSchemaVersion:       cfg.ScenarioConfig.EBPFSchemaVersion,
 		tracePersistenceService: tps,
+		traceStore:              stores.GetTraceStore(cfg.Redis, TTLForTransientSets),
 	}
 	worker.traceRawDataCollector, err = GetNewVZReader(cfg)
 	if err != nil {
@@ -55,12 +59,15 @@ func (worker *QueueWorkerEBPF) handleMessage(traceMessage EBPFTraceMessage) bool
 
 	timeRange := timeRangeForRawDataQuery
 
-	tracesFromOTel := make(map[string]TraceFromOTel)
+	// get all the traceIds from the message and put them in a map and an array for processing
 	traceIds := make([]string, 0)
+	tracesFromOTel := make(map[string]TraceFromOTel)
 	for _, trace := range traceMessage.Traces {
 		traceIds = append(traceIds, trace.TraceId)
 		tracesFromOTel[trace.TraceId] = trace
 	}
+
+	traceIds = worker.getUnprocessedTraces(traceIds)
 
 	spansFromEBPFStore := worker.collectHTTPRawData(traceIds, timeRange)
 	zkLogger.InfoF(LoggerTag, "Number of spans with HTTP raw data: %v", len(spansFromEBPFStore))
@@ -125,6 +132,8 @@ func (worker *QueueWorkerEBPF) handleMessage(traceMessage EBPFTraceMessage) bool
 		zkLogger.Error(LoggerTag, "Error saving EBPF data", saveError)
 		return false
 	}
+
+	worker.setProcessedTraces(traceIds)
 
 	return true
 }
@@ -191,4 +200,53 @@ func (worker *QueueWorkerEBPF) Consume(delivery rmq.Delivery) {
 	if err := delivery.Ack(); err != nil {
 		// handle ack error
 	}
+}
+
+func (worker *QueueWorkerEBPF) getUnprocessedTraces(tracesToProcess []string) []string {
+
+	// mark all traceIds as processed in redis
+	tempSetName := fmt.Sprintf("ebpf_temp_%s_%d", worker.id, time.Now().UnixMilli())
+	defer worker.traceStore.DeleteSet([]string{tempSetName})
+
+	tracesToProcessI := make([]interface{}, 0)
+	for _, traceId := range tracesToProcess {
+		tracesToProcessI = append(tracesToProcessI, traceId)
+	}
+
+	// create this set with all the traceIds
+	if err := worker.traceStore.Add(tempSetName, tracesToProcessI); err != nil {
+		return tracesToProcess
+	}
+
+	// remove all the already processed traces from the set of traces to process
+	if keys, err := worker.traceStore.GetAllKeysWithPrefixAndRegex("ebpf_P", ".*"); err == nil || len(keys) > 0 {
+		processedTracesKey := fmt.Sprintf("ebpf_All_P_%s", worker.id)
+		if ok := worker.traceStore.NewUnionSet(processedTracesKey, keys...); ok {
+			// delete the temporary set after the completing of this process
+			defer worker.traceStore.DeleteSet([]string{tempSetName})
+			tracesToProcess = worker.traceStore.GetValuesAfterSetDiff(tempSetName, processedTracesKey)
+		}
+	}
+
+	return tracesToProcess
+}
+
+func (worker *QueueWorkerEBPF) getRedisSetOfAllProcessedEBPFTraces(tracesProcessed []string) {
+
+}
+
+func (worker *QueueWorkerEBPF) setProcessedTraces(tracesProcessed []string) {
+
+	// mark all traceIds as processed in redis
+	setName := fmt.Sprintf("ebpf_P_%s_%d", worker.id, time.Now().UnixMilli())
+
+	membersToAdd := make([]interface{}, 0)
+	for _, traceId := range tracesProcessed {
+		membersToAdd = append(membersToAdd, string(traceId))
+	}
+	err := worker.traceStore.Add(setName, membersToAdd)
+	if err != nil {
+		zkLogger.DebugF(LoggerTag, "Error marking traceIds as processed in set %s : %v", setName, err)
+	}
+	worker.traceStore.SetExpiryForSet(setName, TTLForScenarioSets)
 }

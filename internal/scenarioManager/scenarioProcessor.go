@@ -171,6 +171,7 @@ func (scenarioProcessor *ScenarioProcessor) processScenario(scenario *model.Scen
 		return
 	}
 
+	// mark all traceIds as processed in redis
 	setName := fmt.Sprintf("%s_P_%d", scenario.Id, time.Now().UnixMilli())
 	membersToAdd := make([]interface{}, 0)
 	for _, traceId := range allTraceIds {

@@ -226,15 +226,6 @@ func (t TraceStore) Add(setName string, members []interface{}) error {
 	return err
 }
 
-func (t TraceStore) GetValuesAfterSetDiff(setLeft, setRight string) []string {
-	// Calculate the set difference: setLeft - setRight
-	result, err := t.redisClient.SDiff(ctx, setLeft, setRight).Result()
-	if err != nil {
-		zkLogger.ErrorF(LoggerTag, "Failed to calculate the set difference: %v", err)
-	}
-	return result
-}
-
 func (t TraceStore) GetAllValuesFromSet(setName string) ([]string, error) {
 	// Get all members of a set
 	return t.redisClient.SMembers(ctx, setName).Result()
@@ -277,6 +268,15 @@ func (t TraceStore) NewIntersectionSet(resultKey string, keys ...string) bool {
 	}
 	return false
 
+}
+
+func (t TraceStore) GetValuesAfterSetDiff(setLeft, setRight string) []string {
+	// Calculate the set difference: setLeft - setRight
+	result, err := t.redisClient.SDiff(ctx, setLeft, setRight).Result()
+	if err != nil {
+		zkLogger.ErrorF(LoggerTag, "Failed to calculate the set difference: %v", err)
+	}
+	return result
 }
 
 func (t TraceStore) readyForSetAction(resultSet string, keys ...string) bool {
