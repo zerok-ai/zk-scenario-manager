@@ -1,15 +1,12 @@
 package scenarioManager
 
 import (
-	"crypto/sha1"
-	"encoding/hex"
 	"fmt"
 	zkLogger "github.com/zerok-ai/zk-utils-go/logs"
 	"github.com/zerok-ai/zk-utils-go/scenario/model"
 	"scenario-manager/config"
 	typedef "scenario-manager/internal"
 	"scenario-manager/internal/stores"
-	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -62,9 +59,9 @@ func (te TraceEvaluator) getValidTracesForProcessing(traceSetForScenario string)
 	finalValueFromInputTraceSet := true
 
 	// remove all the already processed traces from the set of traces to process
-	keys, err := te.traceStore.GetAllKeysWithPrefixAndRegex(te.scenario.Id+"_", `P_[0-9]+$`)
+	keys, err := te.traceStore.GetAllKeysWithPrefixAndRegex(SetPrefixOTelProcessed+"_"+te.scenario.Id, `_[0-9]+$`)
 	if err == nil || len(keys) > 0 {
-		processedTracesKey := fmt.Sprintf("%s_All_P_%d", te.scenario.Id, time.Now().UnixMilli())
+		processedTracesKey := fmt.Sprintf("%s_%s_%d", SetPrefixOTelProcessedAggregate, te.scenario.Id, time.Now().UnixMilli())
 		ok := te.unionSets(keys, processedTracesKey)
 		if ok {
 			finalValueFromInputTraceSet = false
@@ -96,7 +93,7 @@ func (te TraceEvaluator) evalFilter(f model.Filter) *string {
 		// loop on matchingSets and union them
 		workloadTraceSetNames = make([]string, 0)
 		for workloadId, sets := range matchingSets {
-			resultSetName := fmt.Sprintf("U_%s_%s", te.scenario.Id, workloadId)
+			resultSetName := fmt.Sprintf("%s_%s_%s_%d", SetPrefixWorkload, te.scenario.Id, workloadId, time.Now().UnixNano())
 			if te.unionSets(sets, resultSetName) {
 				workloadTraceSetNames = append(workloadTraceSetNames, resultSetName)
 			}
@@ -104,7 +101,8 @@ func (te TraceEvaluator) evalFilter(f model.Filter) *string {
 	} else if f.Type == model.FILTER {
 		workloadTraceSetNames = te.evalFilters(*f.Filters)
 	}
-	resultSetName := uniqueStringFromStringSet(f.Condition, workloadTraceSetNames)
+
+	resultSetName := fmt.Sprintf("%s_%s_%d", SetPrefixFilterResult, te.scenario.Id, time.Now().UnixNano())
 	if !te.evalCondition(f.Condition, workloadTraceSetNames, resultSetName) {
 		return nil
 	}
@@ -168,7 +166,7 @@ func (te TraceEvaluator) DeleteOldSets(sets []string, maxSetCount int) {
 			keysToDelete = append(keysToDelete, prevSetName)
 		}
 	}
-	te.traceStore.DeleteSet(keysToDelete)
+	te.traceStore.DeleteSets(keysToDelete)
 }
 
 func matchPrefixesButNotEquals(prefixes, keys []string) map[string][]string {
@@ -186,29 +184,4 @@ func matchPrefixesButNotEquals(prefixes, keys []string) map[string][]string {
 		}
 	}
 	return matchingSets
-}
-
-func uniqueStringFromStringSet(condition model.Condition, set []string) string {
-
-	// Copy the slice
-	copied := make([]string, len(set))
-	copy(copied, set)
-	sort.Strings(copied)
-
-	// Concatenate the strings
-	combined := strings.Join(copied, string(condition))
-	if len(copied) > 1 {
-		combined = "(" + combined + ")"
-	}
-	/**/
-	// Hash the combined string using SHA1 calculating hash. avoiding sha256 for performance reasons
-	hash := sha1.Sum([]byte(combined))
-
-	// Convert the hash to a hex string
-	hashString := hex.EncodeToString(hash[:])
-	/*/
-	hashString := combined
-	/**/
-
-	return hashString
 }

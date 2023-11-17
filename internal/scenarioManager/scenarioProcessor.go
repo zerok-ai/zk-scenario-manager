@@ -144,7 +144,38 @@ func (scenarioProcessor *ScenarioProcessor) findScenarioToProcess() *model.Scena
 }
 
 func (scenarioProcessor *ScenarioProcessor) markProcessingEnd(scenario *model.Scenario, processedWorkloadSets string) {
-	scenarioProcessor.traceStore.FinishedProcessingScenario(scenario.Id, scenarioProcessor.id, processedWorkloadSets)
+	scenarioProcessor.FinishedProcessingScenario(scenario.Id, scenarioProcessor.id, processedWorkloadSets)
+}
+
+func (scenarioProcessor *ScenarioProcessor) FinishedProcessingScenario(scenarioId, scenarioProcessorId, lastProcessedSets string) {
+	// remove the Key for currently processing worker
+	key := fmt.Sprintf("%s_%s", currentProcessingWorkerKeyPrefix, scenarioId)
+	result := scenarioProcessor.traceStore.GetValueForKey(key)
+	if result != scenarioProcessorId {
+		return
+	}
+	err := scenarioProcessor.traceStore.DeleteSets([]string{key})
+	if err != nil {
+		zkLogger.Error(LoggerTag, "Error deleting currently processing worker:", err)
+		return
+	}
+}
+
+func (scenarioProcessor *ScenarioProcessor) AllowedToProcessScenarioId(scenarioId, scenarioProcessorId string, scenarioProcessingTime time.Duration) bool {
+
+	key := fmt.Sprintf("%s_%s", currentProcessingWorkerKeyPrefix, scenarioId)
+	result := scenarioProcessor.traceStore.GetValueForKey(key)
+
+	if result == "" || result != scenarioProcessorId {
+		key := fmt.Sprintf("%s_%s", currentProcessingWorkerKeyPrefix, scenarioId)
+		err := scenarioProcessor.traceStore.SetValueForKeyWithExpiry(key, scenarioProcessorId, scenarioProcessingTime)
+		if err != nil {
+			zkLogger.Error(LoggerTag, "Error setting last processed workload set:", err)
+			return false
+		}
+		return true
+	}
+	return false
 }
 
 func (scenarioProcessor *ScenarioProcessor) processScenario(scenario *model.Scenario) {
@@ -153,7 +184,7 @@ func (scenarioProcessor *ScenarioProcessor) processScenario(scenario *model.Scen
 	zkLogger.DebugF(LoggerTag, "Processing scenario: %v", scenario.Id)
 
 	// check if allowed to process current scenario
-	if !scenarioProcessor.traceStore.AllowedToProcessScenarioId(scenario.Id, scenarioProcessor.id, scenarioProcessingTime) {
+	if !scenarioProcessor.AllowedToProcessScenarioId(scenario.Id, scenarioProcessor.id, scenarioProcessingTime) {
 		zkLogger.Info(LoggerTag, "Another processor is already processing the scenario")
 		return
 	}
@@ -172,7 +203,7 @@ func (scenarioProcessor *ScenarioProcessor) processScenario(scenario *model.Scen
 	}
 
 	// mark all traceIds as processed in redis
-	setName := fmt.Sprintf("%s_P_%d", scenario.Id, time.Now().UnixMilli())
+	setName := fmt.Sprintf("%s_%s_%d", SetPrefixOTelProcessed, scenario.Id, time.Now().UnixMilli())
 	membersToAdd := make([]interface{}, 0)
 	for _, traceId := range allTraceIds {
 		membersToAdd = append(membersToAdd, string(traceId))

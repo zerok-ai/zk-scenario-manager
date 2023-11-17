@@ -230,8 +230,8 @@ func (worker QueueWorkerEBPF) Consume(delivery rmq.Delivery) {
 func (worker QueueWorkerEBPF) getUnprocessedTraces(tracesToProcess []string) []string {
 
 	// mark all traceIds as processed in redis
-	tempSetName := fmt.Sprintf("ebpf_temp_%s_%d", worker.id, time.Now().UnixMilli())
-	defer worker.traceStore.DeleteSet([]string{tempSetName})
+	tempSetName := fmt.Sprintf("%s_%s_%d", SetPrefixEBPFTemp, worker.id, time.Now().UnixMilli())
+	defer worker.traceStore.DeleteSets([]string{tempSetName})
 
 	tracesToProcessI := make([]interface{}, 0)
 	for _, traceId := range tracesToProcess {
@@ -244,12 +244,12 @@ func (worker QueueWorkerEBPF) getUnprocessedTraces(tracesToProcess []string) []s
 	}
 
 	// remove all the already processed traces from the set of traces to process
-	if keys, err := worker.traceStore.GetAllKeysWithPrefixAndRegex("ebpf_P", ".*"); err == nil || len(keys) > 0 {
-		processedTracesKey := fmt.Sprintf("ebpf_All_P_%s", worker.id)
-		if ok := worker.traceStore.NewUnionSet(processedTracesKey, keys...); ok {
+	if keys, err := worker.traceStore.GetAllKeysWithPrefixAndRegex(SetPrefixEBPFProcessed, ".*"); err == nil || len(keys) > 0 {
+		processedTracesAggregationKey := fmt.Sprintf("%s_%s", SetPrefixEBPFProcessedAggregate, worker.id)
+		if ok := worker.traceStore.NewUnionSet(processedTracesAggregationKey, keys...); ok {
 			// delete the temporary set after the completing of this process
-			defer worker.traceStore.DeleteSet([]string{tempSetName})
-			tracesToProcess = worker.traceStore.GetValuesAfterSetDiff(tempSetName, processedTracesKey)
+			defer worker.traceStore.DeleteSets([]string{tempSetName})
+			tracesToProcess = worker.traceStore.GetValuesAfterSetDiff(tempSetName, processedTracesAggregationKey)
 		}
 	}
 
@@ -259,7 +259,7 @@ func (worker QueueWorkerEBPF) getUnprocessedTraces(tracesToProcess []string) []s
 func (worker QueueWorkerEBPF) setProcessedTraces(tracesProcessed []string) {
 
 	// mark all traceIds as processed in redis
-	setName := fmt.Sprintf("ebpf_P_%s_%d", worker.id, time.Now().UnixMilli())
+	setName := fmt.Sprintf("%s_%s_%d", SetPrefixEBPFProcessed, worker.id, time.Now().UnixMilli())
 
 	membersToAdd := make([]interface{}, 0)
 	for _, traceId := range tracesProcessed {

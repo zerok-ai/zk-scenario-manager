@@ -23,7 +23,7 @@ logs:
   color: true
   level: DEBUG
 scenarioConfig:
-  redisRuleSetCount: 12
+  ebpfLocalWorkers: 2
   processingIntervalInSeconds: 10
   ebpfSchemaVersion: "0.1.1-alpha"
   vzCloudAddr: "px.loadcloud01.getanton.com:443"

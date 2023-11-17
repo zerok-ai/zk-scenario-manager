@@ -24,7 +24,7 @@ data:
       host: 0.0.0.0
       port: 80
     scenarioConfig:
-      redisRuleSetCount: 12
+      ebpfLocalWorkers: 2
       processingIntervalInSeconds: 10
       ebpfSchemaVersion: "0.1.1-alpha"
     logs:

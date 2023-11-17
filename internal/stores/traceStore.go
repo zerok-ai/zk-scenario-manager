@@ -10,9 +10,6 @@ import (
 	"time"
 )
 
-const lastProcessedKeySuffix = "LPV"
-const currentProcessingWorkerKeySuffix = "CPV"
-
 type TraceStore struct {
 	redisClient         *redis.Client
 	ttlForTransientSets time.Duration
@@ -40,20 +37,6 @@ func (t TraceStore) GetIndexOfScenarioToProcess() (int64, error) {
 		return 0, err
 	}
 	return result, nil
-}
-
-func (t TraceStore) AllowedToProcessScenarioId(scenarioId, scenarioProcessorId string, scenarioProcessingTime time.Duration) bool {
-
-	result := t.getCurrentlyProcessingWorker(scenarioId)
-	if result == "" || result != scenarioProcessorId {
-		err := t.setCurrentlyProcessingWorker(scenarioId, scenarioProcessorId, scenarioProcessingTime)
-		if err != nil {
-			zkLogger.Error(LoggerTag, "Error setting last processed workload set:", err)
-			return false
-		}
-		return true
-	}
-	return false
 }
 
 type RedisEntry struct {
@@ -142,40 +125,6 @@ func (t TraceStore) GetValuesForKeys(keyPattern string) (map[string]string, erro
 	}
 
 	return resultMap, nil
-}
-
-func (t TraceStore) getCurrentlyProcessingWorker(scenarioId string) string {
-	key := fmt.Sprintf("%s_%s", scenarioId, currentProcessingWorkerKeySuffix)
-	result, err := t.redisClient.Get(ctx, key).Result()
-	if err != nil {
-		return ""
-	}
-	return result
-}
-
-func (t TraceStore) setCurrentlyProcessingWorker(scenarioId, scenarioProcessorId string, scenarioProcessingTime time.Duration) error {
-	key := fmt.Sprintf("%s_%s", scenarioId, currentProcessingWorkerKeySuffix)
-	err := t.redisClient.Set(ctx, key, scenarioProcessorId, scenarioProcessingTime).Err()
-	return err
-}
-
-func (t TraceStore) deleteCurrentlyProcessingWorker(scenarioId, scenarioProcessorId string) error {
-	key := fmt.Sprintf("%s_%s", scenarioId, currentProcessingWorkerKeySuffix)
-	err := t.redisClient.Del(ctx, key, scenarioProcessorId).Err()
-	return err
-}
-
-func (t TraceStore) FinishedProcessingScenario(scenarioId, scenarioProcessorId, lastProcessedSets string) {
-	// remove the Key for currently processing worker
-	result := t.getCurrentlyProcessingWorker(scenarioId)
-	if result != scenarioProcessorId {
-		return
-	}
-	err := t.deleteCurrentlyProcessingWorker(scenarioId, scenarioProcessorId)
-	if err != nil {
-		zkLogger.Error(LoggerTag, "Error deleting currently processing worker:", err)
-		return
-	}
 }
 
 func (t TraceStore) GetAllKeysWithPrefixAndRegex(prefix, regex string) ([]string, error) {
@@ -325,9 +274,22 @@ func (t TraceStore) SetExists(key string) bool {
 	return exists == 1
 }
 
-func (t TraceStore) DeleteSet(keys []string) {
+func (t TraceStore) DeleteSets(keys []string) error {
 	if len(keys) == 0 {
-		return
+		return nil
 	}
-	t.redisClient.Del(ctx, keys...)
+	return t.redisClient.Del(ctx, keys...).Err()
+}
+
+func (t TraceStore) SetValueForKeyWithExpiry(key, value string, expiration time.Duration) error {
+	err := t.redisClient.Set(ctx, key, value, expiration).Err()
+	return err
+}
+
+func (t TraceStore) GetValueForKey(key string) string {
+	result, err := t.redisClient.Get(ctx, key).Result()
+	if err != nil {
+		return ""
+	}
+	return result
 }

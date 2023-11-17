@@ -22,6 +22,47 @@ const (
 	timeRangeForRawDataQuery     = "-15m" // -5m, -10m, -1h etc
 
 	scenarioProcessingTime = 5 * time.Minute
+
+	/*
+		Workload id sets (these are created by oTel receiver)
+		-----------
+		<workloadId>_<number>
+
+		OTel
+		-----------
+		OTel_P_<scenarioID>_<time>
+		OTel_P_All_<scenarioID>_<time>
+	*/
+	SetPrefixOTelProcessed          = "OTel_P"
+	SetPrefixOTelProcessedAggregate = "OTel_P_All"
+
+	/*
+		filter evaluation
+		-----------
+		a) union set for each workload
+
+		workload_<scenarioID>_<workloadId>_<time_nano>
+
+		b) union set for each filter
+
+		filter_<scenarioID>_<time_nano>
+
+	*/
+	SetPrefixWorkload     = "workload"
+	SetPrefixFilterResult = "filter"
+
+	/*
+		ebpf
+		-----------
+		ebpf_temp_<workerID>_<time>
+		ebpf_All_P_<workerID>
+		ebpf_P_<workerID>_<time>
+	*/
+	SetPrefixEBPFTemp               = "ebpf_temp"
+	SetPrefixEBPFProcessed          = "ebpf_P"
+	SetPrefixEBPFProcessedAggregate = "ebpf_All_P"
+
+	currentProcessingWorkerKeyPrefix = "CPV"
 )
 
 func joinValuesInMapToCSV(data map[string]string) string {

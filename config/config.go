@@ -33,8 +33,8 @@ type RouterConfigs struct {
 }
 
 type ScenariosConfig struct {
-	RedisRuleSetCount           int    `yaml:"redisRuleSetCount" env-description:"No of possible sets for a rule in redis"`
 	ProcessingIntervalInSeconds int    `yaml:"processingIntervalInSeconds" env-description:"Time interval in seconds for processing scenarios"`
+	EBPFLocalWorkers            int    `yaml:"ebpfLocalWorkers" env-description:"Number of local consumers of eBPF queue"`
 	EBPFSchemaVersion           string `yaml:"ebpfSchemaVersion"`
 	VZCloudAddr                 string `yaml:"vzCloudAddr" env-description:"vz cloud address"`
 	VZClusterId                 string `yaml:"vzClusterId" env-description:"vz cluster id"`
