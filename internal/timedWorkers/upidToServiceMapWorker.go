@@ -72,6 +72,5 @@ func (tw *UPIDToServiceMapWorker) getUPIDChangesMap(upidToServiceMap []models.UP
 		}
 		upidChangesMap[item.UPID] = item.Service
 	}
-	logger.Debug(LoggerTag, "UPID changes map: %v", upidChangesMap)
 	return upidChangesMap
 }

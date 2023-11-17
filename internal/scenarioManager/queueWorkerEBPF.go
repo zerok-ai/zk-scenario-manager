@@ -16,46 +16,64 @@ import (
 )
 
 type QueueWorkerEBPF struct {
-	id                      string
-	ebpfConsumer            *stores.TraceQueue
+	id string
+	//ebpfConsumer            *stores.TraceQueue
 	traceRawDataCollector   *vzReader.VzReader
 	eBPFSchemaVersion       string
 	traceStore              *stores.TraceStore
 	tracePersistenceService *tracePersistence.TracePersistenceService
 }
 
-func GetQueueWorkerEBPF(cfg config.AppConfigs, tps *tracePersistence.TracePersistenceService) *QueueWorkerEBPF {
+type QueueWorkerGroupEBPF struct {
+	worker                []QueueWorkerEBPF
+	ebpfConsumer          *stores.TraceQueue
+	traceRawDataCollector *vzReader.VzReader
+}
+
+func (workers QueueWorkerGroupEBPF) Close() {
+	workers.ebpfConsumer.Close()
+	workers.traceRawDataCollector.Close()
+}
+
+func GetQueueWorkerGroupEBPF(cfg config.AppConfigs, tps *tracePersistence.TracePersistenceService, workerCount int) *QueueWorkerGroupEBPF {
+
+	queueWorkerGroupEBPF := QueueWorkerGroupEBPF{}
 
 	var err error
+	workers := make([]QueueWorkerEBPF, 0)
+	consumers := make([]rmq.Consumer, 0)
 
-	// initialize worker
-	worker := QueueWorkerEBPF{
-		id:                      "E" + uuid.New().String(),
-		eBPFSchemaVersion:       cfg.ScenarioConfig.EBPFSchemaVersion,
-		tracePersistenceService: tps,
-		traceStore:              stores.GetTraceStore(cfg.Redis, TTLForTransientSets),
-	}
-	worker.traceRawDataCollector, err = GetNewVZReader(cfg)
-	if err != nil {
+	// initialize raw data collector
+	if queueWorkerGroupEBPF.traceRawDataCollector, err = GetNewVZReader(cfg); err != nil {
 		zkLogger.Error(LoggerTag, "Error getting new VZ reader:", err)
 		return nil
 	}
 
-	// oTel consumer and error store
-	worker.ebpfConsumer, err = stores.GetTraceConsumer(cfg.Redis, &worker, ebpfConsumerName)
-	if err != nil {
+	// initialize workers
+	for i := 0; i < workerCount; i++ {
+		// initialize worker
+		worker := QueueWorkerEBPF{
+			id:                      "E" + uuid.New().String(),
+			eBPFSchemaVersion:       cfg.ScenarioConfig.EBPFSchemaVersion,
+			tracePersistenceService: tps,
+			traceStore:              stores.GetTraceStore(cfg.Redis, TTLForTransientSets),
+		}
+		worker.traceRawDataCollector = queueWorkerGroupEBPF.traceRawDataCollector
+
+		workers = append(workers, worker)
+		consumers = append(consumers, worker)
+	}
+
+	// initialize ebpf trace consumer queue
+	if queueWorkerGroupEBPF.ebpfConsumer, err = stores.GetTraceConsumer(cfg.Redis, consumers, ebpfConsumerName); err != nil {
+		queueWorkerGroupEBPF.traceRawDataCollector.Close()
 		return nil
 	}
 
-	return &worker
+	return &queueWorkerGroupEBPF
 }
 
-func (worker *QueueWorkerEBPF) Close() {
-	worker.ebpfConsumer.Close()
-	worker.traceRawDataCollector.Close()
-}
-
-func (worker *QueueWorkerEBPF) handleMessage(traceMessage EBPFTraceMessage) bool {
+func (worker QueueWorkerEBPF) handleMessage(traceMessage EBPFTraceMessage) bool {
 
 	timeRange := timeRangeForRawDataQuery
 
@@ -67,10 +85,17 @@ func (worker *QueueWorkerEBPF) handleMessage(traceMessage EBPFTraceMessage) bool
 		tracesFromOTel[trace.TraceId] = trace
 	}
 
-	traceIds = worker.getUnprocessedTraces(traceIds)
+	unprocessedIds := worker.getUnprocessedTraces(traceIds)
+	if len(unprocessedIds) == 0 {
+		zkLogger.DebugF(LoggerTag, "Got %d traces which were already processed. Not processing them again. TraceIds :", len(unprocessedIds), unprocessedIds)
+		return true
+	}
 
-	spansFromEBPFStore := worker.collectHTTPRawData(traceIds, timeRange)
-	zkLogger.InfoF(LoggerTag, "Number of spans with HTTP raw data: %v", len(spansFromEBPFStore))
+	spansFromEBPFStore := worker.collectHTTPRawData(unprocessedIds, timeRange)
+	if len(spansFromEBPFStore) == 0 {
+		zkLogger.ErrorF(LoggerTag, "No raw data received from vzReader for %v spans", len(unprocessedIds))
+		return true
+	}
 
 	spansForUpdatingEBPFData := make([]tracePersistenceModel.Span, 0)
 	spansToAddInOTel := make([]tracePersistenceModel.Span, 0)
@@ -133,12 +158,12 @@ func (worker *QueueWorkerEBPF) handleMessage(traceMessage EBPFTraceMessage) bool
 		return false
 	}
 
-	worker.setProcessedTraces(traceIds)
+	worker.setProcessedTraces(unprocessedIds)
 
 	return true
 }
 
-func (worker *QueueWorkerEBPF) getSpanForUpdateRoot(traceId, spanId string, isRoot bool) *tracePersistenceModel.Span {
+func (worker QueueWorkerEBPF) getSpanForUpdateRoot(traceId, spanId string, isRoot bool) *tracePersistenceModel.Span {
 	oTelSpanForPersistence := tracePersistenceModel.Span{
 		TraceID: traceId,
 		SpanID:  spanId,
@@ -147,7 +172,7 @@ func (worker *QueueWorkerEBPF) getSpanForUpdateRoot(traceId, spanId string, isRo
 	return &oTelSpanForPersistence
 }
 
-func (worker *QueueWorkerEBPF) getSpanForPersistence(ebpfSpan models.HttpRawDataModel) tracePersistenceModel.Span {
+func (worker QueueWorkerEBPF) getSpanForPersistence(ebpfSpan models.HttpRawDataModel) tracePersistenceModel.Span {
 	oTelSpanForPersistence := &tracePersistenceModel.Span{
 		TraceID: ebpfSpan.TraceId,
 		SpanID:  ebpfSpan.SpanId,
@@ -157,7 +182,7 @@ func (worker *QueueWorkerEBPF) getSpanForPersistence(ebpfSpan models.HttpRawData
 	return *oTelSpanForPersistence
 }
 
-func (worker *QueueWorkerEBPF) collectRawData(traceIds []string, startTime string) []models.HttpRawDataModel {
+func (worker QueueWorkerEBPF) collectRawData(traceIds []string, startTime string) []models.HttpRawDataModel {
 	rawData, err := worker.traceRawDataCollector.GetHTTPRawData(traceIds, startTime)
 	if err != nil {
 		zkLogger.Error(LoggerTag, "Error getting raw spans for http traces ", traceIds, err)
@@ -166,7 +191,7 @@ func (worker *QueueWorkerEBPF) collectRawData(traceIds []string, startTime strin
 	return rawData.Results
 }
 
-func (worker *QueueWorkerEBPF) collectHTTPRawData(traceIds []string, startTime string) []models.HttpRawDataModel {
+func (worker QueueWorkerEBPF) collectHTTPRawData(traceIds []string, startTime string) []models.HttpRawDataModel {
 	rawData, err := worker.traceRawDataCollector.GetHTTPRawData(traceIds, startTime)
 	if err != nil {
 		zkLogger.Error(LoggerTag, "Error getting raw spans for http traces ", traceIds, err)
@@ -175,7 +200,7 @@ func (worker *QueueWorkerEBPF) collectHTTPRawData(traceIds []string, startTime s
 	return rawData.Results
 }
 
-func (worker *QueueWorkerEBPF) Consume(delivery rmq.Delivery) {
+func (worker QueueWorkerEBPF) Consume(delivery rmq.Delivery) {
 
 	zkLogger.DebugF(LoggerTag, "ebpf worker %v got a message", worker.id)
 	var traceMessage EBPFTraceMessage
@@ -202,7 +227,7 @@ func (worker *QueueWorkerEBPF) Consume(delivery rmq.Delivery) {
 	}
 }
 
-func (worker *QueueWorkerEBPF) getUnprocessedTraces(tracesToProcess []string) []string {
+func (worker QueueWorkerEBPF) getUnprocessedTraces(tracesToProcess []string) []string {
 
 	// mark all traceIds as processed in redis
 	tempSetName := fmt.Sprintf("ebpf_temp_%s_%d", worker.id, time.Now().UnixMilli())
@@ -231,11 +256,7 @@ func (worker *QueueWorkerEBPF) getUnprocessedTraces(tracesToProcess []string) []
 	return tracesToProcess
 }
 
-func (worker *QueueWorkerEBPF) getRedisSetOfAllProcessedEBPFTraces(tracesProcessed []string) {
-
-}
-
-func (worker *QueueWorkerEBPF) setProcessedTraces(tracesProcessed []string) {
+func (worker QueueWorkerEBPF) setProcessedTraces(tracesProcessed []string) {
 
 	// mark all traceIds as processed in redis
 	setName := fmt.Sprintf("ebpf_P_%s_%d", worker.id, time.Now().UnixMilli())

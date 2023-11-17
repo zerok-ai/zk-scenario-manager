@@ -65,8 +65,8 @@ func main() {
 	defer oTelWorker.Close()
 
 	// start EBPF worker
-	ebpfWorker := sm.GetQueueWorkerEBPF(cfg, &tps)
-	defer ebpfWorker.Close()
+	ebpfWorkers := sm.GetQueueWorkerGroupEBPF(cfg, &tps, 2)
+	defer ebpfWorkers.Close()
 
 	configurator := iris.WithConfiguration(iris.Configuration{
 		DisablePathCorrection: true,

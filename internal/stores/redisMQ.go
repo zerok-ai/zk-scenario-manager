@@ -10,6 +10,10 @@ import (
 	"time"
 )
 
+const (
+	prefetchBuffer = 1
+)
+
 type TraceQueue struct {
 	redisClient *redis.Client
 	taskQueue   rmq.Queue
@@ -23,18 +27,22 @@ func GetTraceProducer(redisConfig config.RedisConfig, name string) (*TraceQueue,
 	return initialize(redisConfig, "producer_"+name, name)
 }
 
-func GetTraceConsumer(redisConfig config.RedisConfig, consumer rmq.Consumer, name string) (*TraceQueue, error) {
+func GetTraceConsumer(redisConfig config.RedisConfig, consumer []rmq.Consumer, name string) (*TraceQueue, error) {
 	queue, err := initialize(redisConfig, "consumer_"+name, name)
 	if err == nil {
 
+		consumerCount := len(consumer)
+
 		// 1. Start consuming (yes, you start consuming before setting the consumer)
-		if err = queue.taskQueue.StartConsuming(2, time.Second); err != nil {
+		if err = queue.taskQueue.StartConsuming(int64(prefetchBuffer+consumerCount), time.Second); err != nil {
 			return nil, err
 		}
 
-		// 2. Add the consumer
-		if _, err = queue.taskQueue.AddConsumer(name, consumer); err != nil {
-			return nil, err
+		// 2. Add the consumers
+		for i := 0; i < consumerCount; i++ {
+			if _, err = queue.taskQueue.AddConsumer(name, consumer[i]); err != nil {
+				return nil, err
+			}
 		}
 	}
 	zkLogger.InfoF(LoggerTag, "Initialized the consumer: %s", name)

@@ -49,7 +49,7 @@ func GetQueueWorkerOTel(cfg config.AppConfigs, tps *tracePersistence.TracePersis
 
 	// oTel consumer and error store
 	var err error
-	worker.oTelConsumer, err = stores.GetTraceConsumer(cfg.Redis, &worker, oTelQueue)
+	worker.oTelConsumer, err = stores.GetTraceConsumer(cfg.Redis, []rmq.Consumer{&worker}, oTelQueue)
 	if err != nil {
 		return nil
 	}
