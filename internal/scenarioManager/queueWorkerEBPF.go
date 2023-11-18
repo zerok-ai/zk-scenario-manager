@@ -93,7 +93,7 @@ func (worker QueueWorkerEBPF) handleMessage(traceMessage EBPFTraceMessage) bool 
 
 	spansFromEBPFStore := worker.collectHTTPRawData(unprocessedIds, timeRange)
 	if len(spansFromEBPFStore) == 0 {
-		zkLogger.ErrorF(LoggerTag, "No raw data received from vzReader for %v spans", len(unprocessedIds))
+		zkLogger.DebugF(LoggerTag, "No raw data received from vzReader for %v spans. TraceIds :", len(unprocessedIds), unprocessedIds)
 		return true
 	}
 

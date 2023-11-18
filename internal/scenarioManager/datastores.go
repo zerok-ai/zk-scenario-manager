@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/zerok-ai/zk-rawdata-reader/vzReader"
 	"github.com/zerok-ai/zk-utils-go/ds"
+	zkLogger "github.com/zerok-ai/zk-utils-go/logs"
 	zkRedis "github.com/zerok-ai/zk-utils-go/storage/redis"
 	"github.com/zerok-ai/zk-utils-go/storage/redis/clientDBNames"
 	storage "github.com/zerok-ai/zk-utils-go/storage/redis/config"
@@ -13,6 +14,7 @@ import (
 
 const (
 	cacheSize int = 20
+	LogTag        = "VZReader"
 )
 
 func GetLRUCacheStore(redisConfig storage.RedisConfig, csh zkRedis.CacheStoreHook[string], ctx context.Context) *zkRedis.LocalCacheKVStore[string] {
@@ -31,6 +33,8 @@ func GetNewVZReader(cfg config.AppConfigs) (*vzReader.VzReader, error) {
 		ClusterId:  cfg.ScenarioConfig.VZClusterId,
 		ClusterKey: cfg.ScenarioConfig.VZClusterKey,
 	}
+
+	zkLogger.DebugF(LogTag, "CloudAddr: %s, ClusterId: %s, ClusterKey: %s", reader.CloudAddr, reader.ClusterId, reader.ClusterKey)
 
 	err := reader.Init()
 	if err != nil {
