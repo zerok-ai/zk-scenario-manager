@@ -16,7 +16,7 @@ const (
 	UpsertSpanQuery        = "INSERT INTO span (trace_id, parent_span_id, span_id, span_name, is_root, kind, start_time, latency, source, destination, workload_id_list, protocol, issue_hash_list, request_payload_size, response_payload_size, method, route, scheme, path, query, status, username, source_ip, destination_ip, service_name, errors, span_attributes, resource_attributes, scope_attributes, has_raw_data) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30) ON CONFLICT (trace_id, span_id) DO NOTHING"
 	UpdateIsRootSpanQuery  = "UPDATE span SET is_root = $1 WHERE trace_id=$2 AND span_id=$3"
 	UpsertSpanRawDataQuery = "INSERT INTO span_raw_data (trace_id, span_id, req_headers, resp_headers, is_truncated, req_body, resp_body) VALUES ($1, $2, $3, $4, $5, $6, $7) ON CONFLICT (trace_id, span_id) DO UPDATE SET req_headers = excluded.req_headers, resp_headers = excluded.resp_headers, is_truncated = excluded.is_truncated, req_body = excluded.req_body, resp_body = excluded.resp_body"
-	UpdateWorkloadIdList   = "UPDATE span SET workload_id_list = ARRAY(SELECT DISTINCT UNNEST(workload_id_list || $1))WHERE trace_id=$2 AND span_id=$3"
+	UpdateWorkloadIdList   = "UPDATE span SET has_raw_data = true AND workload_id_list = ARRAY(SELECT DISTINCT UNNEST(workload_id_list || $1)) WHERE trace_id=$2 AND span_id=$3"
 )
 
 var LogTag = "zk_trace_persistence_repo"
