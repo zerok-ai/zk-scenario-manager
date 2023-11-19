@@ -5,7 +5,7 @@
 global:
   dockerBase: "us-west1-docker.pkg.dev/zerok-dev/zk-client"
 
-obfuscate: true
+obfuscate: false
 
 replicaCount: 1
 
