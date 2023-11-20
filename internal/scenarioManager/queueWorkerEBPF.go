@@ -218,16 +218,11 @@ func (worker QueueWorkerEBPF) Consume(delivery rmq.Delivery) {
 
 	// perform task
 	zkLogger.DebugF(LoggerTagEBPF, "got message %v", traceMessage)
-	handled := worker.handleMessage(traceMessage)
-	if !handled {
-		if err := delivery.Reject(); err != nil {
-			// not sure what to do here
-		}
-		return
-	}
+	worker.handleMessage(traceMessage)
 
 	if err := delivery.Ack(); err != nil {
 		// handle ack error
+		zkLogger.ErrorF(LoggerTagEBPF, "Error acknowledging message for queue %s : %v", worker.id, err)
 	}
 }
 
