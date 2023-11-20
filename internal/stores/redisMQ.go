@@ -7,6 +7,7 @@ import (
 	zkLogger "github.com/zerok-ai/zk-utils-go/logs"
 	"github.com/zerok-ai/zk-utils-go/storage/redis/clientDBNames"
 	"github.com/zerok-ai/zk-utils-go/storage/redis/config"
+	"os"
 	"time"
 )
 
@@ -56,13 +57,14 @@ func initialize(redisConfig config.RedisConfig, queueTag, queueName string) (*Tr
 	_redisClient := config.GetRedisConnection(dbName, redisConfig)
 
 	errChan := make(chan error)
-	go logErrors(queueTag, errChan)
 
 	// 2. get the connection and taskQueue
 	connection, err := rmq.OpenConnectionWithRedisClient(queueTag, _redisClient, errChan)
 	if err != nil {
 		return nil, err
 	}
+
+	go logErrors(queueTag, connection, errChan)
 	queue, err := connection.OpenQueue(queueName)
 	if err != nil {
 		return nil, err
@@ -73,15 +75,24 @@ func initialize(redisConfig config.RedisConfig, queueTag, queueName string) (*Tr
 	return &telQueue, nil
 }
 
-func logErrors(name string, errChan <-chan error) {
+func logErrors(name string, connection rmq.Connection, errChan <-chan error) {
 	for e := range errChan {
 		switch err := e.(type) {
 		case *rmq.HeartbeatError:
 			if err.Count == rmq.HeartbeatErrorLimit {
 				zkLogger.Error(LoggerTag, name+" heartbeat error (limit): ", err)
+
+				// exit the process. This is to ensure that the process is restarted.
+				// The consumers of this connection will stop consuming. They won't restart consuming on their own.
+				zkLogger.Error(LoggerTag, "logErrors function exited")
+				<-connection.StopAllConsuming()
+
+				os.Exit(1)
+
 			} else {
 				zkLogger.Error(LoggerTag, name+" heartbeat error: ", err)
 			}
+
 		case *rmq.ConsumeError:
 			zkLogger.Error(LoggerTag, name+" consume error: ", err)
 		case *rmq.DeliveryError:

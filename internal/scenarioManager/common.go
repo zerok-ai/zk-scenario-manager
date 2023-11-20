@@ -1,7 +1,6 @@
 package scenarioManager
 
 import (
-	"strings"
 	"time"
 )
 
@@ -15,16 +14,14 @@ const (
 	CLIENT             = "CLIENT"
 	SERVER             = "SERVER"
 
-	ScenarioRefreshInterval      = 20 * time.Minute
-	TTLForTransientSets          = 30 * time.Second
-	TTLForScenarioSets           = 15 * time.Minute
-	batchSizeForRawDataCollector = 20
-	timeRangeForRawDataQuery     = "-15m" // -5m, -10m, -1h etc
-
-	scenarioProcessingTime = 5 * time.Minute
+	ScenarioRefreshInterval  = 20 * time.Minute
+	TTLForTransientSets      = 30 * time.Second
+	TTLForScenarioSets       = 15 * time.Minute
+	scenarioProcessingTime   = 5 * time.Minute
+	timeRangeForRawDataQuery = "-15m" // -5m, -10m, -1h etc
 
 	/*
-		Workload id sets (these are created by oTel receiver)
+		Workload id sets (these are created by OTLP receiver)
 		-----------
 		<workloadId>_<number>
 
@@ -40,13 +37,10 @@ const (
 		filter evaluation
 		-----------
 		a) union set for each workload
-
 		workload_<scenarioID>_<workloadId>_<time_nano>
 
 		b) union set for each filter
-
 		filter_<scenarioID>_<time_nano>
-
 	*/
 	SetPrefixWorkload     = "workload"
 	SetPrefixFilterResult = "filter"
@@ -61,22 +55,4 @@ const (
 	SetPrefixEBPFTemp               = "ebpf_temp"
 	SetPrefixEBPFProcessed          = "ebpf_P"
 	SetPrefixEBPFProcessedAggregate = "ebpf_All_P"
-
-	currentProcessingWorkerKeyPrefix = "CPV"
 )
-
-func joinValuesInMapToCSV(data map[string]string) string {
-
-	// Initialize an empty string to store the joined values
-	var joinedValues []string
-
-	// Iterate over the map and append the values to the slice
-	for _, value := range data {
-		joinedValues = append(joinedValues, value)
-	}
-
-	// Join the values into a comma-separated string
-	result := strings.Join(joinedValues, ",")
-
-	return result
-}

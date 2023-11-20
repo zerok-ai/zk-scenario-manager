@@ -1,6 +1,7 @@
 package scenarioManager
 
 import (
+	"context"
 	"crypto/md5"
 	"encoding/hex"
 	"encoding/json"
@@ -22,7 +23,10 @@ import (
 
 const (
 	TitleDelimiter = "¦"
+	LoggerTagOTel  = "worker-oTel"
 )
+
+var ctx = context.Background()
 
 type TMapOfSpanIdToSpan map[typedef.TSpanId]*tracePersistenceModel.Span
 
@@ -49,7 +53,7 @@ func GetQueueWorkerOTel(cfg config.AppConfigs, tps *tracePersistence.TracePersis
 
 	// oTel consumer and error store
 	var err error
-	worker.oTelConsumer, err = stores.GetTraceConsumer(cfg.Redis, []rmq.Consumer{&worker}, oTelQueue)
+	worker.oTelConsumer, err = stores.GetTraceConsumer(cfg.Redis, []rmq.Consumer{&worker}, OTelQueue)
 	if err != nil {
 		return nil
 	}
@@ -75,7 +79,7 @@ func (worker *QueueWorkerOTel) Close() {
 
 func (worker *QueueWorkerOTel) handleMessage(oTelMessage OTELTraceMessage) {
 
-	zkLogger.DebugF(LoggerTag, "oTelWorker %v got a message", worker.id)
+	zkLogger.DebugF(LoggerTagOTel, "oTelWorker %v got a message", worker.id)
 
 	// 1. Collect span relation and span data for the traceIDs
 	tracesFromOTelStore := worker.getDataFromOTelStore(oTelMessage.Traces)
@@ -86,7 +90,7 @@ func (worker *QueueWorkerOTel) handleMessage(oTelMessage OTELTraceMessage) {
 	// 2. Process each trace against all the scenarioWithTraces
 	incidents := worker.buildIncidentsForPersistence(&oTelMessage.Scenario, tracesFromOTelStore)
 	if incidents == nil || len(incidents) == 0 {
-		zkLogger.ErrorF(LoggerTag, "no incidents to save")
+		zkLogger.ErrorF(LoggerTagOTel, "no incidents to save")
 		return
 	}
 
@@ -94,15 +98,15 @@ func (worker *QueueWorkerOTel) handleMessage(oTelMessage OTELTraceMessage) {
 	newIncidentList := worker.rateLimitIncidents(incidents, oTelMessage.Scenario)
 
 	if len(newIncidentList) == 0 {
-		zkLogger.InfoF(LoggerTag, "rate limited %d incidents. nothing to save", len(incidents))
+		zkLogger.InfoF(LoggerTagOTel, "rate limited %d incidents. nothing to save", len(incidents))
 		return
 	}
 
 	// 4. save incidents in persistent storage
-	zkLogger.InfoF(LoggerTag, "Sending incidents for persistence, incident count: %d", len(newIncidentList))
+	zkLogger.InfoF(LoggerTagOTel, "Sending incidents for persistence, incident count: %d", len(newIncidentList))
 	saveError := (*worker.tracePersistenceService).SaveIncidents(newIncidentList)
 	if saveError != nil {
-		zkLogger.Error(LoggerTag, "Error saving incidents", saveError)
+		zkLogger.Error(LoggerTagOTel, "Error saving incidents", saveError)
 	}
 
 	// 5. publish traces to ebpf queue
@@ -124,7 +128,7 @@ func (worker *QueueWorkerOTel) handleMessage(oTelMessage OTELTraceMessage) {
 	}
 
 	if len(tracesFromOTel) == 0 {
-		zkLogger.Debug(LoggerTag, "nothing to publish to ebpf queue")
+		zkLogger.Debug(LoggerTagOTel, "nothing to publish to ebpf queue")
 		return
 	}
 
@@ -135,7 +139,7 @@ func (worker *QueueWorkerOTel) handleMessage(oTelMessage OTELTraceMessage) {
 	}
 	err := worker.ebpfProducer.PublishTracesToQueue(traceMessage)
 	if err != nil {
-		zkLogger.Error(LoggerTag, "Error publishing traces to raw data queue", err)
+		zkLogger.Error(LoggerTagOTel, "Error publishing traces to raw data queue", err)
 	}
 
 }
@@ -153,7 +157,7 @@ func getRootSpanFromIncident(incident tracePersistenceModel.Incident) *tracePers
 func (worker *QueueWorkerOTel) getDataFromOTelStore(traceIds []typedef.TTraceid) map[typedef.TTraceid]*stores.TraceFromOTel {
 	tracesFromOTelStore, oTelErrors, err := worker.oTelStore.GetSpansForTracesFromDB(traceIds)
 	if err != nil {
-		zkLogger.Error(LoggerTag, "error in getting data from OTel zkRedis", err)
+		zkLogger.Error(LoggerTagOTel, "error in getting data from OTel zkRedis", err)
 	}
 
 	if oTelErrors != nil && len(oTelErrors) > 0 {
@@ -175,7 +179,7 @@ func (worker *QueueWorkerOTel) getDataFromOTelStore(traceIds []typedef.TTraceid)
 
 func (worker *QueueWorkerOTel) buildIncidentsForPersistence(scenario *model.Scenario, tracesFromOTel map[typedef.TTraceid]*stores.TraceFromOTel) []tracePersistenceModel.IncidentWithIssues {
 
-	zkLogger.DebugF(LoggerTag, "Building scenario for persistence, trace_count=%d", len(tracesFromOTel))
+	zkLogger.DebugF(LoggerTagOTel, "Building scenario for persistence, trace_count=%d", len(tracesFromOTel))
 
 	// a. iterate through the trace data from OTelDataHandler and build the structure which can be saved in DB
 	incidentsWithIssues := make([]tracePersistenceModel.IncidentWithIssues, 0)
@@ -427,12 +431,12 @@ func (worker *QueueWorkerOTel) Consume(delivery rmq.Delivery) {
 	}
 
 	// perform task
-	zkLogger.DebugF(LoggerTag, "got message %v", oTelMessage)
+	zkLogger.DebugF(LoggerTagOTel, "got message %v", oTelMessage)
 
 	startTime := time.Now()
 	worker.handleMessage(oTelMessage)
 	endTime := time.Now()
-	zkLogger.Info(LoggerTag, "Time taken to to process oTel message ", endTime.Sub(startTime))
+	zkLogger.Info(LoggerTagOTel, "Time taken to to process oTel message ", endTime.Sub(startTime))
 
 	if err := delivery.Ack(); err != nil {
 		// handle ack error

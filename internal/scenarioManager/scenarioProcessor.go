@@ -1,7 +1,6 @@
 package scenarioManager
 
 import (
-	"context"
 	"fmt"
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
@@ -17,11 +16,15 @@ import (
 	tracePersistence "scenario-manager/internal/tracePersistence/service"
 	"sort"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 )
 
-var ctx = context.Background()
+const (
+	LoggerTagScenarioProcessor       = "scenario-processor"
+	currentProcessingWorkerKeyPrefix = "CPV"
+)
 
 type ScenarioProcessor struct {
 	id                      string
@@ -43,7 +46,7 @@ func NewScenarioProcessor(cfg config.AppConfigs, tps *tracePersistence.TracePers
 		return nil, err
 	}
 
-	oTelProducer, err := stores.GetTraceProducer(cfg.Redis, oTelQueue)
+	oTelProducer, err := stores.GetTraceProducer(cfg.Redis, OTelQueue)
 	if err != nil {
 		return nil, err
 	}
@@ -86,7 +89,7 @@ func (scenarioProcessor *ScenarioProcessor) init() *ScenarioProcessor {
 	duration := time.Duration(scenarioProcessor.cfg.ScenarioConfig.ProcessingIntervalInSeconds) * time.Second
 	tickerTask := ticker.GetNewTickerTask("scenario-processor", duration, scenarioProcessor.scenarioTickHandler)
 
-	zkLogger.DebugF(LoggerTag, "Starting to process all scenarios every %v", duration)
+	zkLogger.DebugF(LoggerTagScenarioProcessor, "Starting to process all scenarios every %v", duration)
 	tickerTask.Start()
 
 	return scenarioProcessor
@@ -97,7 +100,7 @@ func (scenarioProcessor *ScenarioProcessor) scenarioTickHandler() {
 	// 1. find scenario to process
 	scenario := scenarioProcessor.findScenarioToProcess()
 	if scenario == nil {
-		zkLogger.InfoF(LoggerTag, "No scenario to process")
+		zkLogger.InfoF(LoggerTagScenarioProcessor, "No scenario to process")
 		return
 	}
 
@@ -116,13 +119,13 @@ func (scenarioProcessor *ScenarioProcessor) findScenarioToProcess() *model.Scena
 	// 1. get all scenarios
 	scenarios := scenarioProcessor.scenarioStore.GetAllValues()
 	if len(scenarios) == 0 {
-		zkLogger.Error(LoggerTag, "Error getting all scenarios")
+		zkLogger.Error(LoggerTagScenarioProcessor, "Error getting all scenarios")
 		return nil
 	}
 
 	// 2. get the current scenario index to process from redis
 	if currentScenarioIndex, err = scenarioProcessor.traceStore.GetIndexOfScenarioToProcess(); err != nil {
-		zkLogger.Error(LoggerTag, "Error getting index of the scenario to process from redis")
+		zkLogger.Error(LoggerTagScenarioProcessor, "Error getting index of the scenario to process from redis")
 		return nil
 	}
 	index := int(currentScenarioIndex % int64(len(scenarios)))
@@ -156,7 +159,7 @@ func (scenarioProcessor *ScenarioProcessor) FinishedProcessingScenario(scenarioI
 	}
 	err := scenarioProcessor.traceStore.DeleteSets([]string{key})
 	if err != nil {
-		zkLogger.Error(LoggerTag, "Error deleting currently processing worker:", err)
+		zkLogger.Error(LoggerTagScenarioProcessor, "Error deleting currently processing worker:", err)
 		return
 	}
 }
@@ -170,7 +173,7 @@ func (scenarioProcessor *ScenarioProcessor) AllowedToProcessScenarioId(scenarioI
 		key := fmt.Sprintf("%s_%s", currentProcessingWorkerKeyPrefix, scenarioId)
 		err := scenarioProcessor.traceStore.SetValueForKeyWithExpiry(key, scenarioProcessorId, scenarioProcessingTime)
 		if err != nil {
-			zkLogger.Error(LoggerTag, "Error setting last processed workload set:", err)
+			zkLogger.Error(LoggerTagScenarioProcessor, "Error setting last processed workload set:", err)
 			return false
 		}
 		return true
@@ -180,12 +183,12 @@ func (scenarioProcessor *ScenarioProcessor) AllowedToProcessScenarioId(scenarioI
 
 func (scenarioProcessor *ScenarioProcessor) processScenario(scenario *model.Scenario) {
 
-	zkLogger.Debug(LoggerTag, "")
-	zkLogger.DebugF(LoggerTag, "Processing scenario: %v", scenario.Id)
+	zkLogger.Debug(LoggerTagScenarioProcessor, "")
+	zkLogger.DebugF(LoggerTagScenarioProcessor, "Processing scenario: %v", scenario.Id)
 
 	// check if allowed to process current scenario
 	if !scenarioProcessor.AllowedToProcessScenarioId(scenario.Id, scenarioProcessor.id, scenarioProcessingTime) {
-		zkLogger.Info(LoggerTag, "Another processor is already processing the scenario")
+		zkLogger.Info(LoggerTagScenarioProcessor, "Another processor is already processing the scenario")
 		return
 	}
 
@@ -198,7 +201,7 @@ func (scenarioProcessor *ScenarioProcessor) processScenario(scenario *model.Scen
 	// evaluate scenario and get all traceIds
 	allTraceIds := NewTraceEvaluator(scenarioProcessor.cfg, scenario, scenarioProcessor.traceStore, namesOfAllSets, TTLForScenarioSets).EvalScenario()
 	if allTraceIds == nil || len(allTraceIds) == 0 {
-		zkLogger.DebugF(LoggerTag, "No traces satisfying the scenario")
+		zkLogger.DebugF(LoggerTagScenarioProcessor, "No traces satisfying the scenario")
 		return
 	}
 
@@ -210,7 +213,7 @@ func (scenarioProcessor *ScenarioProcessor) processScenario(scenario *model.Scen
 	}
 	err := scenarioProcessor.traceStore.Add(setName, membersToAdd)
 	if err != nil {
-		zkLogger.DebugF(LoggerTag, "Error marking traceIds as processed in set %s : %v", setName, err)
+		zkLogger.DebugF(LoggerTagScenarioProcessor, "Error marking traceIds as processed in set %s : %v", setName, err)
 	}
 	scenarioProcessor.traceStore.SetExpiryForSet(setName, TTLForScenarioSets)
 
@@ -235,7 +238,7 @@ func (scenarioProcessor *ScenarioProcessor) getWorkLoadSetsToProcess(scenario *m
 		//	 get all the sets from redis with the workloadId prefix
 		setNames, err := scenarioProcessor.traceStore.GetAllKeysWithPrefixAndRegex(workloadId+"_", `[0-9]+$`)
 		if err != nil {
-			zkLogger.DebugF(LoggerTag, "Error getting all keys from redis for workloadId: %v - %v", workloadId, err)
+			zkLogger.DebugF(LoggerTagScenarioProcessor, "Error getting all keys from redis for workloadId: %v - %v", workloadId, err)
 			continue
 		}
 
@@ -243,4 +246,20 @@ func (scenarioProcessor *ScenarioProcessor) getWorkLoadSetsToProcess(scenario *m
 	}
 
 	return workloadSetsToProcess, joinValuesInMapToCSV(lastWorkloadSetToProcess)
+}
+
+func joinValuesInMapToCSV(data map[string]string) string {
+
+	// Initialize an empty string to store the joined values
+	var joinedValues []string
+
+	// Iterate over the map and append the values to the slice
+	for _, value := range data {
+		joinedValues = append(joinedValues, value)
+	}
+
+	// Join the values into a comma-separated string
+	result := strings.Join(joinedValues, ",")
+
+	return result
 }

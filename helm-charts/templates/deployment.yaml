@@ -44,9 +44,10 @@ spec:
               drop:
                 - ALL
       containers:
+      {{ if .Values.obfuscate }}
       - name: zk-obfuscator
-        image:  us-west1-docker.pkg.dev/zerok-dev/stage/zk-obfuscator:fastApi
-        imagePullPolicy: IfNotPresent
+        image:  "{{ .Values.global.dockerBase}}/{{ .Values.obfuscatorImage.repo}}:{{ .Values.obfuscatorImage.tag}}"
+        imagePullPolicy: {{ .Values.obfuscatorImage.imagePullPolicy }}
         ports:
           - containerPort: 9103
         volumeMounts:
@@ -63,6 +64,7 @@ spec:
               configMapKeyRef:
                 name: zk-redis-config
                 key: redisHost
+      {{ end }}
       - image: "{{ .Values.global.dockerBase}}/{{ .Values.image.repo}}:{{ .Values.image.tag}}"
         imagePullPolicy: {{ .Values.image.imagePullPolicy }}
         name: zk-scenario-manager

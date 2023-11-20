@@ -5,7 +5,7 @@
 global:
   dockerBase: "us-west1-docker.pkg.dev/zerok-dev/zk-client"
 
-obfuscate: true
+obfuscate: false
 
 replicaCount: 1
 
@@ -41,6 +41,11 @@ zkScenarioManager:
     requests:
       cpu: 256m
       memory: 64Mi
+
+obfuscatorImage:
+  repo: "zk-obfuscator"
+  tag: "0.1.0-alpha"
+  imagePullPolicy: IfNotPresent
 
 image:
   repo: "zk-scenario-manager"

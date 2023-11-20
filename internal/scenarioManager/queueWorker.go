@@ -6,9 +6,7 @@ import (
 )
 
 const (
-	oTelQueue        = "oTel"
-	oTelConsumerName = "oTel"
-
+	OTelQueue        = "oTel"
 	ebpfQueue        = "eBPF"
 	ebpfConsumerName = "eBPF"
 )
