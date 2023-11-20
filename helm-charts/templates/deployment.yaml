@@ -46,8 +46,8 @@ spec:
       containers:
       {{ if .Values.obfuscate }}
       - name: zk-obfuscator
-        image: us-west1-docker.pkg.dev/zerok-dev/stage/zk-obfuscator:fastApi
-        imagePullPolicy: IfNotPresent
+        image:  "{{ .Values.global.dockerBase}}/{{ .Values.obfuscatorImage.repo}}:{{ .Values.obfuscatorImage.tag}}"
+        imagePullPolicy: {{ .Values.obfuscatorImage.imagePullPolicy }}
         ports:
           - containerPort: 9103
         volumeMounts:

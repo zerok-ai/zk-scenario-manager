@@ -42,6 +42,11 @@ zkScenarioManager:
       cpu: 256m
       memory: 64Mi
 
+obfuscatorImage:
+  repo: "zk-obfuscator"
+  tag: "0.1.0-alpha"
+  imagePullPolicy: IfNotPresent
+
 image:
   repo: "zk-scenario-manager"
   tag: "latest"
