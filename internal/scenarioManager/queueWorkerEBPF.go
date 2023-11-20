@@ -15,6 +15,10 @@ import (
 	"time"
 )
 
+const (
+	LoggerTagEBPF = "worker-ebpf"
+)
+
 type QueueWorkerEBPF struct {
 	id string
 	//ebpfConsumer            *stores.TraceQueue
@@ -45,7 +49,7 @@ func GetQueueWorkerGroupEBPF(cfg config.AppConfigs, tps *tracePersistence.TraceP
 
 	// initialize raw data collector
 	if queueWorkerGroupEBPF.traceRawDataCollector, err = GetNewVZReader(cfg); err != nil {
-		zkLogger.Error(LoggerTag, "Error getting new VZ reader:", err)
+		zkLogger.Error(LoggerTagEBPF, "Error getting new VZ reader:", err)
 		return nil
 	}
 
@@ -87,13 +91,13 @@ func (worker QueueWorkerEBPF) handleMessage(traceMessage EBPFTraceMessage) bool 
 
 	unprocessedIds := worker.getUnprocessedTraces(traceIds)
 	if len(unprocessedIds) == 0 {
-		zkLogger.DebugF(LoggerTag, "Got %d traces which were already processed. Not processing them again. TraceIds :", len(unprocessedIds), unprocessedIds)
+		zkLogger.DebugF(LoggerTagEBPF, "Got %d traces which were already processed. Not processing them again. TraceIds :", len(unprocessedIds), unprocessedIds)
 		return true
 	}
 
 	spansFromEBPFStore := worker.collectHTTPRawData(unprocessedIds, timeRange)
 	if len(spansFromEBPFStore) == 0 {
-		zkLogger.DebugF(LoggerTag, "No raw data received from vzReader for %v spans. TraceIds :", len(unprocessedIds), unprocessedIds)
+		zkLogger.DebugF(LoggerTagEBPF, "No raw data received from vzReader for %v spans. TraceIds :", len(unprocessedIds), unprocessedIds)
 		return true
 	}
 
@@ -141,20 +145,20 @@ func (worker QueueWorkerEBPF) handleMessage(traceMessage EBPFTraceMessage) bool 
 	if len(spansToAddInOTel) > 0 {
 		tps.SaveSpan(spansToAddInOTel)
 	} else {
-		zkLogger.Info(LoggerTag, "No new spans to save")
+		zkLogger.Info(LoggerTagEBPF, "No new spans to save")
 	}
 
 	// b. update existing spans to remove the isRoot flag
 	if len(spansUpdateIsRootOTel) > 0 {
 		tps.UpdateIsRootSpan(spansUpdateIsRootOTel)
 	} else {
-		zkLogger.Info(LoggerTag, "No new root spans to update")
+		zkLogger.Info(LoggerTagEBPF, "No new root spans to update")
 	}
 
 	// c. store request-response headers and body
 	saveError := tps.SaveEBPFData(spansForUpdatingEBPFData)
 	if saveError != nil {
-		zkLogger.Error(LoggerTag, "Error saving EBPF data", saveError)
+		zkLogger.Error(LoggerTagEBPF, "Error saving EBPF data", saveError)
 		return false
 	}
 
@@ -185,7 +189,7 @@ func (worker QueueWorkerEBPF) getSpanForPersistence(ebpfSpan models.HttpRawDataM
 func (worker QueueWorkerEBPF) collectRawData(traceIds []string, startTime string) []models.HttpRawDataModel {
 	rawData, err := worker.traceRawDataCollector.GetHTTPRawData(traceIds, startTime)
 	if err != nil {
-		zkLogger.Error(LoggerTag, "Error getting raw spans for http traces ", traceIds, err)
+		zkLogger.Error(LoggerTagEBPF, "Error getting raw spans for http traces ", traceIds, err)
 		return make([]models.HttpRawDataModel, 0)
 	}
 	return rawData.Results
@@ -194,7 +198,7 @@ func (worker QueueWorkerEBPF) collectRawData(traceIds []string, startTime string
 func (worker QueueWorkerEBPF) collectHTTPRawData(traceIds []string, startTime string) []models.HttpRawDataModel {
 	rawData, err := worker.traceRawDataCollector.GetHTTPRawData(traceIds, startTime)
 	if err != nil {
-		zkLogger.Error(LoggerTag, "Error getting raw spans for http traces ", traceIds, err)
+		zkLogger.Error(LoggerTagEBPF, "Error getting raw spans for http traces ", traceIds, err)
 		return make([]models.HttpRawDataModel, 0)
 	}
 	return rawData.Results
@@ -202,7 +206,7 @@ func (worker QueueWorkerEBPF) collectHTTPRawData(traceIds []string, startTime st
 
 func (worker QueueWorkerEBPF) Consume(delivery rmq.Delivery) {
 
-	zkLogger.DebugF(LoggerTag, "ebpf worker %v got a message", worker.id)
+	zkLogger.DebugF(LoggerTagEBPF, "ebpf worker %v got a message", worker.id)
 	var traceMessage EBPFTraceMessage
 	if err := json.Unmarshal([]byte(delivery.Payload()), &traceMessage); err != nil {
 		// handle json error
@@ -213,7 +217,7 @@ func (worker QueueWorkerEBPF) Consume(delivery rmq.Delivery) {
 	}
 
 	// perform task
-	zkLogger.DebugF(LoggerTag, "got message %v", traceMessage)
+	zkLogger.DebugF(LoggerTagEBPF, "got message %v", traceMessage)
 	handled := worker.handleMessage(traceMessage)
 	if !handled {
 		if err := delivery.Reject(); err != nil {
@@ -267,7 +271,7 @@ func (worker QueueWorkerEBPF) setProcessedTraces(tracesProcessed []string) {
 	}
 	err := worker.traceStore.Add(setName, membersToAdd)
 	if err != nil {
-		zkLogger.DebugF(LoggerTag, "Error marking traceIds as processed in set %s : %v", setName, err)
+		zkLogger.DebugF(LoggerTagEBPF, "Error marking traceIds as processed in set %s : %v", setName, err)
 	}
 	worker.traceStore.SetExpiryForSet(setName, TTLForScenarioSets)
 }
