@@ -38,10 +38,11 @@ type IncidentTableDto struct {
 	TraceId                string    `json:"trace_id"`
 	IssueHash              string    `json:"issue_hash"`
 	IncidentCollectionTime time.Time `json:"incident_collection_time"`
+	RootSpanTime           time.Time `json:"root_span_time"`
 }
 
 func (t IncidentTableDto) GetAllColumns() []any {
-	return []any{t.TraceId, t.IssueHash, t.IncidentCollectionTime}
+	return []any{t.TraceId, t.IssueHash, t.IncidentCollectionTime, t.RootSpanTime}
 }
 
 type ErrorsDataTableDto struct {
@@ -112,6 +113,27 @@ func ConvertIncidentIssuesToIssueDto(s model.IncidentWithIssues, obfuscate bool)
 	var spanRawDataDtoList []SpanRawDataTableDto
 	traceId := s.Incident.TraceId
 	incidentCollectionTime := s.Incident.IncidentCollectionTime
+
+	// setting a default time so that it is never empty
+	rootSpanTime := s.Incident.Spans[0].StartTime
+	for _, span := range s.Incident.Spans {
+		if span.IsRoot {
+			rootSpanTime = span.StartTime
+		}
+		spanDataDto := SpanToSpanDto(*span, traceId)
+		spanDtoList = append(spanDtoList, spanDataDto)
+
+		if spanDataDto.HasRawData {
+			rawDataDto, err := GetRawDataDto(span.SpanRawData, obfuscate)
+			if err != nil {
+				zkLogger.Error(LogTag, err)
+				return response, err
+			}
+
+			spanRawDataDtoList = append(spanRawDataDtoList, rawDataDto)
+		}
+	}
+
 	for _, issueGroup := range s.IssueGroupList {
 		for _, issue := range issueGroup.Issues {
 			issueDto := IssueTableDto{
@@ -126,23 +148,9 @@ func ConvertIncidentIssuesToIssueDto(s model.IncidentWithIssues, obfuscate bool)
 				TraceId:                traceId,
 				IssueHash:              issue.IssueHash,
 				IncidentCollectionTime: incidentCollectionTime,
+				RootSpanTime:           rootSpanTime,
 			}
 			incidentDtoList = append(incidentDtoList, incidentDto)
-		}
-	}
-
-	for _, span := range s.Incident.Spans {
-		spanDataDto := SpanToSpanDto(*span, traceId)
-		spanDtoList = append(spanDtoList, spanDataDto)
-
-		if spanDataDto.HasRawData {
-			rawDataDto, err := GetRawDataDto(span.SpanRawData, obfuscate)
-			if err != nil {
-				zkLogger.Error(LogTag, err)
-				return response, err
-			}
-
-			spanRawDataDtoList = append(spanRawDataDtoList, rawDataDto)
 		}
 	}
 

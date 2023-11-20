@@ -151,12 +151,24 @@ func (s tracePersistenceService) UpdateIsRootSpan(data []model.Span) {
 	}
 
 	spanTableDtoList := make([]dto.SpanTableDto, 0)
+	incidentTableDtoList := make([]dto.IncidentTableDto, 0)
+	uniqueSpans := make(map[string]bool)
 	for _, spanData := range data {
+		key := spanData.TraceID + "_" + spanData.SpanID
+		if _, ok := uniqueSpans[key]; ok {
+			continue
+		}
+		uniqueSpans[key] = true
 		spanTableDto := dto.SpanTableDto{TraceID: spanData.TraceID, SpanID: spanData.SpanID, IsRoot: spanData.IsRoot}
+		incidentTableDto := dto.IncidentTableDto{
+			TraceId:      spanData.TraceID,
+			RootSpanTime: spanData.StartTime,
+		}
 		spanTableDtoList = append(spanTableDtoList, spanTableDto)
+		incidentTableDtoList = append(incidentTableDtoList, incidentTableDto)
 	}
 
-	s.repo.UpdateIsRootSpan(spanTableDtoList)
+	s.repo.UpdateIsRootSpan(spanTableDtoList, incidentTableDtoList)
 }
 
 func (s tracePersistenceService) SaveSpan(data []model.Span) *zkErrors.ZkError {
