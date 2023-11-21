@@ -98,14 +98,27 @@ func (wh *WorkloadKeyHandler) ManageWorkloadKey(workloadID string) error {
 		return fmt.Errorf("error retrieving keys with pattern %s: %v", pattern, err)
 	}
 
+	latestKeyPresent := false
+
 	// Find the highest suffix.
 	highestSuffix := -1
 	for _, key := range keys {
 		var suffix int
+
+		if key == workloadID+"_latest" {
+			latestKeyPresent = true
+			continue
+		}
+
 		_, err = fmt.Sscanf(key, workloadID+"_%d", &suffix)
 		if err == nil && suffix > highestSuffix {
 			highestSuffix = suffix
 		}
+	}
+
+	// <workloadID>_latest set is not present. Nothing to do here.
+	if !latestKeyPresent {
+		return nil
 	}
 
 	// 4. Go back and check if the value of the key created in step 1 is still its own UUID.
