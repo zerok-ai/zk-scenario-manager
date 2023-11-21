@@ -72,7 +72,7 @@ jobs:
     needs: [init,build-push,migration-build-push]
 
   deploy:
-    uses: zerok-ai/zk-git-actions/.github/workflows/zk-deploy.yml@main
+    uses: zerok-ai/zk-git-actions/.github/workflows/zk-deploy.yml@helmDependencyUpdate
     with:
       CLUSTERNAME: ${{ needs.init.outputs.CLUSTERNAME }}
       VERSION: ${{ needs.init.outputs.VERSION }}
@@ -81,4 +81,4 @@ jobs:
       ENVIRONMENT: ${{ needs.init.outputs.ENVIRONMENT }}
     secrets:
       GKE_SA_KEY: ${{ secrets.GKE_SA_KEY_DEV }}
-    needs: [init,build-push,migration-build-push,helm-push]
+    needs: [init,build-push,migration-build-push]
