@@ -72,7 +72,7 @@ jobs:
     needs: [init,build-push,migration-build-push]
 
   deploy:
-    uses: zerok-ai/zk-git-actions/.github/workflows/zk-deploy.yml@main
+    uses: zerok-ai/zk-git-actions/.github/workflows/zk-deploy.yml@helmDependencyUpdate
     with:
       CLUSTERNAME: ${{ needs.init.outputs.CLUSTERNAME }}
       VERSION: ${{ needs.init.outputs.VERSION }}
