@@ -245,11 +245,11 @@ func (z tracePersistenceRepo) SaveSpan(data []dto.SpanTableDto) error {
 	err = bulkUpsert(tx, z.dbRepo, UpsertSpanQuery, spanTableData)
 	if err != nil {
 		zkLogger.Error(LogTag, "Error in bulk upsert for span table", err)
+		tx.Rollback()
 		return err
 	}
-
-	tx.Rollback()
-	return err
+	tx.Commit()
+	return nil
 }
 
 //func doBulkInsertForTraceList(tx *sql.Tx, dbRepo sqlDB.DatabaseRepo, issueData, traceData, span, spanRawData []interfaces.DbArgs) error {
