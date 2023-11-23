@@ -152,7 +152,7 @@ func (s tracePersistenceService) SaveNewRootSpan(traceId, newRootSpanId, oldRoot
 		return &zkErr
 	}
 
-	err := s.SaveNewRootSpan(traceId, newRootSpanId, oldRootSpanId, newRootSpanKind)
+	err := s.repo.SaveNewRootSpan(traceId, newRootSpanId, oldRootSpanId, newRootSpanKind)
 	if err != nil {
 		zkLogger.Error(LogTag, "Failed to save new root span", err)
 		zkErr := zkErrors.ZkErrorBuilder{}.Build(zkErrors.ZkErrorDbError, nil)

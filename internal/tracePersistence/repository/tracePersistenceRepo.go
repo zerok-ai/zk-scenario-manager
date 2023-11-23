@@ -17,7 +17,7 @@ const (
 	UpsertIncidentQuery     = "INSERT INTO incident (trace_id, issue_hash, incident_collection_time, root_span_time) VALUES ($1, $2, $3, $4) ON CONFLICT (issue_hash, trace_id) DO NOTHING"
 	UpsertSpanQuery         = "INSERT INTO span (trace_id, parent_span_id, span_id, span_name, is_root, kind, start_time, latency, source, destination, workload_id_list, protocol, issue_hash_list, request_payload_size, response_payload_size, method, route, scheme, path, query, status, username, source_ip, destination_ip, service_name, errors, span_attributes, resource_attributes, scope_attributes, has_raw_data) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30) ON CONFLICT (trace_id, span_id) DO NOTHING"
 	UpdateIsRootSpanQuery   = "UPDATE span SET is_root = $1 WHERE trace_id=$2 AND span_id=$3"
-	DuplicateSpanQuery      = "INSERT INTO span ( trace_id, parent_span_id, span_id, is_root, kind, start_time, latency, SOURCE, destination, workload_id_list, protocol, issue_hash_list, request_payload_size, response_payload_size, METHOD, route, scheme, path, query, status, metadata, username) SELECT trace_id, parent_span_id, $1 AS span_id, $2 AS is_root, $3 AS kind, start_time, latency, SOURCE, destination, workload_id_list, protocol, issue_hash_list, request_payload_size, response_payload_size, METHOD, route, scheme, path, query, status, metadata, username FROM span WHERE trace_id = $4 AND span_id = $5"
+	DuplicateSpanQuery      = "INSERT INTO span ( trace_id, parent_span_id, span_id, is_root, kind, start_time, latency, SOURCE, destination, workload_id_list, protocol, issue_hash_list, request_payload_size, response_payload_size, METHOD, route, scheme, path, query, status, metadata, username) SELECT trace_id, '0000000000000000' AS parent_span_id, $1 AS span_id, $2 AS is_root, $3 AS kind, start_time, latency, SOURCE, destination, workload_id_list, protocol, issue_hash_list, request_payload_size, response_payload_size, METHOD, route, scheme, path, query, status, metadata, username FROM span WHERE trace_id = $4 AND span_id = $5"
 	UpdateRootSpanTimeQuery = "UPDATE incident SET root_span_time = $1 WHERE trace_id=$2"
 	UpsertSpanRawDataQuery  = "INSERT INTO span_raw_data (trace_id, span_id, req_headers, resp_headers, is_truncated, req_body, resp_body) VALUES ($1, $2, $3, $4, $5, $6, $7) ON CONFLICT (trace_id, span_id) DO UPDATE SET req_headers = excluded.req_headers, resp_headers = excluded.resp_headers, is_truncated = excluded.is_truncated, req_body = excluded.req_body, resp_body = excluded.resp_body"
 	UpdateWorkloadIdList    = "UPDATE span SET workload_id_list = ARRAY(SELECT DISTINCT UNNEST(workload_id_list || $1)) WHERE trace_id=$2 AND span_id=$3"
@@ -204,7 +204,7 @@ func (z tracePersistenceRepo) SaveNewRootSpan(traceId, newRootSpanId, oldRootSpa
 	}
 
 	var rootSpanTime time.Time
-	err = z.dbRepo.Get(GetRootSpanTimeQuery, []any{traceId, newRootSpanId}, []any{&rootSpanTime})
+	err = z.dbRepo.Get(GetRootSpanTimeQuery, []any{traceId, oldRootSpanId}, []any{&rootSpanTime})
 	if err != nil {
 		zkLogger.Error(LogTag, "Error in getting root span time", traceId, newRootSpanId, oldRootSpanId, err)
 		tx.Rollback()
@@ -233,25 +233,21 @@ func (z tracePersistenceRepo) SaveNewRootSpan(traceId, newRootSpanId, oldRootSpa
 
 func updateHelper(tx *sql.Tx, dbRepo sqlDB.DatabaseRepo, query string, param []any) (sql.Result, error) {
 	stmt, err := GetStmtRawQuery(tx, query)
-	paramStr := make([]string, len(param))
-	for i, v := range param {
-		paramStr[i] = v.(string)
-	}
-
 	if err != nil {
 		zkLogger.Error(LogTag, "Error in creating statement for update root span", err)
 		return nil, err
 	}
+
 	result, err := dbRepo.Update(stmt, param)
 	if err != nil {
-		zkLogger.Error(LogTag, "Error in update command", query, paramStr, err)
+		zkLogger.ErrorF(LogTag, "Error in update command %s %v %v", query, param, err)
 		tx.Rollback()
 		return nil, err
 	}
 
 	_, err = result.RowsAffected()
 	if err != nil {
-		zkLogger.Error(LogTag, "error in getting rows affected for update", query, paramStr, err)
+		zkLogger.ErrorF(LogTag, "error in getting rows affected for update %s %v %v", query, param, err)
 		tx.Rollback()
 		return nil, err
 	}

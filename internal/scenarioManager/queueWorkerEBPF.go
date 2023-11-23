@@ -34,6 +34,12 @@ type QueueWorkerGroupEBPF struct {
 	traceRawDataCollector *vzReader.VzReader
 }
 
+type NewRootSpan struct {
+	traceId       string
+	newRootSpanId string
+	oldRootSpanId string
+}
+
 func (workers QueueWorkerGroupEBPF) Close() {
 	workers.ebpfConsumer.Close()
 	workers.traceRawDataCollector.Close()
@@ -102,7 +108,7 @@ func (worker QueueWorkerEBPF) handleMessage(traceMessage EBPFTraceMessage) bool 
 	}
 
 	spansForUpdatingEBPFData := make([]tracePersistenceModel.Span, 0)
-	newRootSpans := make([]tracePersistenceModel.Span, 0)
+	newRootSpans := make([]NewRootSpan, 0)
 
 	for _, spanWithRawDataFromPixie := range spansFromEBPFStore {
 
@@ -127,7 +133,11 @@ func (worker QueueWorkerEBPF) handleMessage(traceMessage EBPFTraceMessage) bool 
 			// add the new span as root
 			spanForPersistence.IsRoot = true
 			spanForPersistence.Kind = CLIENT
-			newRootSpans = append(newRootSpans, spanForPersistence)
+			newRootSpans = append(newRootSpans, NewRootSpan{
+				traceId:       traceIdEbpfSpan,
+				newRootSpanId: spanIdEbpfSpan,
+				oldRootSpanId: traceOTel.RootSpanId,
+			})
 		}
 
 		spansForUpdatingEBPFData = append(spansForUpdatingEBPFData, spanForPersistence)
@@ -138,7 +148,7 @@ func (worker QueueWorkerEBPF) handleMessage(traceMessage EBPFTraceMessage) bool 
 
 	// a. save new root span
 	for _, newRootSpan := range newRootSpans {
-		tps.SaveNewRootSpan(newRootSpan.TraceID, newRootSpan.SpanID, newRootSpan.ParentSpanID, newRootSpan.Kind)
+		tps.SaveNewRootSpan(newRootSpan.traceId, newRootSpan.newRootSpanId, newRootSpan.oldRootSpanId, CLIENT)
 	}
 
 	// b. store request-response headers and body
