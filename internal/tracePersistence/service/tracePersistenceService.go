@@ -2,6 +2,7 @@ package service
 
 import (
 	"github.com/zerok-ai/zk-rawdata-reader/vzReader/utils"
+	"github.com/zerok-ai/zk-utils-go/common"
 	zkLogger "github.com/zerok-ai/zk-utils-go/logs"
 	zkErrors "github.com/zerok-ai/zk-utils-go/zkerrors"
 	"scenario-manager/internal/tracePersistence/model"
@@ -16,8 +17,7 @@ type TracePersistenceService interface {
 	SaveErrors([]model.ErrorData) *zkErrors.ZkError
 	SaveEBPFData([]model.Span) *zkErrors.ZkError
 	Close() error
-	UpdateIsRootSpan(data []model.Span)
-	SaveSpan(data []model.Span) *zkErrors.ZkError
+	SaveNewRootSpan(traceId, newRootSpanId, oldRootSpanId, newRootSpanKind string) *zkErrors.ZkError
 }
 
 func NewScenarioPersistenceService(repo repository.TracePersistenceRepo, obfuscate bool) TracePersistenceService {
@@ -145,48 +145,16 @@ func (s tracePersistenceService) SaveEBPFData(data []model.Span) *zkErrors.ZkErr
 	return nil
 }
 
-func (s tracePersistenceService) UpdateIsRootSpan(data []model.Span) {
-	if len(data) == 0 {
-		zkLogger.Error(LogTag, "Empty span list for updating root span")
-	}
-
-	spanTableDtoList := make([]dto.SpanTableDto, 0)
-	incidentTableDtoList := make([]dto.IncidentTableDto, 0)
-	uniqueSpans := make(map[string]bool)
-	for _, spanData := range data {
-		key := spanData.TraceID + "_" + spanData.SpanID
-		if _, ok := uniqueSpans[key]; ok {
-			continue
-		}
-		uniqueSpans[key] = true
-		spanTableDto := dto.SpanTableDto{TraceID: spanData.TraceID, SpanID: spanData.SpanID, IsRoot: spanData.IsRoot}
-		incidentTableDto := dto.IncidentTableDto{
-			TraceId:      spanData.TraceID,
-			RootSpanTime: spanData.StartTime,
-		}
-		spanTableDtoList = append(spanTableDtoList, spanTableDto)
-		incidentTableDtoList = append(incidentTableDtoList, incidentTableDto)
-	}
-
-	s.repo.UpdateIsRootSpan(spanTableDtoList, incidentTableDtoList)
-}
-
-func (s tracePersistenceService) SaveSpan(data []model.Span) *zkErrors.ZkError {
-	if len(data) == 0 {
-		zkLogger.Error(LogTag, "Empty span list for saving span")
+func (s tracePersistenceService) SaveNewRootSpan(traceId, newRootSpanId, oldRootSpanId, newRootSpanKind string) *zkErrors.ZkError {
+	if common.IsEmpty(traceId) || common.IsEmpty(newRootSpanId) || common.IsEmpty(oldRootSpanId) || common.IsEmpty(newRootSpanKind) {
+		zkLogger.ErrorF(LogTag, "traceid: %s, newRootSpanId: %s, oldRootSpanId: %s, newRootSpanKind: %s cannot be empty", traceId, newRootSpanId, oldRootSpanId, newRootSpanKind)
 		zkErr := zkErrors.ZkErrorBuilder{}.Build(zkErrors.ZkErrorBadRequest, nil)
 		return &zkErr
 	}
 
-	spanTableDtoList := make([]dto.SpanTableDto, 0)
-	for _, spanData := range data {
-		spanTableDto := dto.SpanToSpanDto(spanData, spanData.TraceID)
-		spanTableDtoList = append(spanTableDtoList, spanTableDto)
-	}
-
-	err := s.repo.SaveSpan(spanTableDtoList)
+	err := s.SaveNewRootSpan(traceId, newRootSpanId, oldRootSpanId, newRootSpanKind)
 	if err != nil {
-		zkLogger.Error(LogTag, "Failed to save span", err)
+		zkLogger.Error(LogTag, "Failed to save new root span", err)
 		zkErr := zkErrors.ZkErrorBuilder{}.Build(zkErrors.ZkErrorDbError, nil)
 		return &zkErr
 	}

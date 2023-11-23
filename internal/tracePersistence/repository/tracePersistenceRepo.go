@@ -16,6 +16,7 @@ const (
 	UpsertIncidentQuery     = "INSERT INTO incident (trace_id, issue_hash, incident_collection_time, root_span_time) VALUES ($1, $2, $3, $4) ON CONFLICT (issue_hash, trace_id) DO NOTHING"
 	UpsertSpanQuery         = "INSERT INTO span (trace_id, parent_span_id, span_id, span_name, is_root, kind, start_time, latency, source, destination, workload_id_list, protocol, issue_hash_list, request_payload_size, response_payload_size, method, route, scheme, path, query, status, username, source_ip, destination_ip, service_name, errors, span_attributes, resource_attributes, scope_attributes, has_raw_data) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30) ON CONFLICT (trace_id, span_id) DO NOTHING"
 	UpdateIsRootSpanQuery   = "UPDATE span SET is_root = $1 WHERE trace_id=$2 AND span_id=$3"
+	DuplicateSpanQuery      = "INSERT INTO span ( trace_id, parent_span_id, span_id, is_root, kind, start_time, latency, SOURCE, destination, workload_id_list, protocol, issue_hash_list, request_payload_size, response_payload_size, METHOD, route, scheme, path, query, status, metadata, username) SELECT trace_id, parent_span_id, $1 AS span_id, is_root, $2 AS kind, start_time, latency, SOURCE, destination, workload_id_list, protocol, issue_hash_list, request_payload_size, response_payload_size, METHOD, route, scheme, path, query, status, metadata, username FROM span WHERE trace_id = $3 AND span_id = $4"
 	UpdateRootSpanTimeQuery = "UPDATE incident SET root_span_time = $1 WHERE trace_id=$2"
 	UpsertSpanRawDataQuery  = "INSERT INTO span_raw_data (trace_id, span_id, req_headers, resp_headers, is_truncated, req_body, resp_body) VALUES ($1, $2, $3, $4, $5, $6, $7) ON CONFLICT (trace_id, span_id) DO UPDATE SET req_headers = excluded.req_headers, resp_headers = excluded.resp_headers, is_truncated = excluded.is_truncated, req_body = excluded.req_body, resp_body = excluded.resp_body"
 	UpdateWorkloadIdList    = "UPDATE span SET workload_id_list = ARRAY(SELECT DISTINCT UNNEST(workload_id_list || $1)) WHERE trace_id=$2 AND span_id=$3"
@@ -29,8 +30,7 @@ type TracePersistenceRepo interface {
 	SaveErrors(errors []dto.ErrorsDataTableDto) error
 	SaveEBPFData(rawData []dto.SpanRawDataTableDto, list []dto.SpanTableDto) error
 	Close() error
-	UpdateIsRootSpan(data []dto.SpanTableDto, list []dto.IncidentTableDto)
-	SaveSpan(data []dto.SpanTableDto) error
+	SaveNewRootSpan(traceId, newRootSpanId, oldRootSpanId, newRootSpanKind string) error
 }
 
 type tracePersistenceRepo struct {
@@ -186,102 +186,66 @@ func (z tracePersistenceRepo) SaveEBPFData(rawData []dto.SpanRawDataTableDto, li
 	return nil
 }
 
-func (z tracePersistenceRepo) UpdateIsRootSpan(data []dto.SpanTableDto, incidentList []dto.IncidentTableDto) {
-	tx, err := z.dbRepo.CreateTransaction()
-	if err != nil {
-		zkLogger.Info(LogTag, "Error Creating transaction")
-		return
-	}
-
-	for _, v := range data {
-		stmt, err := GetStmtRawQuery(tx, UpdateIsRootSpanQuery)
-		if err != nil {
-			zkLogger.Error(LogTag, "Error in bulk upsert for save ebpf in updating span root", err)
-			return
-		}
-		_, err = z.dbRepo.Update(stmt, []any{v.IsRoot, v.TraceID, v.SpanID})
-		if err != nil {
-			zkLogger.Error(LogTag, "Error in update is root span for traceId and spanId", v.TraceID, v.SpanID, err)
-		}
-	}
-
-	for _, v := range incidentList {
-		stmt, err := GetStmtRawQuery(tx, UpdateRootSpanTimeQuery)
-		if err != nil {
-			zkLogger.Error(LogTag, "Error in bulk upsert for save ebpf in updating root span time", err)
-			return
-		}
-		_, err = z.dbRepo.Update(stmt, []any{v.RootSpanTime, v.TraceId})
-		if err != nil {
-			zkLogger.Error(LogTag, "Error in update span root time for traceId", v.IncidentCollectionTime, err)
-		}
-	}
-
-	if err != nil {
-		zkLogger.Error(LogTag, "Error in bulk upsert for errors table", err)
-		tx.Rollback()
-		return
-	}
-	tx.Commit()
-}
-
-func (z tracePersistenceRepo) SaveSpan(data []dto.SpanTableDto) error {
+func (z tracePersistenceRepo) SaveNewRootSpan(traceId, newRootSpanId, oldRootSpanId, newRootSpanKind string) error {
 	tx, err := z.dbRepo.CreateTransaction()
 	if err != nil {
 		zkLogger.Info(LogTag, "Error Creating transaction")
 		return err
 	}
 
-	spanTableData := make([]interfaces.DbArgs, 0)
-	uniqueSpans := make(map[string]bool)
-	for _, v := range data {
-		key := v.TraceID + v.SpanID
-		if _, ok := uniqueSpans[key]; !ok {
-			uniqueSpans[key] = true
-			spanTableData = append(spanTableData, v)
-		}
-	}
-
-	err = bulkUpsert(tx, z.dbRepo, UpsertSpanQuery, spanTableData)
+	stmt, err := GetStmtRawQuery(tx, DuplicateSpanQuery)
 	if err != nil {
-		zkLogger.Error(LogTag, "Error in bulk upsert for span table", err)
+		zkLogger.Error(LogTag, "Error in creating statement for duplicate span", err)
+		return err
+	}
+	result, err := z.dbRepo.Update(stmt, []any{newRootSpanId, newRootSpanKind, traceId, oldRootSpanId})
+	if err != nil {
+		zkLogger.Error(LogTag, "Error in update is root span for traceId and spanId", traceId, newRootSpanId, oldRootSpanId, err)
 		tx.Rollback()
 		return err
 	}
+
+	affectedRows, err := result.RowsAffected()
+	if err != nil {
+		zkLogger.Error(LogTag, "Error in update is root span for traceId and spanId", traceId, newRootSpanId, oldRootSpanId, err)
+		tx.Rollback()
+		return err
+	}
+
+	if affectedRows != 1 {
+		zkLogger.Error(LogTag, "Error in duplicating span, affected row not equal to 1", traceId, newRootSpanId, oldRootSpanId, err)
+		tx.Rollback()
+		return err
+	}
+
+	stmt, err = GetStmtRawQuery(tx, UpdateIsRootSpanQuery)
+	if err != nil {
+		zkLogger.Error(LogTag, "Error in creating statement for update root span", err)
+		return err
+	}
+	result, err = z.dbRepo.Update(stmt, []any{false, traceId, oldRootSpanId})
+	if err != nil {
+		zkLogger.Error(LogTag, "Error in setting is_root false in traceId and spanId", traceId, newRootSpanId, oldRootSpanId, err)
+		tx.Rollback()
+		return err
+	}
+
+	affectedRows, err = result.RowsAffected()
+	if err != nil {
+		zkLogger.Error(LogTag, "error in getting rows affected for update is root traceId and spanId", traceId, newRootSpanId, oldRootSpanId, err)
+		tx.Rollback()
+		return err
+	}
+
+	if affectedRows != 1 {
+		zkLogger.Error(LogTag, "Error in update is root span for traceId and spanId, affected row not equal to 1", traceId, newRootSpanId, oldRootSpanId, err)
+		tx.Rollback()
+		return err
+	}
+
 	tx.Commit()
 	return nil
 }
-
-//func doBulkInsertForTraceList(tx *sql.Tx, dbRepo sqlDB.DatabaseRepo, issueData, traceData, span, spanRawData []interfaces.DbArgs) error {
-//
-//	err := bulkInsert(tx, dbRepo, IssueTablePostgres, []string{IssueHash, IssueTitle, ScenarioId, ScenarioVersion}, issueData)
-//	if err != nil {
-//		zkLogger.Info(LogTag, "Error in bulk insert trace table", err)
-//		return err
-//	}
-//
-//	err = bulkInsert(tx, dbRepo, IncidentTablePostgres, []string{TraceId, IssueHash, IncidentCollectionTime, EntryService, Endpoint, ProtocolTraces, RootSpanTime, LatencyNs}, traceData)
-//	if err != nil {
-//		zkLogger.Info(LogTag, "Error in bulk insert trace table", err)
-//		return err
-//	}
-//
-//	cols := []string{TraceId, SpanId, ParentSpanId, Source, Destination, WorkloadIdList, Status, Metadata, LatencyNs, ProtocolTraces, IssueHashList, Time}
-//
-//	err = bulkInsert(tx, dbRepo, SpanTablePostgres, cols, span)
-//	if err != nil {
-//		zkLogger.Info(LogTag, "Error in bulk insert span table", err)
-//		return err
-//	}
-//
-//	err = bulkInsert(tx, dbRepo, SpanRawDataTablePostgres, []string{TraceId, SpanId, RequestPayload, ResponsePayload}, spanRawData)
-//	if err != nil {
-//		zkLogger.Info(LogTag, "Error in bulk insert spanRawData table", err)
-//		return err
-//	}
-//
-//	return nil
-//}
 
 func bulkInsert(tx *sql.Tx, dbRepo sqlDB.DatabaseRepo, table string, columns []string, data []interfaces.DbArgs) error {
 
