@@ -102,8 +102,7 @@ func (worker QueueWorkerEBPF) handleMessage(traceMessage EBPFTraceMessage) bool 
 	}
 
 	spansForUpdatingEBPFData := make([]tracePersistenceModel.Span, 0)
-	spansToAddInOTel := make([]tracePersistenceModel.Span, 0)
-	spansUpdateIsRootOTel := make([]tracePersistenceModel.Span, 0)
+	newRootSpans := make([]tracePersistenceModel.Span, 0)
 
 	for _, spanWithRawDataFromPixie := range spansFromEBPFStore {
 
@@ -125,14 +124,10 @@ func (worker QueueWorkerEBPF) handleMessage(traceMessage EBPFTraceMessage) bool 
 		// This client was not captured by oTel because it didn't have the trace id in the request header. The traceId
 		// was added later in the header by oTel and hence EBPF layer captured it while the response was going out.
 		if traceOTel.RootSpanId != "" && traceOTel.RootSpanKind == SERVER && traceOTel.RootSpanParent == spanIdEbpfSpan {
-
-			// mark the current root span as non-root
-			spansUpdateIsRootOTel = append(spansUpdateIsRootOTel, *worker.getSpanForUpdateRoot(traceIdEbpfSpan, traceOTel.RootSpanId, false))
-
 			// add the new span as root
 			spanForPersistence.IsRoot = true
 			spanForPersistence.Kind = CLIENT
-			spansToAddInOTel = append(spansToAddInOTel, spanForPersistence)
+			newRootSpans = append(newRootSpans, spanForPersistence)
 		}
 
 		spansForUpdatingEBPFData = append(spansForUpdatingEBPFData, spanForPersistence)
@@ -141,21 +136,12 @@ func (worker QueueWorkerEBPF) handleMessage(traceMessage EBPFTraceMessage) bool 
 	// save spans in trace persistence store
 	tps := *worker.tracePersistenceService
 
-	// a. save new spans
-	if len(spansToAddInOTel) > 0 {
-		tps.SaveSpan(spansToAddInOTel)
-	} else {
-		zkLogger.Info(LoggerTagEBPF, "No new spans to save")
+	// a. save new root span
+	for _, newRootSpan := range newRootSpans {
+		tps.SaveNewRootSpan(newRootSpan.TraceID, newRootSpan.SpanID, newRootSpan.ParentSpanID, newRootSpan.Kind)
 	}
 
-	// b. update existing spans to remove the isRoot flag
-	if len(spansUpdateIsRootOTel) > 0 {
-		tps.UpdateIsRootSpan(spansUpdateIsRootOTel)
-	} else {
-		zkLogger.Info(LoggerTagEBPF, "No new root spans to update")
-	}
-
-	// c. store request-response headers and body
+	// b. store request-response headers and body
 	saveError := tps.SaveEBPFData(spansForUpdatingEBPFData)
 	if saveError != nil {
 		zkLogger.Error(LoggerTagEBPF, "Error saving EBPF data", saveError)
