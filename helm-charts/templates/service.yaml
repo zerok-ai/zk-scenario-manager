@@ -8,7 +8,6 @@ spec:
   type: ClusterIP
   selector:
     app: zk-scenario-manager
-    {{- include "zk-scenario-manager.labels" . | nindent 4 }}
   ports:
     - name: web
       port: 80
