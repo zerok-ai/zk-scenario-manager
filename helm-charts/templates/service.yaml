@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "zk-scenario-manager.fullname" . }}
+  labels:
+  {{- include "zk-scenario-manager.labels" . | nindent 4 }}
+spec:
+  type: ClusterIP
+  selector:
+    app: zk-scenario-manager
+    {{- include "zk-scenario-manager.labels" . | nindent 4 }}
+  ports:
+    - name: web
+      port: 80
+      targetPort: 80
