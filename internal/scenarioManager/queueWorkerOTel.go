@@ -90,8 +90,8 @@ func (worker *QueueWorkerOTel) handleMessage(oTelMessage OTELTraceMessage) {
 	}
 
 	// 3. rate limit incidents
-	//newIncidentList := worker.rateLimitIncidents(incidents, oTelMessage.Scenario)
-	newIncidentList := incidents
+	newIncidentList := worker.rateLimitIncidents(incidents, oTelMessage.Scenario)
+	//newIncidentList := incidents
 
 	if len(newIncidentList) == 0 {
 		zkLogger.InfoF(LoggerTagOTel, "rate limited %d incidents. nothing to save", len(incidents))
