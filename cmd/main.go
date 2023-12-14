@@ -6,14 +6,11 @@ import (
 	zkConfig "github.com/zerok-ai/zk-utils-go/config"
 	zkHttpConfig "github.com/zerok-ai/zk-utils-go/http/config"
 	zkLogger "github.com/zerok-ai/zk-utils-go/logs"
-	zkPostgres "github.com/zerok-ai/zk-utils-go/storage/sqlDB/postgres"
 	"net/http"
 	"os"
 	"scenario-manager/config"
 	sm "scenario-manager/internal/scenarioManager"
 	"scenario-manager/internal/timedWorkers"
-	"scenario-manager/internal/tracePersistence/repository"
-	"scenario-manager/internal/tracePersistence/service"
 	"strconv"
 	"time"
 )
@@ -46,46 +43,26 @@ func main() {
 	zkHttpConfig.Init(cfg.Http.Debug)
 	zkLogger.Init(cfg.LogsConfig)
 
-	zkPostgresRepo, err := zkPostgres.NewZkPostgresRepo(cfg.Postgres)
-	if err != nil {
-		panic(err)
-	}
-
-	tpr := repository.NewTracePersistenceRepo(zkPostgresRepo)
-	tps := service.NewScenarioPersistenceService(tpr, shouldObfuscate)
-
-	scenarioProcessor, err := sm.NewScenarioProcessor(cfg, &tps)
+	scenarioProcessor, err := sm.NewScenarioProcessor(cfg)
 	if err != nil {
 		panic(err)
 	}
 	defer scenarioProcessor.Close()
 
 	// start OTel worker
-	oTelWorker := sm.GetQueueWorkerOTel(cfg, &tps)
+	oTelWorker := sm.GetQueueWorkerOTel(cfg)
 	defer oTelWorker.Close()
-
-	// start EBPF worker
-	ebpfWorkers := sm.GetQueueWorkerGroupEBPF(cfg, &tps, 2)
-	defer ebpfWorkers.Close()
 
 	configurator := iris.WithConfiguration(iris.Configuration{
 		DisablePathCorrection: true,
 		LogLevel:              cfg.LogsConfig.Level,
 	})
 
-	// Start all timed workers
-	upidToServiceWorker, err := timedWorkers.NewUPIDToServiceMapWorker(cfg)
-	if err != nil {
-		zkLogger.Info(LogTag, "Failed to start UPIDToServiceMapWorker")
-	}
-
 	workloadKeyHandler, err := timedWorkers.NewWorkloadKeyHandler(&cfg, scenarioProcessor.GetScenarioStore())
 	if err != nil {
 		zkLogger.Info(LogTag, "Failed to start workloadKeyHandler")
 	}
 	defer workloadKeyHandler.Close()
-
-	defer upidToServiceWorker.Close()
 
 	if err = newApp().Listen(":"+cfg.Server.Port, configurator); err != nil {
 		panic(err)

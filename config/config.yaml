@@ -9,6 +9,7 @@ redis:
     executor_attr: 4
     pod_details: 7
     error_details: 8
+    resource_and_scope_attr: 5
   readTimeout: 20
 postgres:
   host: 127.0.0.1

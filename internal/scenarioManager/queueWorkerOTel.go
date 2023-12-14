@@ -11,13 +11,13 @@ import (
 	"github.com/zerok-ai/zk-utils-go/ds"
 	zkLogger "github.com/zerok-ai/zk-utils-go/logs"
 	"github.com/zerok-ai/zk-utils-go/scenario/model"
-	zkRedis "github.com/zerok-ai/zk-utils-go/storage/redis"
-	zkErrors "github.com/zerok-ai/zk-utils-go/zkerrors"
+	otlpCommonV1 "go.opentelemetry.io/proto/otlp/common/v1"
+	v1 "go.opentelemetry.io/proto/otlp/resource/v1"
+	otlpTraceV1 "go.opentelemetry.io/proto/otlp/trace/v1"
 	"scenario-manager/config"
 	typedef "scenario-manager/internal"
 	"scenario-manager/internal/stores"
 	tracePersistenceModel "scenario-manager/internal/tracePersistence/model"
-	tracePersistence "scenario-manager/internal/tracePersistence/service"
 	"time"
 )
 
@@ -28,40 +28,32 @@ const (
 
 var ctx = context.Background()
 
-type TMapOfSpanIdToSpan map[typedef.TSpanId]*tracePersistenceModel.Span
+type TMapOfSpanIdToSpan map[typedef.TSpanId]*stores.SpanFromOTel
 
 type QueueWorkerOTel struct {
-	id                      string
-	oTelStore               *stores.OTelDataHandler
-	errorCacheSaveHooks     ErrorCacheSaveHooks[string]
-	errorStoreReader        *zkRedis.LocalCacheKVStore[string]
-	traceStore              *stores.TraceStore
-	tracePersistenceService *tracePersistence.TracePersistenceService
-	oTelConsumer            *stores.TraceQueue
-	ebpfProducer            *stores.TraceQueue
+	id             string
+	oTelStore      *stores.OTelDataHandler
+	attributeStore *stores.AttributesStore
+	errorStore     *stores.ErrorStore
+	traceStore     *stores.TraceStore
+	oTelConsumer   *stores.TraceQueue
+	ebpfProducer   *stores.TraceQueue
 }
 
-func GetQueueWorkerOTel(cfg config.AppConfigs, tps *tracePersistence.TracePersistenceService) *QueueWorkerOTel {
+func GetQueueWorkerOTel(cfg config.AppConfigs) *QueueWorkerOTel {
 
 	// initialize worker
 	worker := QueueWorkerOTel{
-		id:                      "O" + uuid.New().String(),
-		oTelStore:               stores.GetOTelStore(cfg.Redis),
-		tracePersistenceService: tps,
-		traceStore:              stores.GetTraceStore(cfg.Redis, TTLForTransientSets),
+		id:             "O" + uuid.New().String(),
+		oTelStore:      stores.GetOTelStore(cfg.Redis),
+		traceStore:     stores.GetTraceStore(cfg.Redis, TTLForTransientSets),
+		attributeStore: stores.GetAttributesStore(cfg.Redis),
+		errorStore:     stores.GetErrorStore(cfg.Redis),
 	}
 
 	// oTel consumer and error store
 	var err error
 	worker.oTelConsumer, err = stores.GetTraceConsumer(cfg.Redis, []rmq.Consumer{&worker}, OTelQueue)
-	if err != nil {
-		return nil
-	}
-	worker.errorCacheSaveHooks = ErrorCacheSaveHooks[string]{oTelMessageConsumer: &worker}
-	worker.errorStoreReader = GetLRUCacheStore(cfg.Redis, &worker.errorCacheSaveHooks, ctx)
-
-	// ebpf producer
-	worker.ebpfProducer, err = stores.GetTraceProducer(cfg.Redis, ebpfQueue)
 	if err != nil {
 		return nil
 	}
@@ -71,10 +63,10 @@ func GetQueueWorkerOTel(cfg config.AppConfigs, tps *tracePersistence.TracePersis
 
 func (worker *QueueWorkerOTel) Close() {
 	worker.oTelStore.Close()
-	worker.errorStoreReader.Close()
+	worker.attributeStore.Close()
+	worker.errorStore.Close()
 	worker.traceStore.Close()
 	worker.oTelConsumer.Close()
-	worker.ebpfProducer.Close()
 }
 
 func (worker *QueueWorkerOTel) handleMessage(oTelMessage OTELTraceMessage) {
@@ -82,7 +74,7 @@ func (worker *QueueWorkerOTel) handleMessage(oTelMessage OTELTraceMessage) {
 	zkLogger.DebugF(LoggerTagOTel, "oTelWorker %v got a message", worker.id)
 
 	// 1. Collect span relation and span data for the traceIDs
-	tracesFromOTelStore := worker.getDataFromOTelStore(oTelMessage.Traces)
+	tracesFromOTelStore, resourceHashToInfoMap, scopeHashToInfoMap := worker.getDataFromOTelStore(oTelMessage.Traces)
 	if tracesFromOTelStore == nil || len(tracesFromOTelStore) == 0 {
 		return
 	}
@@ -102,79 +94,94 @@ func (worker *QueueWorkerOTel) handleMessage(oTelMessage OTELTraceMessage) {
 		return
 	}
 
-	// 4. save incidents in persistent storage
-	zkLogger.InfoF(LoggerTagOTel, "Sending incidents for persistence, incident count: %d", len(newIncidentList))
-	saveError := (*worker.tracePersistenceService).SaveIncidents(newIncidentList)
-	if saveError != nil {
-		zkLogger.Error(LoggerTagOTel, "Error saving incidents", saveError)
-	}
-
-	// 5. publish traces to ebpf queue
-	tracesFromOTel := make([]TraceFromOTel, 0)
+	// 4. save attributes details
+	spanBuffer := make([]*stores.SpanFromOTel, 0)
 	for _, incident := range newIncidentList {
-
-		trace := TraceFromOTel{
-			TraceId: incident.Incident.TraceId,
+		for _, span := range incident.Incident.Spans {
+			span.Span.Attributes = typedef.ConvertMapToKVList(span.SpanAttributes)
+			spanBuffer = append(spanBuffer, span)
 		}
-
-		rootSpan := getRootSpanFromIncident(incident.Incident)
-		if rootSpan != nil {
-			trace.RootSpanId = rootSpan.SpanID
-			trace.RootSpanParent = rootSpan.ParentSpanID
-			trace.RootSpanKind = rootSpan.Kind
-		}
-
-		tracesFromOTel = append(tracesFromOTel, trace)
 	}
 
-	if len(tracesFromOTel) == 0 {
-		zkLogger.Debug(LoggerTagOTel, "nothing to publish to ebpf queue")
-		return
-	}
+	resourceBuffer := ConvertOtelSpanToResourceSpan(spanBuffer, resourceHashToInfoMap, scopeHashToInfoMap)
 
-	traceMessage := EBPFTraceMessage{
-		Scenario:   oTelMessage.Scenario,
-		ProducerId: worker.id,
-		Traces:     tracesFromOTel,
-	}
-	err := worker.ebpfProducer.PublishTracesToQueue(traceMessage)
-	if err != nil {
-		zkLogger.Error(LoggerTagOTel, "Error publishing traces to raw data queue", err)
-	}
-
+	resourceBufferByteArr, _ := json.Marshal(resourceBuffer)
+	fmt.Printf("resourceBufferByteArr: %v", resourceBufferByteArr)
 }
 
-func getRootSpanFromIncident(incident tracePersistenceModel.Incident) *tracePersistenceModel.Span {
-	spans := incident.Spans
+func ConvertOtelSpanToResourceSpan(spans []*stores.SpanFromOTel, resourceHashToInfoMap, scopeHashToInfoMap map[string]map[string]interface{}) []*otlpTraceV1.ResourceSpans {
+
+	resourceMap := make(map[string]map[string][]stores.SpanFromOTel)
+
 	for _, span := range spans {
-		if span.IsRoot {
-			return span
+		if scopeMap, ok := resourceMap[span.ResourceAttributesHash]; ok {
+			if spans, ok2 := scopeMap[span.ScopeAttributesHash]; ok2 {
+				spans = append(spans, *span)
+			} else {
+				spanList := make([]stores.SpanFromOTel, 0)
+				scopeMap[span.ScopeAttributesHash] = append(spanList, *span)
+			}
+		} else {
+			spanList := make([]stores.SpanFromOTel, 0)
+			resourceMap[span.ResourceAttributesHash] = map[string][]stores.SpanFromOTel{
+				span.ScopeAttributesHash: append(spanList, *span),
+			}
 		}
 	}
-	return nil
+
+	resourceSpans := make([]*otlpTraceV1.ResourceSpans, 0)
+
+	resourceHashToAttr := make(map[string][]*otlpCommonV1.KeyValue)
+	scopeHashToAttr := make(map[string][]*otlpCommonV1.KeyValue)
+
+	for key, value := range resourceHashToInfoMap {
+		resourceHashToAttr[key] = typedef.ConvertMapToKVList(value)
+	}
+
+	for key, value := range scopeHashToInfoMap {
+		scopeHashToAttr[key] = typedef.ConvertMapToKVList(value)
+	}
+
+	for resourceHash, scopeMap := range resourceMap {
+		scopeSpansList := make([]*otlpTraceV1.ScopeSpans, 0)
+		resource := otlpTraceV1.ResourceSpans{
+			Resource: &v1.Resource{
+				Attributes: resourceHashToAttr[resourceHash],
+			},
+			SchemaUrl: resourceHashToInfoMap[resourceHash]["schema_url"].(string),
+		}
+		for scopeHash, spanList := range scopeMap {
+			scopeSpans := otlpTraceV1.ScopeSpans{
+				Scope: &otlpCommonV1.InstrumentationScope{
+					Attributes: scopeHashToAttr[scopeHash],
+					Name:       scopeHashToInfoMap[scopeHash]["name"].(string),
+					Version:    scopeHashToInfoMap[scopeHash]["version"].(string),
+				},
+				SchemaUrl: scopeHashToInfoMap[scopeHash]["schema_url"].(string),
+			}
+			scopeSpans.Spans = make([]*otlpTraceV1.Span, 0)
+			for _, span := range spanList {
+				scopeSpans.Spans = append(scopeSpans.Spans, span.Span)
+			}
+			scopeSpansList = append(scopeSpansList, &scopeSpans)
+		}
+		resource.ScopeSpans = scopeSpansList
+		resourceSpans = append(resourceSpans, &resource)
+	}
+
+	return resourceSpans
 }
 
-func (worker *QueueWorkerOTel) getDataFromOTelStore(traceIds []typedef.TTraceid) map[typedef.TTraceid]*stores.TraceFromOTel {
-	tracesFromOTelStore, oTelErrors, err := worker.oTelStore.GetSpansForTracesFromDB(traceIds)
+func (worker *QueueWorkerOTel) getDataFromOTelStore(traceIds []typedef.TTraceid) (map[typedef.TTraceid]*stores.TraceFromOTel, map[string]map[string]interface{}, map[string]map[string]interface{}) {
+	tracesFromOTelStore, err := worker.oTelStore.GetSpansForTracesFromDB(traceIds)
 	if err != nil {
 		zkLogger.Error(LoggerTagOTel, "error in getting data from OTel zkRedis", err)
 	}
 
-	if oTelErrors != nil && len(oTelErrors) > 0 {
-		errorData := make([]tracePersistenceModel.ErrorData, 0)
-		for _, errorID := range oTelErrors {
-			expStrPtr, isFromCache := worker.errorStoreReader.Get(errorID)
-			if !isFromCache {
-				expData := tracePersistenceModel.ErrorData{Id: errorID, Data: *expStrPtr}
-				errorData = append(errorData, expData)
-			}
-		}
-		if len(errorData) > 0 {
-			(*worker.tracePersistenceService).SaveErrors(errorData)
-		}
-	}
+	resourceHashToInfoMap, scopeHashToInfoMap := worker.attributeStore.GetResourceScopeInfoForHashes(tracesFromOTelStore)
+	tracesFromOTelStore = worker.errorStore.GetExceptionDataForHashes(tracesFromOTelStore)
 
-	return tracesFromOTelStore
+	return tracesFromOTelStore, resourceHashToInfoMap, scopeHashToInfoMap
 }
 
 func (worker *QueueWorkerOTel) buildIncidentsForPersistence(scenario *model.Scenario, tracesFromOTel map[typedef.TTraceid]*stores.TraceFromOTel) []tracePersistenceModel.IncidentWithIssues {
@@ -187,7 +194,7 @@ func (worker *QueueWorkerOTel) buildIncidentsForPersistence(scenario *model.Scen
 	for traceId, traceFromOTel := range tracesFromOTel {
 		spanMapOfPersistentSpans := make(TMapOfSpanIdToSpan)
 		for _, spanFromOTel := range traceFromOTel.Spans {
-			spanMapOfPersistentSpans[spanFromOTel.SpanID] = spanFromOTel.SpanForPersistence
+			spanMapOfPersistentSpans[spanFromOTel.SpanID] = spanFromOTel
 		}
 		traceTreeForPersistence[traceId] = &spanMapOfPersistentSpans
 
@@ -201,7 +208,7 @@ func (worker *QueueWorkerOTel) buildIncidentsForPersistence(scenario *model.Scen
 
 func (worker *QueueWorkerOTel) evaluateIncidents(traceId typedef.TTraceid, scenario *model.Scenario, spansOfTrace TMapOfSpanIdToSpan) tracePersistenceModel.IncidentWithIssues {
 
-	spans := make([]*tracePersistenceModel.Span, 0)
+	spans := make([]*stores.SpanFromOTel, 0)
 	for key := range spansOfTrace {
 		spans = append(spans, spansOfTrace[key])
 	}
@@ -289,7 +296,7 @@ func getListOfIssuesForScenario(scenario *model.Scenario, spanMap TMapOfSpanIdTo
 		for _, workloadId := range workloadIdList {
 			spans, ok := workloadIdToSpanArrayMap[typedef.TWorkloadId(workloadId)]
 			if !ok {
-				spans = make([]*tracePersistenceModel.Span, 0)
+				spans = make([]*stores.SpanFromOTel, 0)
 			}
 			workloadIdToSpanArrayMap[typedef.TWorkloadId(workloadId)] = append(spans, span)
 		}
@@ -297,7 +304,7 @@ func getListOfIssuesForScenario(scenario *model.Scenario, spanMap TMapOfSpanIdTo
 
 	// 3. do a cartesian product of all the elements in workloadIdSet. This gives us all the possible combinations of
 	//	workloads-span groups that can be give rise to a unique issues
-	issueSource := make([]map[typedef.TWorkloadId]*tracePersistenceModel.Span, 0)
+	issueSource := make([]map[typedef.TWorkloadId]*stores.SpanFromOTel, 0)
 	for workloadId := range workloadIdListInGroup {
 		arrSpans := workloadIdToSpanArrayMap[workloadId]
 		issueSource = getCartesianProductOfSpans(issueSource, arrSpans, workloadId)
@@ -322,7 +329,7 @@ func getListOfIssuesForScenario(scenario *model.Scenario, spanMap TMapOfSpanIdTo
 			}
 
 			// 4.a.3. get the group_by object from span for the current scenario
-			groupByForScenario, ok := span.GroupByMap[tracePersistenceModel.ScenarioId(scenario.Id)]
+			groupByForScenario, ok := span.GroupByMap[stores.ScenarioId(scenario.Id)]
 			if !ok {
 				//not sure why would this happen
 				continue
@@ -384,18 +391,18 @@ func getListOfIssuesForScenario(scenario *model.Scenario, spanMap TMapOfSpanIdTo
 	return issues
 }
 
-func getCartesianProductOfSpans(previousResult []map[typedef.TWorkloadId]*tracePersistenceModel.Span, multiplier []*tracePersistenceModel.Span, workload typedef.TWorkloadId) []map[typedef.TWorkloadId]*tracePersistenceModel.Span {
+func getCartesianProductOfSpans(previousResult []map[typedef.TWorkloadId]*stores.SpanFromOTel, multiplier []*stores.SpanFromOTel, workload typedef.TWorkloadId) []map[typedef.TWorkloadId]*stores.SpanFromOTel {
 
 	if len(multiplier) == 0 {
 		return previousResult
 	}
 
 	if len(previousResult) == 0 {
-		previousResult = append(previousResult, make(map[typedef.TWorkloadId]*tracePersistenceModel.Span))
+		previousResult = append(previousResult, make(map[typedef.TWorkloadId]*stores.SpanFromOTel))
 	}
 
 	//e.g. [w2:s1,w1:s2] x w3:[s3,s4] = [w2:s1,w1:s2,w3:s3] [w2:s1,w1:s2,w3:s4]
-	result := make([]map[typedef.TWorkloadId]*tracePersistenceModel.Span, 0)
+	result := make([]map[typedef.TWorkloadId]*stores.SpanFromOTel, 0)
 	for _, s1 := range previousResult {
 		for _, s2 := range multiplier {
 			newMap := s1
@@ -404,20 +411,6 @@ func getCartesianProductOfSpans(previousResult []map[typedef.TWorkloadId]*traceP
 		}
 	}
 	return result
-}
-
-type ErrorCacheSaveHooks[T any] struct {
-	oTelMessageConsumer *QueueWorkerOTel
-}
-
-func (errorCacheSaveHooks *ErrorCacheSaveHooks[T]) PreCacheSaveHookAsync(key string, value *T) *zkErrors.ZkError {
-
-	if value != nil {
-		strToSave := fmt.Sprintf("%v", *value)
-		return (*errorCacheSaveHooks.oTelMessageConsumer.tracePersistenceService).SaveErrors([]tracePersistenceModel.ErrorData{{Id: key, Data: strToSave}})
-	}
-
-	return nil
 }
 
 func (worker *QueueWorkerOTel) Consume(delivery rmq.Delivery) {

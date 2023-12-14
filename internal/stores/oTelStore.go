@@ -4,16 +4,16 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/redis/go-redis/v9"
-	zkCommon "github.com/zerok-ai/zk-utils-go/common"
 	zkLogger "github.com/zerok-ai/zk-utils-go/logs"
 	"github.com/zerok-ai/zk-utils-go/storage/redis/clientDBNames"
 	"github.com/zerok-ai/zk-utils-go/storage/redis/config"
+	otlpCommonV1 "go.opentelemetry.io/proto/otlp/common/v1"
+	otlpTraceV1 "go.opentelemetry.io/proto/otlp/trace/v1"
 	typedef "scenario-manager/internal"
-	tracePersistenceModel "scenario-manager/internal/tracePersistence/model"
 )
 
-type TWorkLoadIdToSpan map[typedef.TWorkloadId]*tracePersistenceModel.Span
-type TWorkLoadIdToSpanArray map[typedef.TWorkloadId][]*tracePersistenceModel.Span
+type TWorkLoadIdToSpan map[typedef.TWorkloadId]*SpanFromOTel
+type TWorkLoadIdToSpanArray map[typedef.TWorkloadId][]*SpanFromOTel
 
 type OTelDataHandler struct {
 	redisClient *redis.Client
@@ -44,103 +44,20 @@ type OTelError struct {
 }
 
 type SpanFromOTel struct {
-	TraceID      typedef.TTraceid
-	SpanID       typedef.TSpanId
-	ParentSpanID typedef.TSpanId `json:"parent_span_id"`
-
-	SpanName   string `json:"span_name"`
-	Kind       string `json:"span_kind"`
-	Method     string `json:"method"`
-	OTelSchema string `json:"schema_version"`
-
-	StartTimeNS uint64 `json:"start_ns"`
-	LatencyNS   uint64 `json:"latency_ns"`
-
-	ServiceName string `json:"service_name"`
-	Source      string `json:"source"`
-	SourceIP    string `json:"source_ip"`
-	Destination string `json:"destination"`
-	DestIP      string `json:"destination_ip"`
-
-	Errors   []OTelError          `json:"errors"`
-	Protocol typedef.ProtocolType `json:"protocol"`
-
-	GroupByMap tracePersistenceModel.GroupByMap `json:"group_by"`
-
-	WorkloadIDList []string `json:"workload_id_list"`
-
-	// attributes
-	SpanAttributes     zkCommon.GenericMap `json:"attributes"`
-	ResourceAttributes zkCommon.GenericMap `json:"resource_attributes"`
-	ScopeAttributes    zkCommon.GenericMap `json:"scope_attributes"`
-
-	SpanForPersistence *tracePersistenceModel.Span
-	Children           []SpanFromOTel
-
-	// Protocol properties.
-	Route    string   `json:"route"`
-	Scheme   string   `json:"scheme"`
-	Path     string   `json:"path"`
-	Query    string   `json:"query"`
-	Status   *float64 `json:"status"`
-	Username string   `json:"username"`
-}
-
-func (spanFromOTel *SpanFromOTel) createAndPopulateSpanForPersistence() {
-
-	spanFromOTel.SpanForPersistence = &tracePersistenceModel.Span{
-		TraceID:           string(spanFromOTel.TraceID),
-		SpanID:            string(spanFromOTel.SpanID),
-		SpanName:          spanFromOTel.SpanName,
-		OTelSchemaVersion: spanFromOTel.OTelSchema,
-		Kind:              spanFromOTel.Kind,
-		ParentSpanID:      string(spanFromOTel.ParentSpanID),
-		StartTime:         EpochNanoSecondsToTime(spanFromOTel.StartTimeNS),
-		Latency:           spanFromOTel.LatencyNS,
-		WorkloadIDList:    spanFromOTel.WorkloadIDList,
-		GroupByMap:        spanFromOTel.GroupByMap,
-		Method:            spanFromOTel.Method,
-
-		ServiceName:   spanFromOTel.ServiceName,
-		Source:        spanFromOTel.Source,
-		SourceIP:      spanFromOTel.SourceIP,
-		Destination:   spanFromOTel.Destination,
-		DestinationIP: spanFromOTel.DestIP,
-		Protocol:      spanFromOTel.Protocol,
-
-		SpanAttributes:     spanFromOTel.SpanAttributes,
-		ResourceAttributes: spanFromOTel.ResourceAttributes,
-		ScopeAttributes:    spanFromOTel.ScopeAttributes,
-
-		Status:   spanFromOTel.Status,
-		Route:    spanFromOTel.Route,
-		Scheme:   spanFromOTel.Scheme,
-		Query:    spanFromOTel.Query,
-		Path:     spanFromOTel.Path,
-		Username: spanFromOTel.Username,
-	}
-}
-
-func (spanFromOTel *SpanFromOTel) populateErrorAttributeMap() []string {
-
-	errorIds := make([]string, 0)
-
-	spanForPersistence := spanFromOTel.SpanForPersistence
-	// set protocol for exception
-	if spanFromOTel.Errors != nil && len(spanFromOTel.Errors) > 0 {
-
-		for _, oTelError := range spanFromOTel.Errors {
-			errorIds = append(errorIds, oTelError.Hash)
-		}
-
-		bytesOTelErrors, err := json.Marshal(spanFromOTel.Errors)
-		if err != nil {
-			zkLogger.Error(LoggerTag, "populateErrorAttributeMap: err=", err)
-			return errorIds
-		}
-		spanForPersistence.Errors = string(bytesOTelErrors)
-	}
-	return errorIds
+	Span                   *otlpTraceV1.Span        `json:"span"`
+	SpanAttributes         map[string]interface{}   `json:"span_attributes,omitempty"`
+	SpanEvents             []map[string]interface{} `json:"span_events,omitempty"`
+	ResourceAttributesHash string                   `json:"resource_attributes_hash,omitempty"`
+	ScopeAttributesHash    string                   `json:"scope_attributes_hash,omitempty"`
+	WorkloadIDList         []string                 `json:"workload_id_list"`
+	GroupByMap             GroupByMap               `json:"group_by"`
+	ScopeAttributes        []*otlpCommonV1.KeyValue `json:"scope_attributes,omitempty"`
+	ResourceAttributes     []*otlpCommonV1.KeyValue `json:"resource_attributes,omitempty"`
+	TraceID                typedef.TTraceid         `json:"trace_id"`
+	IsRoot                 bool                     `json:"is_root"`
+	IssueHashList          []string                 `json:"issue_hash_list"`
+	SpanID                 typedef.TSpanId          `json:"span_id"`
+	ParentSpanID           typedef.TSpanId          `json:"parent_span_id"`
 }
 
 type SpanAttributes interface {
@@ -156,7 +73,7 @@ type TraceFromOTel struct {
 // GetSpansForTracesFromDB retrieves the spans for the given traceIds from the database
 // Returns a map of traceId to TraceFromOTel
 // Returns a map of protocol to array of traces
-func (t OTelDataHandler) GetSpansForTracesFromDB(keys []typedef.TTraceid) (result map[typedef.TTraceid]*TraceFromOTel, oTelErrors []string, err error) {
+func (t OTelDataHandler) GetSpansForTracesFromDB(keys []typedef.TTraceid) (result map[typedef.TTraceid]*TraceFromOTel, err error) {
 
 	redisClient := t.redisClient
 
@@ -172,20 +89,18 @@ func (t OTelDataHandler) GetSpansForTracesFromDB(keys []typedef.TTraceid) (resul
 	_, err = pipe.Exec(ctx)
 	if err != nil {
 		fmt.Println("Error executing transaction:", err)
-		return nil, nil, err
+		return nil, err
 	}
 
 	// 4. Process the results
-	result, oTelErrors = t.processResult(keys, hashResults)
+	result = t.processResult(keys, hashResults)
 
-	return result, oTelErrors, nil
+	return result, nil
 }
 
-func (t OTelDataHandler) processResult(keys []typedef.TTraceid, hashResults []*redis.MapStringStringCmd) (result map[typedef.TTraceid]*TraceFromOTel, errors []string) {
+func (t OTelDataHandler) processResult(keys []typedef.TTraceid, hashResults []*redis.MapStringStringCmd) (result map[typedef.TTraceid]*TraceFromOTel) {
 
 	result = make(map[typedef.TTraceid]*TraceFromOTel)
-	errors = make([]string, 0)
-
 	for i, hashResult := range hashResults {
 		traceId := keys[i]
 		trace, err1 := hashResult.Result()
@@ -212,10 +127,6 @@ func (t OTelDataHandler) processResult(keys []typedef.TTraceid, hashResults []*r
 			}
 			sp.TraceID = traceId
 			sp.SpanID = typedef.TSpanId(spanId)
-			sp.createAndPopulateSpanForPersistence()
-
-			// handle exceptions
-			errors = append(errors, sp.populateErrorAttributeMap()...)
 
 			traceFromOTel.Spans[typedef.TSpanId(spanId)] = &sp
 		}
@@ -223,10 +134,8 @@ func (t OTelDataHandler) processResult(keys []typedef.TTraceid, hashResults []*r
 		// 4.2 set the parent-child relationships and find root span
 		var rootSpan *SpanFromOTel
 		for _, spanFromOTel := range traceFromOTel.Spans {
-			parentSpan, ok := traceFromOTel.Spans[spanFromOTel.ParentSpanID]
-			if ok {
-				parentSpan.Children = append(parentSpan.Children, *spanFromOTel)
-			} else {
+			_, ok := traceFromOTel.Spans[spanFromOTel.ParentSpanID]
+			if !ok {
 				rootSpan = spanFromOTel
 			}
 		}
@@ -236,11 +145,21 @@ func (t OTelDataHandler) processResult(keys []typedef.TTraceid, hashResults []*r
 			continue
 		}
 
-		rootSpan.SpanForPersistence.IsRoot = true
+		rootSpan.IsRoot = true
 		traceFromOTel.RootSpanID = rootSpan.SpanID
 
 		result[traceId] = traceFromOTel
 	}
 
-	return result, errors
+	return result
 }
+
+type GroupByValueItem struct {
+	WorkloadId string `json:"workload_id"`
+	Title      string `json:"title"`
+	Hash       string `json:"hash"`
+}
+
+type GroupByValues []*GroupByValueItem
+type ScenarioId string
+type GroupByMap map[ScenarioId]GroupByValues

@@ -13,7 +13,6 @@ import (
 	"scenario-manager/config"
 	typedef "scenario-manager/internal"
 	"scenario-manager/internal/stores"
-	tracePersistence "scenario-manager/internal/tracePersistence/service"
 	"sort"
 	"strconv"
 	"strings"
@@ -27,19 +26,18 @@ const (
 )
 
 type ScenarioProcessor struct {
-	id                      string
-	cfg                     config.AppConfigs
-	scenarioStore           *zkRedis.VersionedStore[model.Scenario]
-	tracePersistenceService *tracePersistence.TracePersistenceService
-	traceStore              *stores.TraceStore
-	oTelStore               *stores.OTelDataHandler
-	oTelProducer            *stores.TraceQueue
-	traceRawDataCollector   *vzReader.VzReader
-	issueRateMap            typedef.IssueRateMap
-	mutex                   sync.Mutex
+	id                    string
+	cfg                   config.AppConfigs
+	scenarioStore         *zkRedis.VersionedStore[model.Scenario]
+	traceStore            *stores.TraceStore
+	oTelStore             *stores.OTelDataHandler
+	oTelProducer          *stores.TraceQueue
+	traceRawDataCollector *vzReader.VzReader
+	issueRateMap          typedef.IssueRateMap
+	mutex                 sync.Mutex
 }
 
-func NewScenarioProcessor(cfg config.AppConfigs, tps *tracePersistence.TracePersistenceService) (*ScenarioProcessor, error) {
+func NewScenarioProcessor(cfg config.AppConfigs) (*ScenarioProcessor, error) {
 
 	vs, err := zkRedis.GetVersionedStore[model.Scenario](&cfg.Redis, clientDBNames.ScenariosDBName, ScenarioRefreshInterval)
 	if err != nil {
@@ -52,12 +50,11 @@ func NewScenarioProcessor(cfg config.AppConfigs, tps *tracePersistence.TracePers
 	}
 
 	fp := ScenarioProcessor{
-		id:                      "S" + uuid.New().String(),
-		scenarioStore:           vs,
-		traceStore:              stores.GetTraceStore(cfg.Redis, TTLForTransientSets),
-		oTelProducer:            oTelProducer,
-		tracePersistenceService: tps,
-		cfg:                     cfg,
+		id:            "S" + uuid.New().String(),
+		scenarioStore: vs,
+		traceStore:    stores.GetTraceStore(cfg.Redis, TTLForTransientSets),
+		oTelProducer:  oTelProducer,
+		cfg:           cfg,
 	}
 
 	reader, err := GetNewVZReader(cfg)

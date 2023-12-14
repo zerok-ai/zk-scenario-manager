@@ -6,12 +6,12 @@ require (
 	github.com/adjust/rmq/v5 v5.2.0
 	github.com/google/uuid v1.4.0
 	github.com/kataras/iris/v12 v12.2.0
-	github.com/lib/pq v1.10.9
 	github.com/pkg/errors v0.9.1
 	github.com/redis/go-redis/v9 v9.0.5
 	github.com/stretchr/testify v1.8.4
 	github.com/zerok-ai/zk-rawdata-reader v0.5.3
-	github.com/zerok-ai/zk-utils-go v0.5.17
+	github.com/zerok-ai/zk-utils-go v0.5.19-0.20231211091230-492cfaecb8dd
+	go.opentelemetry.io/proto/otlp v1.0.0
 )
 
 require (
@@ -58,6 +58,7 @@ require (
 	github.com/lestrrat-go/iter v1.0.2 // indirect
 	github.com/lestrrat-go/jwx v1.2.26 // indirect
 	github.com/lestrrat-go/option v1.0.1 // indirect
+	github.com/lib/pq v1.10.9 // indirect
 	github.com/mailgun/raymond/v2 v2.0.48 // indirect
 	github.com/mailru/easyjson v0.7.7 // indirect
 	github.com/microcosm-cc/bluemonday v1.0.26 // indirect
