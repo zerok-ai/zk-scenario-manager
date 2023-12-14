@@ -199,10 +199,16 @@ func ConvertOtelSpanToResourceSpan(spans []*stores.SpanFromOTel, resourceHashToI
 	scopeHashToAttr := make(map[string][]*otlpCommonV1.KeyValue)
 
 	for key, value := range resourceHashToInfoMap {
+		if value["attributes"] == nil {
+			continue
+		}
 		resourceHashToAttr[key] = typedef.ConvertMapToKVList(value["attributes"].(map[string]interface{}))
 	}
 
 	for key, value := range scopeHashToInfoMap {
+		if value["attributes"] == nil {
+			continue
+		}
 		scopeHashToAttr[key] = typedef.ConvertMapToKVList(value["attributes"].(map[string]interface{}))
 	}
 
