@@ -90,7 +90,8 @@ func (worker *QueueWorkerOTel) handleMessage(oTelMessage OTELTraceMessage) {
 	}
 
 	// 3. rate limit incidents
-	newIncidentList := worker.rateLimitIncidents(incidents, oTelMessage.Scenario)
+	//newIncidentList := worker.rateLimitIncidents(incidents, oTelMessage.Scenario)
+	newIncidentList := incidents
 
 	if len(newIncidentList) == 0 {
 		zkLogger.InfoF(LoggerTagOTel, "rate limited %d incidents. nothing to save", len(incidents))
@@ -156,8 +157,8 @@ func (worker *QueueWorkerOTel) handleMessage(oTelMessage OTELTraceMessage) {
 	//fmt.Printf("resourceBufferByteArr: %v", resourceBufferByteArr)
 
 	fmt.Println("Testing")
-	// Set up a connection to the server.
-	conn, err := grpc.Dial("otel-collector.px-collector.svc.cluster.local", grpc.WithInsecure())
+	// Set up a connection to the server
+	conn, err := grpc.Dial("otel-collector.px-collector.svc.cluster.local:4319", grpc.WithInsecure())
 	//conn, err := grpc.Dial("localhost:4319", grpc.WithInsecure())
 	if err != nil {
 		log.Fatalf("did not connect: %v", err)
