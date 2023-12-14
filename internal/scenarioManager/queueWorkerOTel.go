@@ -11,9 +11,12 @@ import (
 	"github.com/zerok-ai/zk-utils-go/ds"
 	zkLogger "github.com/zerok-ai/zk-utils-go/logs"
 	"github.com/zerok-ai/zk-utils-go/scenario/model"
+	pb "go.opentelemetry.io/proto/otlp/collector/trace/v1"
 	otlpCommonV1 "go.opentelemetry.io/proto/otlp/common/v1"
 	v1 "go.opentelemetry.io/proto/otlp/resource/v1"
 	otlpTraceV1 "go.opentelemetry.io/proto/otlp/trace/v1"
+	"google.golang.org/grpc"
+	"log"
 	"scenario-manager/config"
 	typedef "scenario-manager/internal"
 	"scenario-manager/internal/stores"
@@ -94,6 +97,49 @@ func (worker *QueueWorkerOTel) handleMessage(oTelMessage OTELTraceMessage) {
 		return
 	}
 
+	//for _, incident := range newIncidentList {
+	//	isRootSpanPresent := false
+	//	for _, span := range incident.Incident.Spans {
+	//		if span.IsRoot {
+	//			isRootSpanPresent = true
+	//			break
+	//		}
+	//	}
+	//	if !isRootSpanPresent {
+	//		zkLogger.ErrorF(LoggerTagOTel, "no root span found for incident %v", incident)
+	//	}
+	//}
+
+	// 3.1 move scenario id to root span
+	for _, incident := range newIncidentList {
+		for _, span := range incident.Incident.Spans {
+			if span.WorkloadIDList != nil && len(span.WorkloadIDList) != 0 {
+				var workloadIdList []*otlpCommonV1.AnyValue
+				for _, workloadId := range span.WorkloadIDList {
+					workloadIdList = append(workloadIdList, &otlpCommonV1.AnyValue{Value: &otlpCommonV1.AnyValue_StringValue{StringValue: workloadId}})
+				}
+
+				span.Span.Attributes = append(span.Span.Attributes, &otlpCommonV1.KeyValue{
+					Key:   "workload_id_list",
+					Value: &otlpCommonV1.AnyValue{Value: &otlpCommonV1.AnyValue_ArrayValue{ArrayValue: &otlpCommonV1.ArrayValue{Values: workloadIdList}}},
+				})
+			}
+
+			if span.IsRoot {
+				var scenarioIdList []*otlpCommonV1.AnyValue
+				for _, issueGroup := range incident.IssueGroupList {
+					scenarioIdList = append(scenarioIdList, &otlpCommonV1.AnyValue{Value: &otlpCommonV1.AnyValue_StringValue{StringValue: issueGroup.ScenarioId}})
+				}
+
+				span.Span.Attributes = append(span.Span.Attributes, &otlpCommonV1.KeyValue{
+					Key:   "scenario_id",
+					Value: &otlpCommonV1.AnyValue{Value: &otlpCommonV1.AnyValue_ArrayValue{ArrayValue: &otlpCommonV1.ArrayValue{Values: scenarioIdList}}},
+				})
+				break
+			}
+		}
+	}
+
 	// 4. save attributes details
 	spanBuffer := make([]*stores.SpanFromOTel, 0)
 	for _, incident := range newIncidentList {
@@ -102,11 +148,29 @@ func (worker *QueueWorkerOTel) handleMessage(oTelMessage OTELTraceMessage) {
 			spanBuffer = append(spanBuffer, span)
 		}
 	}
-
+	var tracesData pb.ExportTraceServiceRequest
 	resourceBuffer := ConvertOtelSpanToResourceSpan(spanBuffer, resourceHashToInfoMap, scopeHashToInfoMap)
+	tracesData.ResourceSpans = resourceBuffer
 
-	resourceBufferByteArr, _ := json.Marshal(resourceBuffer)
-	fmt.Printf("resourceBufferByteArr: %v", resourceBufferByteArr)
+	//resourceBufferByteArr, _ := json.Marshal(resourceBuffer)
+	//fmt.Printf("resourceBufferByteArr: %v", resourceBufferByteArr)
+
+	fmt.Println("Testing")
+	// Set up a connection to the server.
+	conn, err := grpc.Dial("otel-collector.px-collector.svc.cluster.local:4319", grpc.WithInsecure())
+	//conn, err := grpc.Dial("localhost:4319", grpc.WithInsecure())
+	if err != nil {
+		log.Fatalf("did not connect: %v", err)
+	}
+	defer conn.Close()
+	c := pb.NewTraceServiceClient(conn)
+
+	// Contact the server and print out its response.
+	response, err := c.Export(context.Background(), &tracesData)
+	if err != nil {
+		log.Fatalf("could not send trace data: %v", err)
+	}
+	log.Printf("Response: %v", response)
 }
 
 func ConvertOtelSpanToResourceSpan(spans []*stores.SpanFromOTel, resourceHashToInfoMap, scopeHashToInfoMap map[string]map[string]interface{}) []*otlpTraceV1.ResourceSpans {
@@ -135,11 +199,11 @@ func ConvertOtelSpanToResourceSpan(spans []*stores.SpanFromOTel, resourceHashToI
 	scopeHashToAttr := make(map[string][]*otlpCommonV1.KeyValue)
 
 	for key, value := range resourceHashToInfoMap {
-		resourceHashToAttr[key] = typedef.ConvertMapToKVList(value)
+		resourceHashToAttr[key] = typedef.ConvertMapToKVList(value["attributes"].(map[string]interface{}))
 	}
 
 	for key, value := range scopeHashToInfoMap {
-		scopeHashToAttr[key] = typedef.ConvertMapToKVList(value)
+		scopeHashToAttr[key] = typedef.ConvertMapToKVList(value["attributes"].(map[string]interface{}))
 	}
 
 	for resourceHash, scopeMap := range resourceMap {
