@@ -157,7 +157,7 @@ func (worker *QueueWorkerOTel) handleMessage(oTelMessage OTELTraceMessage) {
 
 	fmt.Println("Testing")
 	// Set up a connection to the server.
-	conn, err := grpc.Dial("otel-collector.px-collector.svc.cluster.local:4319", grpc.WithInsecure())
+	conn, err := grpc.Dial("grpc://otel-collector.px-collector.svc.cluster.local:4319", grpc.WithInsecure())
 	//conn, err := grpc.Dial("localhost:4319", grpc.WithInsecure())
 	if err != nil {
 		log.Fatalf("did not connect: %v", err)
