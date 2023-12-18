@@ -86,7 +86,7 @@ func (wh *WorkloadKeyHandler) ManageWorkloadKey(workloadID string) error {
 	}
 
 	// 2. Create a key with value(rename_worker_<workload_id>) as the UUID of the pod with ttl as 1min
-
+	//TODO: We can use SetNX here to make sure competing pods don't try to set the key at the same time.
 	if err = wh.RedisHandler.SetWithTTL(lockKeyName, wh.UUID, TickerInterval); err != nil {
 		return fmt.Errorf("error setting key with TTL: %v", err)
 	}
@@ -122,6 +122,7 @@ func (wh *WorkloadKeyHandler) ManageWorkloadKey(workloadID string) error {
 	}
 
 	// 4. Go back and check if the value of the key created in step 1 is still its own UUID.
+	//TODO: We can use EVAL function or a lua script to keep the get and delete operation atomic.
 	currentValue, err = wh.RedisHandler.Get(lockKeyName)
 	if err != nil {
 		return fmt.Errorf("error getting value for key %s: %v", lockKeyName, err)
