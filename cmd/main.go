@@ -50,7 +50,7 @@ func main() {
 	defer scenarioProcessor.Close()
 
 	// start OTel worker
-	oTelWorker := sm.GetQueueWorkerOTel(cfg)
+	oTelWorker := sm.GetQueueWorkerOTel(cfg, scenarioProcessor.GetScenarioStore())
 	defer oTelWorker.Close()
 
 	configurator := iris.WithConfiguration(iris.Configuration{

@@ -1,6 +1,7 @@
 package redis
 
 import (
+	"github.com/redis/go-redis/v9"
 	"time"
 )
 
@@ -10,6 +11,7 @@ type RedisHandlerInterface interface {
 	Set(key string, value interface{}) error
 	Get(key string) (string, error)
 	SetNX(key string, value interface{}) error
+	SetNXWithTTL(key string, value interface{}, ttl time.Duration) error
 	HSet(key string, value interface{}) error
 	HMSet(key string, value interface{}) error
 	GetKeysByPattern(pattern string) ([]string, error)
@@ -18,5 +20,6 @@ type RedisHandlerInterface interface {
 	RenameKeyWithTTL(oldKey string, newKey string, ttl time.Duration) error
 	CheckRedisConnection() error
 	HGetAll(key string) (map[string]string, error)
+	Eval(script string, keys []string, args ...interface{}) *redis.Cmd
 	Shutdown()
 }

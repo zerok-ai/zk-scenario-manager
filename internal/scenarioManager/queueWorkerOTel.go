@@ -10,7 +10,9 @@ import (
 	"github.com/google/uuid"
 	"github.com/zerok-ai/zk-utils-go/ds"
 	zkLogger "github.com/zerok-ai/zk-utils-go/logs"
+	"github.com/zerok-ai/zk-utils-go/scenario"
 	"github.com/zerok-ai/zk-utils-go/scenario/model"
+	zkRedis "github.com/zerok-ai/zk-utils-go/storage/redis"
 	pb "go.opentelemetry.io/proto/otlp/collector/trace/v1"
 	otlpCommonV1 "go.opentelemetry.io/proto/otlp/common/v1"
 	v1 "go.opentelemetry.io/proto/otlp/resource/v1"
@@ -41,9 +43,10 @@ type QueueWorkerOTel struct {
 	traceStore     *stores.TraceStore
 	oTelConsumer   *stores.TraceQueue
 	ebpfProducer   *stores.TraceQueue
+	scenarioStore  *zkRedis.VersionedStore[model.Scenario]
 }
 
-func GetQueueWorkerOTel(cfg config.AppConfigs) *QueueWorkerOTel {
+func GetQueueWorkerOTel(cfg config.AppConfigs, scenarioStore *zkRedis.VersionedStore[model.Scenario]) *QueueWorkerOTel {
 
 	// initialize worker
 	worker := QueueWorkerOTel{
@@ -52,6 +55,7 @@ func GetQueueWorkerOTel(cfg config.AppConfigs) *QueueWorkerOTel {
 		traceStore:     stores.GetTraceStore(cfg.Redis, TTLForTransientSets),
 		attributeStore: stores.GetAttributesStore(cfg.Redis),
 		errorStore:     stores.GetErrorStore(cfg.Redis),
+		scenarioStore:  scenarioStore,
 	}
 
 	// oTel consumer and error store
@@ -125,12 +129,13 @@ func (worker *QueueWorkerOTel) handleMessage(oTelMessage OTELTraceMessage) {
 			}
 
 			if span.IsRoot {
-				var scenarioIdList []interface{}
-				for _, issueGroup := range incident.IssueGroupList {
-					scenarioIdList = append(scenarioIdList, issueGroup.ScenarioId)
+				scenarios := worker.scenarioStore.GetAllValues()
+				scenarioIds, err := scenario.FindMatchingScenarios(span.WorkloadIDList, scenarios)
+				if err != nil {
+					zkLogger.Error(LoggerTagOTel, "error in getting scenario ids for workload ids", err)
+				} else {
+					span.SpanAttributes["scenario_id_list"] = scenarioIds
 				}
-
-				span.SpanAttributes["scenario_id_list"] = scenarioIdList
 			}
 		}
 	}

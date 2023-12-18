@@ -41,6 +41,11 @@ type ScenariosConfig struct {
 	VZClusterKey                string `yaml:"vzClusterKey" env-description:"vz cluster key"`
 }
 
+type WorkLoadConfig struct {
+	WorkLoadTtl            int `yaml:"ttl"`
+	WorkLoadTickerDuration int `yaml:"tickerDuration"`
+}
+
 // AppConfigs is an application configuration structure
 type AppConfigs struct {
 	Redis          storage.RedisConfig             `yaml:"redis"`
@@ -54,4 +59,5 @@ type AppConfigs struct {
 	Greeting       string                          `env:"GREETING" env-description:"Greeting phrase" env-default:"Hello!"`
 	SuprSend       SuprSendConfig                  `yaml:"suprsend"`
 	ScenarioConfig ScenariosConfig                 `yaml:"scenarioConfig"`
+	Workload       WorkLoadConfig                  `yaml:"workLoad"`
 }
