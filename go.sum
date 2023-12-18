@@ -201,12 +201,6 @@ github.com/yuin/gopher-lua v1.1.0 h1:BojcDhfyDWgU2f2TOzYK/g5p2gxMrku8oupLDqlnSqE
 github.com/yuin/gopher-lua v1.1.0/go.mod h1:GBR0iDaNXjAgGg9zfCvksxSRnQx76gclCIb7kdAd1Pw=
 github.com/zerok-ai/zk-rawdata-reader v0.5.3 h1:XBbK4Dm7sI+fcsFFRnprrVQrNSkn1kCWF6aeVc/fusk=
 github.com/zerok-ai/zk-rawdata-reader v0.5.3/go.mod h1:GNFYev1p4/t9IoHMCX43/Yexc6K4j93to/kkcytIsFc=
-github.com/zerok-ai/zk-utils-go v0.5.19-0.20231215104055-85cb658116c4 h1:k5oM8NBMoMQh68HyRRkt0gE0FOXTkb020yJ9S0rnd6c=
-github.com/zerok-ai/zk-utils-go v0.5.19-0.20231215104055-85cb658116c4/go.mod h1:rvHpUbscGLcD5VcY+31a0wNXuT7Ucj+7lxXT8sqvkDA=
-github.com/zerok-ai/zk-utils-go v0.5.19-0.20231215111810-aca426986cdb h1:f1j02Z9YN8Q+Ev1hMNc8y09xRNE2H+jFNVadjxwDAcI=
-github.com/zerok-ai/zk-utils-go v0.5.19-0.20231215111810-aca426986cdb/go.mod h1:rvHpUbscGLcD5VcY+31a0wNXuT7Ucj+7lxXT8sqvkDA=
-github.com/zerok-ai/zk-utils-go v0.5.19-0.20231215112410-9b394f9acb9b h1:WVp82N8iIkplu4G9vedh42SCJ0QeJhJnKH7f4i54Gmw=
-github.com/zerok-ai/zk-utils-go v0.5.19-0.20231215112410-9b394f9acb9b/go.mod h1:rvHpUbscGLcD5VcY+31a0wNXuT7Ucj+7lxXT8sqvkDA=
 github.com/zerok-ai/zk-utils-go v0.5.19-0.20231218061052-0734617883aa h1:PGTBH/4lEUs8wzZ7wIiUgQDETIi0O07YHkWy4lnKHKs=
 github.com/zerok-ai/zk-utils-go v0.5.19-0.20231218061052-0734617883aa/go.mod h1:rvHpUbscGLcD5VcY+31a0wNXuT7Ucj+7lxXT8sqvkDA=
 go.opentelemetry.io/proto/otlp v1.0.0 h1:T0TX0tmXU8a3CbNXzEKGeU5mIVOdf0oykP+u2lIVU/I=
