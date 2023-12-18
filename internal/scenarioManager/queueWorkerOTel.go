@@ -112,31 +112,25 @@ func (worker *QueueWorkerOTel) handleMessage(oTelMessage OTELTraceMessage) {
 	//}
 
 	// 3.1 move scenario id to root span
-	for _, incident := range newIncidentList {
-		for _, span := range incident.Incident.Spans {
+	for incidentIndex := 0; incidentIndex < len(newIncidentList); incidentIndex++ {
+		incident := &newIncidentList[incidentIndex]
+		for spanIndex := 0; incidentIndex < len(incident.Incident.Spans); incidentIndex++ {
+			span := incident.Incident.Spans[spanIndex]
 			if span.WorkloadIDList != nil && len(span.WorkloadIDList) != 0 {
-				var workloadIdList []*otlpCommonV1.AnyValue
+				var workloadIdList []interface{}
 				for _, workloadId := range span.WorkloadIDList {
-					workloadIdList = append(workloadIdList, &otlpCommonV1.AnyValue{Value: &otlpCommonV1.AnyValue_StringValue{StringValue: workloadId}})
+					workloadIdList = append(workloadIdList, workloadId)
 				}
-
-				span.Span.Attributes = append(span.Span.Attributes, &otlpCommonV1.KeyValue{
-					Key:   "workload_id_list",
-					Value: &otlpCommonV1.AnyValue{Value: &otlpCommonV1.AnyValue_ArrayValue{ArrayValue: &otlpCommonV1.ArrayValue{Values: workloadIdList}}},
-				})
+				span.SpanAttributes["workload_id_list"] = workloadIdList
 			}
 
 			if span.IsRoot {
-				var scenarioIdList []*otlpCommonV1.AnyValue
+				var scenarioIdList []interface{}
 				for _, issueGroup := range incident.IssueGroupList {
-					scenarioIdList = append(scenarioIdList, &otlpCommonV1.AnyValue{Value: &otlpCommonV1.AnyValue_StringValue{StringValue: issueGroup.ScenarioId}})
+					scenarioIdList = append(scenarioIdList, issueGroup.ScenarioId)
 				}
 
-				span.Span.Attributes = append(span.Span.Attributes, &otlpCommonV1.KeyValue{
-					Key:   "scenario_id",
-					Value: &otlpCommonV1.AnyValue{Value: &otlpCommonV1.AnyValue_ArrayValue{ArrayValue: &otlpCommonV1.ArrayValue{Values: scenarioIdList}}},
-				})
-				break
+				span.SpanAttributes["scenario_id_list"] = scenarioIdList
 			}
 		}
 	}
