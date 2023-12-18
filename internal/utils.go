@@ -26,6 +26,18 @@ func GetAnyValueFromInterface(value interface{}) *v1.AnyValue {
 				StringValue: v,
 			},
 		}
+	case []string:
+		var values []*v1.AnyValue
+		for _, item := range v {
+			values = append(values, GetAnyValueFromInterface(item))
+		}
+		return &v1.AnyValue{
+			Value: &v1.AnyValue_ArrayValue{
+				ArrayValue: &v1.ArrayValue{
+					Values: values,
+				},
+			},
+		}
 	case []interface{}:
 		var values []*v1.AnyValue
 		for _, item := range v {

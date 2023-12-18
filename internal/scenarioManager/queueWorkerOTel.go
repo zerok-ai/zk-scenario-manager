@@ -118,25 +118,35 @@ func (worker *QueueWorkerOTel) handleMessage(oTelMessage OTELTraceMessage) {
 	// 3.1 move scenario id to root span
 	for incidentIndex := 0; incidentIndex < len(newIncidentList); incidentIndex++ {
 		incident := &newIncidentList[incidentIndex]
-		for spanIndex := 0; incidentIndex < len(incident.Incident.Spans); incidentIndex++ {
+		var rootSpan *stores.SpanFromOTel
+		var allWorkloadIdsInTrace []string
+		for spanIndex := 0; spanIndex < len(incident.Incident.Spans); spanIndex++ {
 			span := incident.Incident.Spans[spanIndex]
 			if span.WorkloadIDList != nil && len(span.WorkloadIDList) != 0 {
-				var workloadIdList []interface{}
+				var workloadIdList []string
 				for _, workloadId := range span.WorkloadIDList {
 					workloadIdList = append(workloadIdList, workloadId)
 				}
 				span.SpanAttributes["workload_id_list"] = workloadIdList
+				allWorkloadIdsInTrace = append(allWorkloadIdsInTrace, workloadIdList...)
 			}
 
 			if span.IsRoot {
-				scenarios := worker.scenarioStore.GetAllValues()
-				scenarioIds, err := scenario.FindMatchingScenarios(span.WorkloadIDList, scenarios)
-				if err != nil {
-					zkLogger.Error(LoggerTagOTel, "error in getting scenario ids for workload ids", err)
-				} else {
-					span.SpanAttributes["scenario_id_list"] = scenarioIds
-				}
+				rootSpan = span
 			}
+		}
+
+		if rootSpan == nil {
+			zkLogger.ErrorF(LoggerTagOTel, "no root span found for incident %v", incident)
+			continue
+		}
+
+		scenarios := worker.scenarioStore.GetAllValues()
+		scenarioIds, err := scenario.FindMatchingScenarios(allWorkloadIdsInTrace, scenarios)
+		if err != nil {
+			zkLogger.Error(LoggerTagOTel, "error in getting scenario ids for workload ids", err)
+		} else {
+			rootSpan.SpanAttributes["scenario_id_list"] = scenarioIds
 		}
 	}
 

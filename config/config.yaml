@@ -33,3 +33,6 @@ scenarioConfig:
 server:
   host: localhost
   port: 80
+workLoad:
+  ttl: 900
+  tickerDuration: 60
