@@ -102,6 +102,13 @@ func (worker *QueueWorkerOTel) handleMessage(oTelMessage OTELTraceMessage) {
 		return
 	}
 
+	for _, incident := range newIncidentList {
+		if len(tracesFromOTelStore[typedef.TTraceid(incident.Incident.TraceId)].Spans) != len(incident.Incident.Spans) {
+			zkLogger.ErrorF(LoggerTagOTel, "span count mismatch for incident %v", incident)
+			zkLogger.Error(LoggerTagOTel, "OtelCount: %d, newIncidentCount: %d", len(tracesFromOTelStore[typedef.TTraceid(incident.Incident.TraceId)].Spans), len(incident.Incident.Spans))
+		}
+	}
+
 	//for _, incident := range newIncidentList {
 	//	isRootSpanPresent := false
 	//	for _, span := range incident.Incident.Spans {
@@ -146,7 +153,7 @@ func (worker *QueueWorkerOTel) handleMessage(oTelMessage OTELTraceMessage) {
 		if err != nil {
 			zkLogger.Error(LoggerTagOTel, "error in getting scenario ids for workload ids", err)
 		} else {
-			rootSpan.SpanAttributes["scenario_id_list"] = scenarioIds
+			rootSpan.SpanAttributes["probes"] = scenarioIds
 		}
 	}
 

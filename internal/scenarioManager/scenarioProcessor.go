@@ -14,7 +14,6 @@ import (
 	typedef "scenario-manager/internal"
 	"scenario-manager/internal/stores"
 	"sort"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -110,8 +109,7 @@ func (scenarioProcessor *ScenarioProcessor) findScenarioToProcess() *model.Scena
 	// declare variables
 	var currentScenarioIndex int64
 	var err error
-	var scenarioIds []int
-	var sid int
+	var scenarioIds []string
 
 	// 1. get all scenarios
 	scenarios := scenarioProcessor.scenarioStore.GetAllValues()
@@ -128,17 +126,13 @@ func (scenarioProcessor *ScenarioProcessor) findScenarioToProcess() *model.Scena
 	index := int(currentScenarioIndex % int64(len(scenarios)))
 
 	// 3. sort all the scenarios based on the scenario ids.
-	for key := range scenarios {
-		// convert key to integer
-		if sid, err = strconv.Atoi(key); err != nil {
-			continue
-		}
-		scenarioIds = append(scenarioIds, sid)
+	for _, scenario := range scenarios {
+		scenarioIds = append(scenarioIds, scenario.Id)
 	}
-	sort.Ints(scenarioIds)
+	sort.Strings(scenarioIds)
 
 	// 4. get the scenario to process
-	scenarioToProcess := scenarios[fmt.Sprintf("%d", scenarioIds[index])]
+	scenarioToProcess := scenarios[fmt.Sprintf("%s", scenarioIds[index])]
 
 	return scenarioToProcess
 }
@@ -230,7 +224,7 @@ func (scenarioProcessor *ScenarioProcessor) getWorkLoadSetsToProcess(scenario *m
 	//  iterate over workload sets of the current scenario and get all the workload sets to process
 	workloadSetsToProcess := make([]string, 0)
 	lastWorkloadSetToProcess := make(map[string]string)
-	for workloadId, _ := range *scenario.Workloads {
+	for workloadId := range *scenario.Workloads {
 
 		//	 get all the sets from redis with the workloadId prefix
 		setNames, err := scenarioProcessor.traceStore.GetAllKeysWithPrefixAndRegex(workloadId+"_", `[0-9]+$`)
