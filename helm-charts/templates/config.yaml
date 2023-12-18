@@ -31,6 +31,9 @@ data:
     logs:
       color: {{ .Values.serviceConfigs.logs.color }}
       level: {{ .Values.serviceConfigs.logs.level }}
+    workLoad:
+      ttl: {{ .Values.workLoadTtl }}
+      tickerDuration: {{ .Values.workLoadTickerDuration }}
 kind: ConfigMap
 metadata:
   name: {{ include "zk-scenario-manager.fullname" . }}

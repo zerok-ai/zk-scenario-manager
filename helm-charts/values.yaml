@@ -14,6 +14,9 @@ serviceConfigs:
     color: true
     level: DEBUG
 
+workLoadTtl: 900
+workLoadTickerDuration: 60
+
 redis:
   host: redis.zk-client.svc.cluster.local
   port: 6379
