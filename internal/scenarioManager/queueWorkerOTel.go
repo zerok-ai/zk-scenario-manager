@@ -129,12 +129,12 @@ func (worker *QueueWorkerOTel) handleMessage(oTelMessage OTELTraceMessage) {
 	for incidentIndex := 0; incidentIndex < len(newIncidentList); incidentIndex++ {
 		incident := &newIncidentList[incidentIndex]
 		var rootSpan *stores.SpanFromOTel
-		var allWorkloadIdsInTrace ds.Set[string]
-		var allGroupByTitleSet ds.Set[string]
+		allWorkloadIdsInTrace := make(ds.Set[string])
+		allGroupByTitleSet := make(ds.Set[string])
 		for spanIndex := 0; spanIndex < len(incident.Incident.Spans); spanIndex++ {
 			span := incident.Incident.Spans[spanIndex]
 			if span.WorkloadIDList != nil && len(span.WorkloadIDList) != 0 {
-				var workloadIdSet ds.Set[string]
+				workloadIdSet := make(ds.Set[string])
 				for _, workloadId := range span.WorkloadIDList {
 					workloadIdSet.Add(workloadId)
 				}
@@ -183,8 +183,8 @@ func (worker *QueueWorkerOTel) handleMessage(oTelMessage OTELTraceMessage) {
 	// Set up a connection to the server
 	url := fmt.Sprintf("%s:%s", worker.exporter.Host, worker.exporter.Port)
 	zkLogger.Info(LoggerTagOTel, "Connecting to ", url)
-	conn, err := grpc.Dial(url, grpc.WithTransportCredentials(insecure.NewCredentials()))
-	//conn, err := grpc.Dial("localhost:4319", grpc.WithInsecure())
+	//conn, err := grpc.Dial(url, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	conn, err := grpc.Dial("localhost:4319", grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		log.Fatalf("did not connect: %v", err)
 	}
@@ -462,6 +462,9 @@ func getListOfIssuesForScenario(scenario *model.Scenario, spanMap TMapOfSpanIdTo
 			span, ok := spanMap[typedef.TSpanId(span_.SpanID)]
 			if !ok {
 				continue
+			}
+			if span.GroupByTitleSet == nil {
+				span.GroupByTitleSet = make(ds.Set[string])
 			}
 			span.GroupByTitleSet.Add(title)
 		}
