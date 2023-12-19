@@ -1,6 +1,7 @@
 package stores
 
 import (
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"github.com/redis/go-redis/v9"
@@ -127,6 +128,7 @@ func (t OTelDataHandler) processResult(keys []typedef.TTraceid, hashResults []*r
 			}
 			sp.TraceID = traceId
 			sp.SpanID = typedef.TSpanId(spanId)
+			sp.ParentSpanID = typedef.TSpanId(hex.EncodeToString(sp.Span.ParentSpanId))
 
 			traceFromOTel.Spans[typedef.TSpanId(spanId)] = &sp
 		}

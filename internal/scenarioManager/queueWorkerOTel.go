@@ -194,14 +194,16 @@ func ConvertOtelSpanToResourceSpan(spans []*stores.SpanFromOTel, resourceHashToI
 
 	resourceMap := make(map[string]map[string][]stores.SpanFromOTel)
 
+	// make a map from resourceHash to scopeHash to spans
 	for _, span := range spans {
-		if scopeMap, ok := resourceMap[span.ResourceAttributesHash]; ok {
-			if spans, ok2 := scopeMap[span.ScopeAttributesHash]; ok2 {
-				spans = append(spans, *span)
+		if scopeMap, resourceHashFound := resourceMap[span.ResourceAttributesHash]; resourceHashFound {
+			spanList := make([]stores.SpanFromOTel, 0)
+			if s, scopeHashFound := scopeMap[span.ScopeAttributesHash]; scopeHashFound {
+				spanList = s
 			} else {
-				spanList := make([]stores.SpanFromOTel, 0)
-				scopeMap[span.ScopeAttributesHash] = append(spanList, *span)
+				spanList = make([]stores.SpanFromOTel, 0)
 			}
+			scopeMap[span.ScopeAttributesHash] = append(spanList, *span)
 		} else {
 			spanList := make([]stores.SpanFromOTel, 0)
 			resourceMap[span.ResourceAttributesHash] = map[string][]stores.SpanFromOTel{

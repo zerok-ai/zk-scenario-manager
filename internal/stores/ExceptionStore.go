@@ -50,8 +50,9 @@ func (e ErrorStore) GetExceptionDataForHashes(tracesFromOTelStore map[typedef.TT
 	for _, spanFromOTel := range tracesFromOTelStore {
 		for _, span := range spanFromOTel.Spans {
 			spanEventMap := span.SpanEvents
-			var spanEvent *v1.Span_Event
+			spanEventList := make([]*v1.Span_Event, 0)
 			for _, event := range spanEventMap {
+				var spanEvent *v1.Span_Event
 				if event["name"] == "exception" {
 					exceptionHash := event["exception_hash"].(string)
 					exceptionData := e.GetExceptionDetailsFromRedisUsingHashes(exceptionHash)
@@ -62,9 +63,10 @@ func (e ErrorStore) GetExceptionDataForHashes(tracesFromOTelStore map[typedef.TT
 					spanEvent.Attributes = typedef.ConvertMapToKVList(exceptionDataMap)
 					spanEvent.Name = event["name"].(string)
 				}
+				spanEventList = append(spanEventList, spanEvent)
 			}
-			if spanEvent == nil {
-				span.Span.Events = append(span.Span.Events, spanEvent)
+			if spanEventList != nil {
+				span.Span.Events = spanEventList
 			}
 		}
 	}
