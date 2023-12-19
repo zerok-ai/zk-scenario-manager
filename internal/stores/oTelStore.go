@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/redis/go-redis/v9"
+	"github.com/zerok-ai/zk-utils-go/ds"
 	zkLogger "github.com/zerok-ai/zk-utils-go/logs"
 	"github.com/zerok-ai/zk-utils-go/storage/redis/clientDBNames"
 	"github.com/zerok-ai/zk-utils-go/storage/redis/config"
@@ -56,7 +57,7 @@ type SpanFromOTel struct {
 	ResourceAttributes     []*otlpCommonV1.KeyValue `json:"resource_attributes,omitempty"`
 	TraceID                typedef.TTraceid         `json:"trace_id"`
 	IsRoot                 bool                     `json:"is_root"`
-	IssueHashList          []string                 `json:"issue_hash_list"`
+	GroupByTitleSet        ds.Set[string]           `json:"group_by_title_set"`
 	SpanID                 typedef.TSpanId          `json:"span_id"`
 	ParentSpanID           typedef.TSpanId          `json:"parent_span_id"`
 }

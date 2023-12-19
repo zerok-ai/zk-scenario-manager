@@ -129,16 +129,18 @@ func (worker *QueueWorkerOTel) handleMessage(oTelMessage OTELTraceMessage) {
 	for incidentIndex := 0; incidentIndex < len(newIncidentList); incidentIndex++ {
 		incident := &newIncidentList[incidentIndex]
 		var rootSpan *stores.SpanFromOTel
-		var allWorkloadIdsInTrace []string
+		var allWorkloadIdsInTrace ds.Set[string]
+		var allGroupByTitleSet ds.Set[string]
 		for spanIndex := 0; spanIndex < len(incident.Incident.Spans); spanIndex++ {
 			span := incident.Incident.Spans[spanIndex]
 			if span.WorkloadIDList != nil && len(span.WorkloadIDList) != 0 {
-				var workloadIdList []string
+				var workloadIdSet ds.Set[string]
 				for _, workloadId := range span.WorkloadIDList {
-					workloadIdList = append(workloadIdList, workloadId)
+					workloadIdSet.Add(workloadId)
 				}
-				span.SpanAttributes["workload_id_list"] = workloadIdList
-				allWorkloadIdsInTrace = append(allWorkloadIdsInTrace, workloadIdList...)
+				span.SpanAttributes["workload_id_list"] = workloadIdSet
+				allWorkloadIdsInTrace.Union(workloadIdSet)
+				allGroupByTitleSet.Union(span.GroupByTitleSet)
 			}
 
 			if span.IsRoot {
@@ -152,12 +154,14 @@ func (worker *QueueWorkerOTel) handleMessage(oTelMessage OTELTraceMessage) {
 		}
 
 		scenarios := worker.scenarioStore.GetAllValues()
-		scenarioIds, err := scenario.FindMatchingScenarios(allWorkloadIdsInTrace, scenarios)
+		scenarioIds, err := scenario.FindMatchingScenarios(allWorkloadIdsInTrace.GetAll(), scenarios)
 		if err != nil {
 			zkLogger.Error(LoggerTagOTel, "error in getting scenario ids for workload ids", err)
 		} else {
 			rootSpan.SpanAttributes["probes"] = scenarioIds
 		}
+
+		rootSpan.SpanAttributes["GroupByTitleSet"] = allGroupByTitleSet
 	}
 
 	// 4. save attributes details
@@ -459,21 +463,7 @@ func getListOfIssuesForScenario(scenario *model.Scenario, spanMap TMapOfSpanIdTo
 			if !ok {
 				continue
 			}
-			if span.IssueHashList == nil {
-				span.IssueHashList = make([]string, 0)
-			}
-
-			// iterate over span.IssueHashList and check for the existence of duplicate issueHash. If not present, add.
-			isIssueHashPresent := false
-			for _, issueHash := range span.IssueHashList {
-				if issueHash == hash {
-					isIssueHashPresent = true
-					break
-				}
-			}
-			if !isIssueHashPresent {
-				span.IssueHashList = append(span.IssueHashList, hash)
-			}
+			span.GroupByTitleSet.Add(title)
 		}
 	}
 

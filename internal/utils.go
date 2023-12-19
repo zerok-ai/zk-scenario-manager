@@ -1,6 +1,7 @@
 package internal
 
 import (
+	"github.com/zerok-ai/zk-utils-go/ds"
 	"github.com/zerok-ai/zk-utils-go/logs"
 	"go.opentelemetry.io/proto/otlp/common/v1"
 )
@@ -26,6 +27,8 @@ func GetAnyValueFromInterface(value interface{}) *v1.AnyValue {
 				StringValue: v,
 			},
 		}
+	case ds.Set[string]:
+		return GetAnyValueFromInterface(v.GetAll())
 	case []string:
 		var values []*v1.AnyValue
 		for _, item := range v {
