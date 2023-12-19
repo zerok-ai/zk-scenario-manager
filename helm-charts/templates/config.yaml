@@ -34,6 +34,9 @@ data:
     workLoad:
       ttl: {{ .Values.workLoadTtl }}
       tickerDuration: {{ .Values.workLoadTickerDuration }}
+    exporter:
+      host: opentelemetry-collector.opentelemetry-operator-system.svc.cluster.local
+      port: 4319
 kind: ConfigMap
 metadata:
   name: {{ include "zk-scenario-manager.fullname" . }}

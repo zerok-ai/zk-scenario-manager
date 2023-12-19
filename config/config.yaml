@@ -1,6 +1,6 @@
 redis:
   host: 127.0.0.1
-  password: "kj1p9v5tkB"
+  password: "gbRMSbFJ5a"
   port: 6379
   dbs:
     filtered_traces: 1
@@ -36,3 +36,6 @@ server:
 workLoad:
   ttl: 900
   tickerDuration: 60
+exporter:
+  host: opentelemetry-collector.opentelemetry-operator-system.svc.cluster.local
+  port: 4319

@@ -18,6 +18,7 @@ import (
 	v1 "go.opentelemetry.io/proto/otlp/resource/v1"
 	otlpTraceV1 "go.opentelemetry.io/proto/otlp/trace/v1"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 	"log"
 	"scenario-manager/config"
 	typedef "scenario-manager/internal"
@@ -44,6 +45,7 @@ type QueueWorkerOTel struct {
 	oTelConsumer   *stores.TraceQueue
 	ebpfProducer   *stores.TraceQueue
 	scenarioStore  *zkRedis.VersionedStore[model.Scenario]
+	exporter       config.Exporter
 }
 
 func GetQueueWorkerOTel(cfg config.AppConfigs, scenarioStore *zkRedis.VersionedStore[model.Scenario]) *QueueWorkerOTel {
@@ -56,6 +58,7 @@ func GetQueueWorkerOTel(cfg config.AppConfigs, scenarioStore *zkRedis.VersionedS
 		attributeStore: stores.GetAttributesStore(cfg.Redis),
 		errorStore:     stores.GetErrorStore(cfg.Redis),
 		scenarioStore:  scenarioStore,
+		exporter:       cfg.Exporter,
 	}
 
 	// oTel consumer and error store
@@ -174,11 +177,14 @@ func (worker *QueueWorkerOTel) handleMessage(oTelMessage OTELTraceMessage) {
 
 	fmt.Println("Testing")
 	// Set up a connection to the server
-	conn, err := grpc.Dial("opentelemetry-collector.monitoring.svc.cluster.local:4319", grpc.WithInsecure())
+	url := fmt.Sprintf("%s:%s", worker.exporter.Host, worker.exporter.Port)
+	zkLogger.Info(LoggerTagOTel, "Connecting to ", url)
+	conn, err := grpc.Dial(url, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	//conn, err := grpc.Dial("localhost:4319", grpc.WithInsecure())
 	if err != nil {
 		log.Fatalf("did not connect: %v", err)
 	}
+
 	defer conn.Close()
 	c := pb.NewTraceServiceClient(conn)
 

@@ -46,6 +46,11 @@ type WorkLoadConfig struct {
 	WorkLoadTickerDuration int `yaml:"tickerDuration"`
 }
 
+type Exporter struct {
+	Host string `yaml:"host"`
+	Port string `yaml:"port"`
+}
+
 // AppConfigs is an application configuration structure
 type AppConfigs struct {
 	Redis          storage.RedisConfig             `yaml:"redis"`
@@ -60,4 +65,5 @@ type AppConfigs struct {
 	SuprSend       SuprSendConfig                  `yaml:"suprsend"`
 	ScenarioConfig ScenariosConfig                 `yaml:"scenarioConfig"`
 	Workload       WorkLoadConfig                  `yaml:"workLoad"`
+	Exporter       Exporter                        `yaml:"exporter"`
 }
