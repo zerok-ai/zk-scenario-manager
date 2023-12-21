@@ -21,7 +21,7 @@ import (
 
 const (
 	LoggerTagScenarioProcessor       = "scenario-processor"
-	currentProcessingWorkerKeyPrefix = "CPV"
+	currentProcessingWorkerKeyPrefix = "CPW"
 )
 
 type ScenarioProcessor struct {
@@ -137,17 +137,18 @@ func (scenarioProcessor *ScenarioProcessor) findScenarioToProcess() *model.Scena
 	return scenarioToProcess
 }
 
-func (scenarioProcessor *ScenarioProcessor) markProcessingEnd(scenario *model.Scenario, processedWorkloadSets string) {
-	scenarioProcessor.FinishedProcessingScenario(scenario.Id, scenarioProcessor.id, processedWorkloadSets)
+func (scenarioProcessor *ScenarioProcessor) markProcessingEnd(scenario *model.Scenario) {
+	scenarioProcessor.FinishedProcessingScenario(scenario.Id, scenarioProcessor.id)
 }
 
-func (scenarioProcessor *ScenarioProcessor) FinishedProcessingScenario(scenarioId, scenarioProcessorId, lastProcessedSets string) {
+func (scenarioProcessor *ScenarioProcessor) FinishedProcessingScenario(scenarioId, scenarioProcessorId string) {
 	// remove the Key for currently processing worker
 	key := fmt.Sprintf("%s_%s", currentProcessingWorkerKeyPrefix, scenarioId)
 	result := scenarioProcessor.traceStore.GetValueForKey(key)
 	if result != scenarioProcessorId {
 		return
 	}
+
 	err := scenarioProcessor.traceStore.DeleteSets([]string{key})
 	if err != nil {
 		zkLogger.Error(LoggerTagScenarioProcessor, "Error deleting currently processing worker:", err)
@@ -156,20 +157,14 @@ func (scenarioProcessor *ScenarioProcessor) FinishedProcessingScenario(scenarioI
 }
 
 func (scenarioProcessor *ScenarioProcessor) AllowedToProcessScenarioId(scenarioId, scenarioProcessorId string, scenarioProcessingTime time.Duration) bool {
-
 	key := fmt.Sprintf("%s_%s", currentProcessingWorkerKeyPrefix, scenarioId)
-	result := scenarioProcessor.traceStore.GetValueForKey(key)
-
-	if result == "" || result != scenarioProcessorId {
-		key := fmt.Sprintf("%s_%s", currentProcessingWorkerKeyPrefix, scenarioId)
-		err := scenarioProcessor.traceStore.SetValueForKeyWithExpiry(key, scenarioProcessorId, scenarioProcessingTime)
-		if err != nil {
-			zkLogger.Error(LoggerTagScenarioProcessor, "Error setting last processed workload set:", err)
-			return false
-		}
-		return true
+	success, err := scenarioProcessor.traceStore.SetValueForKeyWithExpiryIfNotExist(key, scenarioProcessorId, scenarioProcessingTime)
+	if err != nil {
+		zkLogger.Error(LoggerTagScenarioProcessor, "Error setting currently processing worker:", err)
+		return false
 	}
-	return false
+
+	return success
 }
 
 func (scenarioProcessor *ScenarioProcessor) processScenario(scenario *model.Scenario) {
@@ -184,10 +179,10 @@ func (scenarioProcessor *ScenarioProcessor) processScenario(scenario *model.Scen
 	}
 
 	// get all the workload sets to process for the current scenario
-	namesOfAllSets, lastWorkloadSetsToProcess := scenarioProcessor.getWorkLoadSetsToProcess(scenario)
+	namesOfAllSets := scenarioProcessor.getWorkLoadSetsToProcess(scenario)
 
 	// mark the processing end for the current scenario
-	defer scenarioProcessor.markProcessingEnd(scenario, lastWorkloadSetsToProcess)
+	defer scenarioProcessor.markProcessingEnd(scenario)
 
 	// evaluate scenario and get all traceIds
 	allTraceIds := NewTraceEvaluator(scenarioProcessor.cfg, scenario, scenarioProcessor.traceStore, namesOfAllSets, TTLForScenarioSets).EvalScenario()
@@ -219,13 +214,11 @@ func (scenarioProcessor *ScenarioProcessor) processScenario(scenario *model.Scen
 
 // getWorkLoadSetsToProcess gets all the workload sets to process for the current scenario
 // the function also returns a comma separated string of the last workload set to process for each workload
-func (scenarioProcessor *ScenarioProcessor) getWorkLoadSetsToProcess(scenario *model.Scenario) ([]string, string) {
+func (scenarioProcessor *ScenarioProcessor) getWorkLoadSetsToProcess(scenario *model.Scenario) []string {
 
 	//  iterate over workload sets of the current scenario and get all the workload sets to process
 	workloadSetsToProcess := make([]string, 0)
-	lastWorkloadSetToProcess := make(map[string]string)
 	for workloadId := range *scenario.Workloads {
-
 		//	 get all the sets from redis with the workloadId prefix
 		setNames, err := scenarioProcessor.traceStore.GetAllKeysWithPrefixAndRegex(workloadId+"_", `[0-9]+$`)
 		if err != nil {
@@ -236,7 +229,7 @@ func (scenarioProcessor *ScenarioProcessor) getWorkLoadSetsToProcess(scenario *m
 		workloadSetsToProcess = append(workloadSetsToProcess, setNames...)
 	}
 
-	return workloadSetsToProcess, joinValuesInMapToCSV(lastWorkloadSetToProcess)
+	return workloadSetsToProcess
 }
 
 func joinValuesInMapToCSV(data map[string]string) string {

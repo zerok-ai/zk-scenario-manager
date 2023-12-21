@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/redis/go-redis/v9"
+	"github.com/zerok-ai/zk-rawdata-reader/vzReader/utils"
 	"github.com/zerok-ai/zk-utils-go/ds"
 	zkLogger "github.com/zerok-ai/zk-utils-go/logs"
 	"github.com/zerok-ai/zk-utils-go/storage/redis/clientDBNames"
@@ -138,7 +139,7 @@ func (t OTelDataHandler) processResult(keys []typedef.TTraceid, hashResults []*r
 		var rootSpan *SpanFromOTel
 		for _, spanFromOTel := range traceFromOTel.Spans {
 			_, ok := traceFromOTel.Spans[spanFromOTel.ParentSpanID]
-			if !ok {
+			if !ok && utils.IsEmpty(string(spanFromOTel.ParentSpanID)) {
 				rootSpan = spanFromOTel
 			}
 		}

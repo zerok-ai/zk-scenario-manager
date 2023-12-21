@@ -286,6 +286,10 @@ func (t TraceStore) SetValueForKeyWithExpiry(key, value string, expiration time.
 	return err
 }
 
+func (t TraceStore) SetValueForKeyWithExpiryIfNotExist(key, value string, expiration time.Duration) (bool, error) {
+	return t.redisClient.SetNX(ctx, key, value, expiration).Result()
+}
+
 func (t TraceStore) GetValueForKey(key string) string {
 	result, err := t.redisClient.Get(ctx, key).Result()
 	if err != nil {
