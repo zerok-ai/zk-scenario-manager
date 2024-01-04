@@ -82,11 +82,6 @@ spec:
         env: # Setting Enviornmental Variables
           - name: OBFUSCATE
             value: "{{ .Values.obfuscate}}"
-          - name: PL_POSTGRES_PASSWORD # Setting Database password from Secret
-            valueFrom:
-              secretKeyRef:
-                name: postgres
-                key: postgres-password
           - name: ZK_REDIS_PASSWORD # Setting Redis password from Secret
             valueFrom:
               secretKeyRef:

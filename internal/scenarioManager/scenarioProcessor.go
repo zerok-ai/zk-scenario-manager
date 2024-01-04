@@ -3,8 +3,6 @@ package scenarioManager
 import (
 	"fmt"
 	"github.com/google/uuid"
-	"github.com/pkg/errors"
-	"github.com/zerok-ai/zk-rawdata-reader/vzReader"
 	zkLogger "github.com/zerok-ai/zk-utils-go/logs"
 	"github.com/zerok-ai/zk-utils-go/scenario/model"
 	zkRedis "github.com/zerok-ai/zk-utils-go/storage/redis"
@@ -25,15 +23,14 @@ const (
 )
 
 type ScenarioProcessor struct {
-	id                    string
-	cfg                   config.AppConfigs
-	scenarioStore         *zkRedis.VersionedStore[model.Scenario]
-	traceStore            *stores.TraceStore
-	oTelStore             *stores.OTelDataHandler
-	oTelProducer          *stores.TraceQueue
-	traceRawDataCollector *vzReader.VzReader
-	issueRateMap          typedef.IssueRateMap
-	mutex                 sync.Mutex
+	id            string
+	cfg           config.AppConfigs
+	scenarioStore *zkRedis.VersionedStore[model.Scenario]
+	traceStore    *stores.TraceStore
+	oTelStore     *stores.OTelDataHandler
+	oTelProducer  *stores.TraceQueue
+	issueRateMap  typedef.IssueRateMap
+	mutex         sync.Mutex
 }
 
 func NewScenarioProcessor(cfg config.AppConfigs) (*ScenarioProcessor, error) {
@@ -56,11 +53,6 @@ func NewScenarioProcessor(cfg config.AppConfigs) (*ScenarioProcessor, error) {
 		cfg:           cfg,
 	}
 
-	reader, err := GetNewVZReader(cfg)
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to get new VZ reader")
-	}
-	fp.traceRawDataCollector = reader
 	fp.oTelStore = stores.GetOTelStore(cfg.Redis)
 
 	returnValue := fp.init()
@@ -76,7 +68,6 @@ func (scenarioProcessor *ScenarioProcessor) Close() {
 	scenarioProcessor.traceStore.Close()
 	scenarioProcessor.oTelStore.Close()
 	scenarioProcessor.oTelProducer.Close()
-	scenarioProcessor.traceRawDataCollector.Close()
 }
 
 func (scenarioProcessor *ScenarioProcessor) init() *ScenarioProcessor {
