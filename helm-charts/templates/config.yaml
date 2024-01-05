@@ -12,22 +12,11 @@ data:
         pod_details: {{ .Values.redis.dbs.pod_details }}
         error_details: {{ .Values.redis.dbs.error_details }}
         resource_and_scope_attr: 5
-    postgres:
-      host: "{{ .Values.postgres.host }}"
-      port: {{ .Values.postgres.port }}
-      user: "{{ .Values.postgres.user }}"
-      password: ""
-      dbname: "{{ .Values.postgres.database }}"
-      max_connections: 5
-      max_idle_connections: 5
-      connection_max_lifetime_in_minutes: 10
     server:
       host: 0.0.0.0
       port: 80
     scenarioConfig:
-      ebpfLocalWorkers: 2
       processingIntervalInSeconds: 10
-      ebpfSchemaVersion: "0.1.1-alpha"
     logs:
       color: {{ .Values.serviceConfigs.logs.color }}
       level: {{ .Values.serviceConfigs.logs.level }}
