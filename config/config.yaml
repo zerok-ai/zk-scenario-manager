@@ -1,6 +1,6 @@
 redis:
   host: 127.0.0.1
-  password: "gbRMSbFJ5a"
+  password: "eKbbxAn8qr"
   port: 6379
   dbs:
     filtered_traces: 1
@@ -11,25 +11,11 @@ redis:
     error_details: 8
     resource_and_scope_attr: 5
   readTimeout: 20
-postgres:
-  host: 127.0.0.1
-  port: 5432
-  user: "postgres"
-  password: "eo1Mgtm6HI"
-  dbname: "pl"
-  max_connections: 5
-  max_idle_connections: 5
-  connection_max_lifetime_in_minutes: 10
+scenarioConfig:
+  processingIntervalInSeconds: 10
 logs:
   color: true
   level: DEBUG
-scenarioConfig:
-  ebpfLocalWorkers: 2
-  processingIntervalInSeconds: 10
-  ebpfSchemaVersion: "0.1.1-alpha"
-  vzCloudAddr: "px.loadcloud01.getanton.com:443"
-  vzClusterId: "e38ee038-32af-43a0-8e1b-510d31b0e8c9"
-  vzClusterKey: "px-api-f8d4bc05-381d-469b-ab54-82b7128e58ee"
 server:
   host: localhost
   port: 80

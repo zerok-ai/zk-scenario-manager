@@ -243,6 +243,10 @@ func ConvertOtelSpanToResourceSpan(spans []*stores.SpanFromOTel, resourceHashToI
 
 	for resourceHash, scopeMap := range resourceMap {
 		scopeSpansList := make([]*otlpTraceV1.ScopeSpans, 0)
+		if resourceHashToInfoMap[resourceHash]["schema_url"] == nil {
+			zkLogger.ErrorF(LoggerTagOTel, "schema_url not found for resourceHash %s", resourceHash)
+		}
+
 		resource := otlpTraceV1.ResourceSpans{
 			Resource: &v1.Resource{
 				Attributes: resourceHashToAttr[resourceHash],

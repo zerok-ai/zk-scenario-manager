@@ -168,12 +168,15 @@ func (scenarioProcessor *ScenarioProcessor) processScenario(scenario *model.Scen
 		zkLogger.Info(LoggerTagScenarioProcessor, "Another processor is already processing the scenario")
 		return
 	}
+	// mark the processing end for the current scenario
+	defer scenarioProcessor.markProcessingEnd(scenario)
 
 	// get all the workload sets to process for the current scenario
 	namesOfAllSets := scenarioProcessor.getWorkLoadSetsToProcess(scenario)
-
-	// mark the processing end for the current scenario
-	defer scenarioProcessor.markProcessingEnd(scenario)
+	if len(namesOfAllSets) == 0 {
+		zkLogger.DebugF(LoggerTagScenarioProcessor, "No workload sets to process for the scenario")
+		return
+	}
 
 	// evaluate scenario and get all traceIds
 	allTraceIds := NewTraceEvaluator(scenarioProcessor.cfg, scenario, scenarioProcessor.traceStore, namesOfAllSets, TTLForScenarioSets).EvalScenario()
