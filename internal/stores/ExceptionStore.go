@@ -98,13 +98,13 @@ func (e ErrorStore) GetExceptionDetailsFromRedisUsingHashes(hash string) Excepti
 	var ExceptionDetails ExceptionDetails
 	exceptionDetailsJSON, err := e.redisHandler.Get(hash)
 	if err != nil {
-		zkLogger.Error(LogTag, "Error while getting exception details for hash %s: %v\n", hash, err)
+		zkLogger.ErrorF(LogTag, "Error while getting exception details for hash %s: %v\n", hash, err)
 		return ExceptionDetails
 	}
 
 	err = json.Unmarshal([]byte(exceptionDetailsJSON), &ExceptionDetails)
 	if err != nil {
-		zkLogger.Error(LogTag, "Error while unmarshalling exception details for hash %s: %v\n", hash, err)
+		zkLogger.ErrorF(LogTag, "Error while unmarshalling exception details for hash %s: %v\n", hash, err)
 		return ExceptionDetails
 	}
 	return ExceptionDetails

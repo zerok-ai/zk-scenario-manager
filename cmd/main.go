@@ -84,9 +84,9 @@ func waitForPresidio() {
 		}
 
 		if err != nil {
-			zkLogger.Error(LogTag, "Presidio Error: %v\n", err)
+			zkLogger.ErrorF(LogTag, "Presidio Error: %v\n", err)
 		} else {
-			zkLogger.Info(LogTag, "Presidio Status code: %d\n", resp.StatusCode)
+			zkLogger.InfoF(LogTag, "Presidio Status code: %d\n", resp.StatusCode)
 		}
 
 		time.Sleep(interval)
