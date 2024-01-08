@@ -59,7 +59,13 @@ func (e ErrorStore) GetExceptionDataForHashes(tracesFromOTelStore map[typedef.TT
 					spanEvent = GetSpanEventFromException(exceptionData)
 					spanEvent.Name = "exception"
 				} else {
-					exceptionDataMap := event["attributes"].(map[string]interface{})
+					attr := event["attributes"]
+					var exceptionDataMap map[string]interface{}
+					if attr == nil {
+						exceptionDataMap = make(map[string]interface{})
+					} else {
+						exceptionDataMap = attr.(map[string]interface{})
+					}
 					spanEvent.Attributes = typedef.ConvertMapToKVList(exceptionDataMap)
 					spanEvent.Name = event["name"].(string)
 				}
