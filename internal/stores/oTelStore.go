@@ -6,6 +6,7 @@ import (
 	"github.com/golang/protobuf/proto"
 	"github.com/redis/go-redis/v9"
 	"github.com/zerok-ai/zk-rawdata-reader/vzReader/utils"
+	zkUtilsCommonModel "github.com/zerok-ai/zk-utils-go/common"
 	"github.com/zerok-ai/zk-utils-go/ds"
 	zkLogger "github.com/zerok-ai/zk-utils-go/logs"
 	zkUtilsEnrichedSpan "github.com/zerok-ai/zk-utils-go/proto/enrichedSpan"
@@ -49,20 +50,20 @@ type OTelError struct {
 }
 
 type SpanFromOTel struct {
-	Span                   *otlpTraceV1.Span                `json:"span"`
-	SpanAttributes         zkUtilsEnrichedSpan.GenericMap   `json:"span_attributes,omitempty"`
-	SpanEvents             []zkUtilsEnrichedSpan.GenericMap `json:"span_events,omitempty"`
-	ResourceAttributesHash string                           `json:"resource_attributes_hash,omitempty"`
-	ScopeAttributesHash    string                           `json:"scope_attributes_hash,omitempty"`
-	WorkloadIDList         []string                         `json:"workload_id_list"`
-	GroupByMap             zkUtilsEnrichedSpan.GroupByMap   `json:"group_by"`
-	ScopeAttributes        []*otlpCommonV1.KeyValue         `json:"scope_attributes,omitempty"`
-	ResourceAttributes     []*otlpCommonV1.KeyValue         `json:"resource_attributes,omitempty"`
-	TraceID                typedef.TTraceid                 `json:"trace_id"`
-	IsRoot                 bool                             `json:"is_root"`
-	GroupByTitleSet        ds.Set[string]                   `json:"group_by_title_set"`
-	SpanID                 typedef.TSpanId                  `json:"span_id"`
-	ParentSpanID           typedef.TSpanId                  `json:"parent_span_id"`
+	Span                   *otlpTraceV1.Span               `json:"span"`
+	SpanAttributes         zkUtilsCommonModel.GenericMap   `json:"span_attributes,omitempty"`
+	SpanEvents             []zkUtilsCommonModel.GenericMap `json:"span_events,omitempty"`
+	ResourceAttributesHash string                          `json:"resource_attributes_hash,omitempty"`
+	ScopeAttributesHash    string                          `json:"scope_attributes_hash,omitempty"`
+	WorkloadIDList         []string                        `json:"workload_id_list"`
+	GroupByMap             zkUtilsCommonModel.GroupByMap   `json:"group_by"`
+	ScopeAttributes        []*otlpCommonV1.KeyValue        `json:"scope_attributes,omitempty"`
+	ResourceAttributes     []*otlpCommonV1.KeyValue        `json:"resource_attributes,omitempty"`
+	TraceID                typedef.TTraceid                `json:"trace_id"`
+	IsRoot                 bool                            `json:"is_root"`
+	GroupByTitleSet        ds.Set[string]                  `json:"group_by_title_set"`
+	SpanID                 typedef.TSpanId                 `json:"span_id"`
+	ParentSpanID           typedef.TSpanId                 `json:"parent_span_id"`
 }
 
 type SpanAttributes interface {

@@ -3,6 +3,7 @@ package stores
 import (
 	"encoding/json"
 	zkLogger "github.com/zerok-ai/zk-utils-go/logs"
+	"github.com/zerok-ai/zk-utils-go/proto/enrichedSpan"
 	"github.com/zerok-ai/zk-utils-go/storage/redis/clientDBNames"
 	"github.com/zerok-ai/zk-utils-go/storage/redis/config"
 	v12 "go.opentelemetry.io/proto/otlp/common/v1"
@@ -66,7 +67,7 @@ func (e ErrorStore) GetExceptionDataForHashes(tracesFromOTelStore map[typedef.TT
 					} else {
 						exceptionDataMap = attr.(map[string]interface{})
 					}
-					spanEvent.Attributes = typedef.ConvertMapToKVList(exceptionDataMap)
+					spanEvent.Attributes = enrichedSpan.ConvertMapToKVList(exceptionDataMap).KeyValueList
 					spanEvent.Name = event["name"].(string)
 				}
 				spanEventList = append(spanEventList, spanEvent)
