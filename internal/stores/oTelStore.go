@@ -150,7 +150,7 @@ func (t OTelDataHandler) fetchSpanData(keys []typedef.TTraceid, hashResults []*r
 				continue
 			}
 			traceSpanId := string(traceId) + "-" + spanId
-			nodeIpMap[spanNodeIp] = append(nodeIpMap[spanId], traceSpanId)
+			nodeIpMap[spanNodeIp] = append(nodeIpMap[spanNodeIp], traceSpanId)
 		}
 	}
 
