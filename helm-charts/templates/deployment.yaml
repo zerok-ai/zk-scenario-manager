@@ -5,7 +5,7 @@ metadata:
   labels:
     app: zk-scenario-manager
     {{- include "zk-scenario-manager.labels" . | nindent 4 }}
-  namespace: zk-client
+  namespace: zk-loadtest
 spec:
   replicas: 1
   selector:
@@ -18,31 +18,31 @@ spec:
         app: zk-scenario-manager
         {{- include "zk-scenario-manager.labels" . | nindent 4 }}
     spec:
-      initContainers:
-        - command:
-            - sh
-            - -c
-            - 'set -xe; URL="${PROTOCOL}://${SERVICE_NAME}:${SERVICE_PORT}${HEALTH_PATH}";
-              until [ $(curl -m 0.5 -s -o /dev/null -w "%{http_code}" -k ${URL}) -eq 200 ];
-              do echo "waiting for ${URL}"; sleep 2; done;'
-          name: operator-wait
-          env:
-            - name: SERVICE_NAME
-              value: zk-operator.zk-client.svc.cluster.local
-            - name: SERVICE_PORT
-              value: "8081"
-            - name: PROTOCOL
-              value: http
-            - name: HEALTH_PATH
-              value: "/healthz"
-          image: "{{ .Values.initImage.repo}}:{{ .Values.initImage.tag}}"
-          imagePullPolicy: IfNotPresent
-          resources: { }
-          securityContext:
-            allowPrivilegeEscalation: false
-            capabilities:
-              drop:
-                - ALL
+{{/*      initContainers:*/}}
+{{/*        - command:*/}}
+{{/*            - sh*/}}
+{{/*            - -c*/}}
+{{/*            - 'set -xe; URL="${PROTOCOL}://${SERVICE_NAME}:${SERVICE_PORT}${HEALTH_PATH}";*/}}
+{{/*              until [ $(curl -m 0.5 -s -o /dev/null -w "%{http_code}" -k ${URL}) -eq 200 ];*/}}
+{{/*              do echo "waiting for ${URL}"; sleep 2; done;'*/}}
+{{/*          name: operator-wait*/}}
+{{/*          env:*/}}
+{{/*            - name: SERVICE_NAME*/}}
+{{/*              value: zk-operator.zk-client.svc.cluster.local*/}}
+{{/*            - name: SERVICE_PORT*/}}
+{{/*              value: "8081"*/}}
+{{/*            - name: PROTOCOL*/}}
+{{/*              value: http*/}}
+{{/*            - name: HEALTH_PATH*/}}
+{{/*              value: "/healthz"*/}}
+{{/*          image: "{{ .Values.initImage.repo}}:{{ .Values.initImage.tag}}"*/}}
+{{/*          imagePullPolicy: IfNotPresent*/}}
+{{/*          resources: { }*/}}
+{{/*          securityContext:*/}}
+{{/*            allowPrivilegeEscalation: false*/}}
+{{/*            capabilities:*/}}
+{{/*              drop:*/}}
+{{/*                - ALL*/}}
       containers:
       {{ if .Values.obfuscate }}
       - name: zk-obfuscator
