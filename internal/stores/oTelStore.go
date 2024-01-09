@@ -137,7 +137,7 @@ func (t OTelDataHandler) fetchSpanData(keys []typedef.TTraceid, hashResults []*r
 		traceSpanNodeIpMap, err1 := nodeIp.Result()
 
 		if err1 != nil {
-			zkLogger.Error(LoggerTag, "Error retrieving trace:", err1)
+			zkLogger.Error(LoggerTag, "Error retrieving trace's SpanId NodeIp Map from redis DB3 result set", err1)
 			continue
 		}
 		if len(traceSpanNodeIpMap) == 0 {
@@ -147,7 +147,7 @@ func (t OTelDataHandler) fetchSpanData(keys []typedef.TTraceid, hashResults []*r
 		for spanId, spanNodeIp := range traceSpanNodeIpMap {
 			//validate if the string is an ip address
 			if isValidNodeIP(spanNodeIp) == false {
-				zkLogger.Error(LoggerTag, "Error retrieving trace:", err1)
+				zkLogger.Error(LoggerTag, fmt.Sprintf("Error while creating nodeIp-traceList map traceId: %s, spanId: %s because Invalid Node IP: %s", traceId, spanId, spanNodeIp), err1)
 				continue
 			}
 			traceSpanId := string(traceId) + "-" + spanId
@@ -198,13 +198,14 @@ func (t OTelDataHandler) getSpanData(nodeIpTraceIdMap map[string][]string) (map[
 
 func (t OTelDataHandler) processResult(keys []typedef.TTraceid, traceSpanData map[string]map[string]string) (result map[typedef.TTraceid]*TraceFromOTel) {
 
+	zkLogger.Info(LoggerTag, fmt.Sprintf("Processing data received from OTLP receiver for traceList: %s", traceSpanData))
 	result = make(map[typedef.TTraceid]*TraceFromOTel)
 	for i := range keys {
 		traceId := keys[i]
 		trace := traceSpanData[string(traceId)]
 
 		if trace == nil {
-			zkLogger.Error(LoggerTag, fmt.Sprintf("Error retrieving trace: %s", traceId), nil)
+			zkLogger.Error(LoggerTag, fmt.Sprintf("Error retrieving data from otlp receiver got null data for traceId : %s", traceId), nil)
 			continue
 		}
 
@@ -219,7 +220,7 @@ func (t OTelDataHandler) processResult(keys []typedef.TTraceid, traceSpanData ma
 		for spanId, spanData := range trace {
 			var protoSpan zkUtilsProtoEnrichedRawSpan.OtelEnrichedRawSpanForProto
 			if err := proto.Unmarshal([]byte(spanData), &protoSpan); err != nil {
-				zkLogger.Error(LoggerTag, "Error retrieving span:", err)
+				zkLogger.Error(LoggerTag, fmt.Sprintf("Error unmarshalling span data for spanId: %s spanData: %s for traceid:  %s ", spanId, spanData, traceId), err)
 				continue
 			}
 
