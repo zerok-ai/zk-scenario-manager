@@ -1,9 +1,11 @@
 package internal
 
 import (
+	"fmt"
 	"github.com/zerok-ai/zk-utils-go/ds"
 	"github.com/zerok-ai/zk-utils-go/logs"
 	"go.opentelemetry.io/proto/otlp/common/v1"
+	"strings"
 )
 
 var LogTag = "internal"
@@ -81,4 +83,19 @@ func GetAnyValueFromInterface(value interface{}) *v1.AnyValue {
 		logger.Debug(LogTag, "Unknown type ", v)
 	}
 	return nil
+}
+
+func SplitTraceIdSpanId(traceIdSpanId string) (string, string, error) {
+
+	parts := strings.Split(traceIdSpanId, "-")
+
+	// Check if there are at least two parts
+	if len(parts) >= 2 {
+		traceId := parts[0]
+		spanId := parts[1]
+		return traceId, spanId, nil
+	} else {
+		fmt.Println("Invalid input string, does not contain '-'")
+		return "", "", fmt.Errorf("invalid traceIdSpanId string, does not contain '-'")
+	}
 }

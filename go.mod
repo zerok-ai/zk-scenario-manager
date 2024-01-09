@@ -1,6 +1,6 @@
 module scenario-manager
 
-go 1.20
+go 1.21
 
 require (
 	github.com/adjust/rmq/v5 v5.2.0

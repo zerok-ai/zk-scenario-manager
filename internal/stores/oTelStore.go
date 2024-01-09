@@ -14,7 +14,11 @@ import (
 	"github.com/zerok-ai/zk-utils-go/storage/redis/config"
 	otlpCommonV1 "go.opentelemetry.io/proto/otlp/common/v1"
 	otlpTraceV1 "go.opentelemetry.io/proto/otlp/trace/v1"
+	"net"
+	"regexp"
+	smUtils "scenario-manager/internal"
 	typedef "scenario-manager/internal"
+	otlpReceiverClient "scenario-manager/internal/client"
 )
 
 type TWorkLoadIdToSpan map[typedef.TWorkloadId]*SpanFromOTel
@@ -98,20 +102,109 @@ func (t OTelDataHandler) GetSpansForTracesFromDB(keys []typedef.TTraceid) (resul
 	}
 
 	// 4. Process the results
-	result = t.processResult(keys, hashResults)
+	data, err := t.fetchSpanData(keys, hashResults)
+	if err != nil {
+		return nil, err
+	}
+
+	result = t.processResult(keys, data)
 
 	return result, nil
 }
 
-func (t OTelDataHandler) processResult(keys []typedef.TTraceid, hashResults []*redis.MapStringStringCmd) (result map[typedef.TTraceid]*TraceFromOTel) {
+func (t OTelDataHandler) fetchSpanData(keys []typedef.TTraceid, hashResults []*redis.MapStringStringCmd) (map[string]map[string]string, error) {
+	// keys will have trace id's
 
-	result = make(map[typedef.TTraceid]*TraceFromOTel)
-	for i, hashResult := range hashResults {
+	//hashResults will have the data for each trace id ie map[string]string traceId : map[spanId]NodeIpOfOtlpReceiver
+
+	// map[string]string
+	//map[ip][traces]
+	//getting list of trace id's
+
+	//create map[nodeId][]traceId+'-'+spanId
+
+	//and make an api call to fetch all the data for each trace id in go routine
+
+	// result will map of traceId+'-'+spanId to TraceFromOTel
+
+	//and the convert above data to in below format
+
+	// combine all the data again
+	nodeIpMap := make(map[string][]string)
+
+	for i, nodeIp := range hashResults {
 		traceId := keys[i]
-		trace, err1 := hashResult.Result()
+		traceSpanNodeIpMap, err1 := nodeIp.Result()
 
 		if err1 != nil {
 			zkLogger.Error(LoggerTag, "Error retrieving trace:", err1)
+			continue
+		}
+		if len(traceSpanNodeIpMap) == 0 {
+			zkLogger.DebugF(LoggerTag, "No trace data found for traceId: %s in OTel store", traceId)
+			continue
+		}
+		for spanId, spanNodeIp := range traceSpanNodeIpMap {
+			//validate if the string is an ip address
+			if isValidNodeIP(spanNodeIp) == false {
+				zkLogger.Error(LoggerTag, "Error retrieving trace:", err1)
+				continue
+			}
+			traceSpanId := string(traceId) + "-" + spanId
+			nodeIpMap[spanNodeIp] = append(nodeIpMap[spanId], traceSpanId)
+		}
+	}
+
+	//make an api call to fetch all the data for each trace id in go routine
+	var otlpReceiverResultMap map[string]map[string]string
+	otlpReceiverResultMap, err := t.getSpanData(nodeIpMap)
+	if err != nil {
+		zkLogger.Error(LoggerTag, "Error retrieving data from OTLP receiver", err)
+		return otlpReceiverResultMap, err
+	}
+
+	return otlpReceiverResultMap, nil
+}
+
+func (t OTelDataHandler) getSpanData(nodeIpTraceIdMap map[string][]string) (map[string]map[string]string, error) {
+
+	otlpReceiverResultMap := make(map[string]map[string]string)
+
+	for nodeIp, traceIdSpanIdList := range nodeIpTraceIdMap {
+		//get data from receiver
+		traceDataFromOtlpReceiver, err := otlpReceiverClient.GetSpanData(nodeIp, traceIdSpanIdList, "31602") //TODO: get from config
+		if err != nil {
+			zkLogger.Error(LoggerTag, fmt.Sprintf("Error retrieving data from OTLP receiver with nodeIP: %s for traces : %s", nodeIp, traceIdSpanIdList), err)
+			continue
+		}
+
+		for traceIdSpanId, spanData := range traceDataFromOtlpReceiver {
+			traceId, spanId, err := smUtils.SplitTraceIdSpanId(traceIdSpanId)
+			if err != nil {
+				zkLogger.Error(LoggerTag, fmt.Sprintf("Error splitting traceIdSpanId: %s", traceIdSpanId), err)
+				continue
+			}
+			if len(otlpReceiverResultMap[traceId]) == 0 || otlpReceiverResultMap[traceId] == nil {
+				otlpReceiverResultMap[traceId] = make(map[string]string)
+				otlpReceiverResultMap[traceId][spanId] = spanData
+			} else {
+				otlpReceiverResultMap[traceId][spanId] = spanData
+			}
+		}
+	}
+
+	return otlpReceiverResultMap, nil
+}
+
+func (t OTelDataHandler) processResult(keys []typedef.TTraceid, traceSpanData map[string]map[string]string) (result map[typedef.TTraceid]*TraceFromOTel) {
+
+	result = make(map[typedef.TTraceid]*TraceFromOTel)
+	for i := range keys {
+		traceId := keys[i]
+		trace := traceSpanData[string(traceId)]
+
+		if trace == nil {
+			zkLogger.Error(LoggerTag, fmt.Sprintf("Error retrieving trace: %s", traceId), nil)
 			continue
 		}
 
@@ -179,3 +272,17 @@ type GroupByValueItem struct {
 type GroupByValues []*GroupByValueItem
 type ScenarioId string
 type GroupByMap map[ScenarioId]GroupByValues
+
+func isValidIP(ip string) bool {
+	parsedIP := net.ParseIP(ip)
+	return parsedIP != nil
+}
+
+// isNodeIP checks if the input string is a valid Node IP (IPv4 or IPv6)
+func isValidNodeIP(ip string) bool {
+	// Use a regular expression to check if the string is in the form of a valid IP
+	// This is just a basic example, you may need to adjust the regex based on your specific requirements
+	ipRegex := regexp.MustCompile(`^(\d{1,3}\.){3}\d{1,3}$|^([0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}$`)
+
+	return ipRegex.MatchString(ip) && isValidIP(ip)
+}

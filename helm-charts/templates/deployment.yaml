@@ -83,15 +83,17 @@ spec:
           - name: OBFUSCATE
             value: "{{ .Values.obfuscate}}"
           - name: ZK_REDIS_PASSWORD # Setting Redis password from Secret
-            valueFrom:
-              secretKeyRef:
-                name: redis
-                key: redis-password
+            value: eKbbxAn8qr
+{{/*            valueFrom:*/}}
+{{/*              secretKeyRef:*/}}
+{{/*                name: redis*/}}
+{{/*                key: redis-password*/}}
           - name: ZK_REDIS_HOST # Setting Redis password from Secret
-            valueFrom:
-              configMapKeyRef:
-                name: zk-redis-config
-                key: redisHost
+            value: redis-master.zk-client.svc.cluster.local
+{{/*            valueFrom:*/}}
+{{/*              configMapKeyRef:*/}}
+{{/*                name: zk-redis-config*/}}
+{{/*                key: redisHost*/}}
       volumes:
       - configMap:
           name: {{ include "zk-scenario-manager.fullname" . }}
