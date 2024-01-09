@@ -10,6 +10,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/zerok-ai/zk-utils-go/ds"
 	zkLogger "github.com/zerok-ai/zk-utils-go/logs"
+	zkUtilsEnrichedSpan "github.com/zerok-ai/zk-utils-go/proto/enrichedSpan"
 	"github.com/zerok-ai/zk-utils-go/scenario"
 	"github.com/zerok-ai/zk-utils-go/scenario/model"
 	zkRedis "github.com/zerok-ai/zk-utils-go/storage/redis"
@@ -432,7 +433,7 @@ func getListOfIssuesForScenario(scenario *model.Scenario, spanMap TMapOfSpanIdTo
 			}
 
 			// 4.a.3. get the group_by object from span for the current scenario
-			groupByForScenario, ok := span.GroupByMap[stores.ScenarioId(scenario.Id)]
+			groupByForScenario, ok := span.GroupByMap[zkUtilsEnrichedSpan.ScenarioId(scenario.Id)]
 			if !ok {
 				//not sure why would this happen
 				continue

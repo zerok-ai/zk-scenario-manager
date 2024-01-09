@@ -2,12 +2,14 @@ package stores
 
 import (
 	"encoding/hex"
-	"encoding/json"
 	"fmt"
+	"github.com/golang/protobuf/proto"
 	"github.com/redis/go-redis/v9"
 	"github.com/zerok-ai/zk-rawdata-reader/vzReader/utils"
 	"github.com/zerok-ai/zk-utils-go/ds"
 	zkLogger "github.com/zerok-ai/zk-utils-go/logs"
+	zkUtilsEnrichedSpan "github.com/zerok-ai/zk-utils-go/proto/enrichedSpan"
+	zkUtilsProtoEnrichedRawSpan "github.com/zerok-ai/zk-utils-go/proto/opentelemetry"
 	"github.com/zerok-ai/zk-utils-go/storage/redis/clientDBNames"
 	"github.com/zerok-ai/zk-utils-go/storage/redis/config"
 	otlpCommonV1 "go.opentelemetry.io/proto/otlp/common/v1"
@@ -47,20 +49,20 @@ type OTelError struct {
 }
 
 type SpanFromOTel struct {
-	Span                   *otlpTraceV1.Span        `json:"span"`
-	SpanAttributes         map[string]interface{}   `json:"span_attributes,omitempty"`
-	SpanEvents             []map[string]interface{} `json:"span_events,omitempty"`
-	ResourceAttributesHash string                   `json:"resource_attributes_hash,omitempty"`
-	ScopeAttributesHash    string                   `json:"scope_attributes_hash,omitempty"`
-	WorkloadIDList         []string                 `json:"workload_id_list"`
-	GroupByMap             GroupByMap               `json:"group_by"`
-	ScopeAttributes        []*otlpCommonV1.KeyValue `json:"scope_attributes,omitempty"`
-	ResourceAttributes     []*otlpCommonV1.KeyValue `json:"resource_attributes,omitempty"`
-	TraceID                typedef.TTraceid         `json:"trace_id"`
-	IsRoot                 bool                     `json:"is_root"`
-	GroupByTitleSet        ds.Set[string]           `json:"group_by_title_set"`
-	SpanID                 typedef.TSpanId          `json:"span_id"`
-	ParentSpanID           typedef.TSpanId          `json:"parent_span_id"`
+	Span                   *otlpTraceV1.Span                `json:"span"`
+	SpanAttributes         zkUtilsEnrichedSpan.GenericMap   `json:"span_attributes,omitempty"`
+	SpanEvents             []zkUtilsEnrichedSpan.GenericMap `json:"span_events,omitempty"`
+	ResourceAttributesHash string                           `json:"resource_attributes_hash,omitempty"`
+	ScopeAttributesHash    string                           `json:"scope_attributes_hash,omitempty"`
+	WorkloadIDList         []string                         `json:"workload_id_list"`
+	GroupByMap             zkUtilsEnrichedSpan.GroupByMap   `json:"group_by"`
+	ScopeAttributes        []*otlpCommonV1.KeyValue         `json:"scope_attributes,omitempty"`
+	ResourceAttributes     []*otlpCommonV1.KeyValue         `json:"resource_attributes,omitempty"`
+	TraceID                typedef.TTraceid                 `json:"trace_id"`
+	IsRoot                 bool                             `json:"is_root"`
+	GroupByTitleSet        ds.Set[string]                   `json:"group_by_title_set"`
+	SpanID                 typedef.TSpanId                  `json:"span_id"`
+	ParentSpanID           typedef.TSpanId                  `json:"parent_span_id"`
 }
 
 type SpanAttributes interface {
@@ -122,12 +124,22 @@ func (t OTelDataHandler) processResult(keys []typedef.TTraceid, hashResults []*r
 
 		// 4.1 Unmarshal the Spans
 		for spanId, spanData := range trace {
-			var sp SpanFromOTel
-			err2 := json.Unmarshal([]byte(spanData), &sp)
-			if err2 != nil {
-				zkLogger.Error(LoggerTag, "Error retrieving span:", err2)
+			var protoSpan zkUtilsProtoEnrichedRawSpan.OtelEnrichedRawSpanForProto
+			if err := proto.Unmarshal([]byte(spanData), &protoSpan); err != nil {
+				zkLogger.Error(LoggerTag, "Error retrieving span:", err)
 				continue
 			}
+
+			var sp SpanFromOTel
+			x := zkUtilsEnrichedSpan.GetEnrichedSpan(&protoSpan)
+
+			sp.Span = x.Span
+			sp.SpanAttributes = x.SpanAttributes
+			sp.SpanEvents = x.SpanEvents
+			sp.ResourceAttributesHash = x.ResourceAttributesHash
+			sp.ScopeAttributesHash = x.ScopeAttributesHash
+			sp.WorkloadIDList = x.WorkloadIdList
+			sp.GroupByMap = x.GroupBy
 			sp.TraceID = traceId
 			sp.SpanID = typedef.TSpanId(spanId)
 			sp.ParentSpanID = typedef.TSpanId(hex.EncodeToString(sp.Span.ParentSpanId))

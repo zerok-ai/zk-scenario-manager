@@ -4,13 +4,13 @@ go 1.20
 
 require (
 	github.com/adjust/rmq/v5 v5.2.0
+	github.com/golang/protobuf v1.5.3
 	github.com/google/uuid v1.4.0
 	github.com/kataras/iris/v12 v12.2.0
-	github.com/pkg/errors v0.9.1
 	github.com/redis/go-redis/v9 v9.0.5
 	github.com/stretchr/testify v1.8.4
 	github.com/zerok-ai/zk-rawdata-reader v0.5.3
-	github.com/zerok-ai/zk-utils-go v0.5.19-0.20231218103509-43b8cdbc7d4b
+	github.com/zerok-ai/zk-utils-go v0.5.19-test3.0.20240108110257-1752857bb213
 	go.opentelemetry.io/proto/otlp v1.0.0
 	google.golang.org/grpc v1.59.0
 )
@@ -39,7 +39,6 @@ require (
 	github.com/goccy/go-json v0.10.2 // indirect
 	github.com/gofrs/uuid v4.4.0+incompatible // indirect
 	github.com/gogo/protobuf v1.3.2 // indirect
-	github.com/golang/protobuf v1.5.3 // indirect
 	github.com/golang/snappy v0.0.4 // indirect
 	github.com/gorilla/css v1.0.0 // indirect
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.16.0 // indirect
@@ -64,6 +63,7 @@ require (
 	github.com/mailgun/raymond/v2 v2.0.48 // indirect
 	github.com/mailru/easyjson v0.7.7 // indirect
 	github.com/microcosm-cc/bluemonday v1.0.26 // indirect
+	github.com/pkg/errors v0.9.1 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/rogpeppe/go-internal v1.12.0 // indirect
 	github.com/russross/blackfriday/v2 v2.1.0 // indirect

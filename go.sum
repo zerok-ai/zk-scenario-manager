@@ -163,7 +163,6 @@ github.com/sirupsen/logrus v1.9.0/go.mod h1:naHLuLoDiP4jHNo9R0sCBMtWGeIprob74mVs
 github.com/spf13/pflag v1.0.5/go.mod h1:McXfInJRrz4CZXVZOBLb0bTZqETkiAhM9Iw0y3An2Bg=
 github.com/stretchr/objx v0.1.0/go.mod h1:HFkY916IF+rwdDfMAkV7OtwuqBVzrE8GR6GFx+wExME=
 github.com/stretchr/objx v0.4.0/go.mod h1:YvHI0jy2hoMjB+UWwv71VJQ9isScKT/TqJzVSSt89Yw=
-github.com/stretchr/objx v0.5.0 h1:1zr/of2m5FGMsad5YfcqgdqdWrIhu+EBEJRhR1U7z/c=
 github.com/stretchr/objx v0.5.0/go.mod h1:Yh+to48EsGEfYuaHDzXPcE3xhTkx73EhmCGUpEOglKo=
 github.com/stretchr/testify v1.2.2/go.mod h1:a8OnRcib4nhh0OaRAV+Yts87kKdq0PP7pXfy6kDkUVs=
 github.com/stretchr/testify v1.6.1/go.mod h1:6Fq8oRcR53rry900zMqJjRRixrwX3KX962/h/Wwjteg=
@@ -201,8 +200,8 @@ github.com/yuin/gopher-lua v1.1.0 h1:BojcDhfyDWgU2f2TOzYK/g5p2gxMrku8oupLDqlnSqE
 github.com/yuin/gopher-lua v1.1.0/go.mod h1:GBR0iDaNXjAgGg9zfCvksxSRnQx76gclCIb7kdAd1Pw=
 github.com/zerok-ai/zk-rawdata-reader v0.5.3 h1:XBbK4Dm7sI+fcsFFRnprrVQrNSkn1kCWF6aeVc/fusk=
 github.com/zerok-ai/zk-rawdata-reader v0.5.3/go.mod h1:GNFYev1p4/t9IoHMCX43/Yexc6K4j93to/kkcytIsFc=
-github.com/zerok-ai/zk-utils-go v0.5.19-0.20231218103509-43b8cdbc7d4b h1:zFS7R+O2WWqFPvMtChrd65FxJp5QhlnYhKv73NSynXM=
-github.com/zerok-ai/zk-utils-go v0.5.19-0.20231218103509-43b8cdbc7d4b/go.mod h1:rvHpUbscGLcD5VcY+31a0wNXuT7Ucj+7lxXT8sqvkDA=
+github.com/zerok-ai/zk-utils-go v0.5.19-test3.0.20240108110257-1752857bb213 h1:11a3EmILr59rjMuazSQFhMZ8WqhjW8n5/Dm7UzjdNXs=
+github.com/zerok-ai/zk-utils-go v0.5.19-test3.0.20240108110257-1752857bb213/go.mod h1:dRfUoayXLkRyhRTf+Sic6TITAVqR41fPKItFChHG1DU=
 go.opentelemetry.io/proto/otlp v1.0.0 h1:T0TX0tmXU8a3CbNXzEKGeU5mIVOdf0oykP+u2lIVU/I=
 go.opentelemetry.io/proto/otlp v1.0.0/go.mod h1:Sy6pihPLfYHkr3NkUbEhGHFhINUSI/v80hjKIs5JXpM=
 golang.org/x/crypto v0.0.0-20190308221718-c2843e01d9a2/go.mod h1:djNgcEr1/C05ACkg1iLfiJU5Ep61QUkGW8qpdssI0+w=
