@@ -4,9 +4,9 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	zkhttp "github.com/zerok-ai/zk-utils-go/http"
 	zklogger "github.com/zerok-ai/zk-utils-go/logs"
 	"io"
-	"net/http"
 )
 
 const ZkOtlpReceiverLogTag = "ZkOtlpReceiverClient"
@@ -22,19 +22,26 @@ func GetSpanData(nodeIp string, traceIdPrefixList []string, nodePort string) (ma
 		return nil, err
 	}
 
-	// Make the HTTP POST request
-	response, err := http.Post(url, "application/json", bytes.NewBuffer(requestBody))
-	if err != nil {
-		zklogger.Error(ZkOtlpReceiverLogTag, "Error making HTTP request to OTLP receiver: ", err)
-		return nil, err
+	response, zkErr := zkhttp.Create().Post(url, bytes.NewBuffer(requestBody))
+	zklogger.Info(ZkOtlpReceiverLogTag, fmt.Sprintf("Received Status  from OTLP receiver: %s", response.Status))
+	zklogger.Info(ZkOtlpReceiverLogTag, fmt.Sprintf("Received Status code from OTLP receiver: %s", response.StatusCode))
+	if zkErr != nil {
+		zklogger.Error(ZkOtlpReceiverLogTag, "Error making HTTP request to OTLP receiver: ", zkErr)
+		return nil, nil //TODO: return error
 	}
-	defer func(Body io.ReadCloser) {
-		err := Body.Close()
-		if err != nil {
-			zklogger.Error(ZkOtlpReceiverLogTag, "Error closing trace span data response body received from OTLP receiver: ", err)
-		}
-	}(response.Body)
 
+	// Make the HTTP POST request
+	//response, err := http.Post(url, "application/json", bytes.NewBuffer(requestBody))
+	//if err != nil {
+	//	zklogger.Error(ZkOtlpReceiverLogTag, "Error making HTTP request to OTLP receiver: ", err)
+	//	return nil, err
+	//}
+	//defer func(Body io.ReadCloser) {
+	//	err := Body.Close()
+	//	if err != nil {
+	//		zklogger.Error(ZkOtlpReceiverLogTag, "Error closing trace span data response body received from OTLP receiver: ", err)
+	//	}
+	//}(response.Body)
 	zklogger.Info(ZkOtlpReceiverLogTag, fmt.Sprintf("Received response from OTLP receiver: %s", response.Body))
 	// Read the response body
 	responseBody, err := io.ReadAll(response.Body)
