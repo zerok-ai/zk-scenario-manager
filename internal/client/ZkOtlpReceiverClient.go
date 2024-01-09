@@ -30,18 +30,6 @@ func GetSpanData(nodeIp string, traceIdPrefixList []string, nodePort string) (ma
 		return nil, nil //TODO: return error
 	}
 
-	// Make the HTTP POST request
-	//response, err := http.Post(url, "application/json", bytes.NewBuffer(requestBody))
-	//if err != nil {
-	//	zklogger.Error(ZkOtlpReceiverLogTag, "Error making HTTP request to OTLP receiver: ", err)
-	//	return nil, err
-	//}
-	//defer func(Body io.ReadCloser) {
-	//	err := Body.Close()
-	//	if err != nil {
-	//		zklogger.Error(ZkOtlpReceiverLogTag, "Error closing trace span data response body received from OTLP receiver: ", err)
-	//	}
-	//}(response.Body)
 	zklogger.Info(ZkOtlpReceiverLogTag, fmt.Sprintf("Received response from OTLP receiver: %s", response.Body))
 	// Read the response body
 	responseBody, err := io.ReadAll(response.Body)
