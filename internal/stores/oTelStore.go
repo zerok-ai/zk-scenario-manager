@@ -130,6 +130,7 @@ func (t OTelDataHandler) fetchSpanData(keys []typedef.TTraceid, hashResults []*r
 
 	// combine all the data again
 	nodeIpMap := make(map[string][]string)
+	otlpNodeIpEncounterGivenTraceMap := make(map[string]map[string]bool)
 
 	for i, nodeIp := range hashResults {
 		traceId := keys[i]
@@ -149,6 +150,15 @@ func (t OTelDataHandler) fetchSpanData(keys []typedef.TTraceid, hashResults []*r
 				zkLogger.Error(LoggerTag, fmt.Sprintf("Error while creating nodeIp-traceList map traceId: %s, spanId: %s because Invalid Node IP: %s", traceId, spanId, spanNodeIp), err1)
 				continue
 			}
+			//initialize the map for the given nodeIp if not present
+			if otlpNodeIpEncounterGivenTraceMap[spanNodeIp] == nil || len(otlpNodeIpEncounterGivenTraceMap[spanNodeIp]) == 0 {
+				otlpNodeIpEncounterGivenTraceMap[spanNodeIp] = make(map[string]bool)
+			}
+			//check if the nodeIp encountered for the given traceId
+			if otlpNodeIpEncounterGivenTraceMap[spanNodeIp][string(traceId)] == true {
+				continue
+			}
+			otlpNodeIpEncounterGivenTraceMap[spanNodeIp][string(traceId)] = true
 			//traceSpanId := string(traceId) + "-" + spanId
 			nodeIpMap[spanNodeIp] = append(nodeIpMap[spanNodeIp], string(traceId))
 		}
