@@ -27,7 +27,10 @@ func GetSpanData(nodeIp string, traceIdPrefixList []string, nodePort string) (ma
 
 	if zkErr != nil {
 		zklogger.Error(ZkOtlpReceiverLogTag, "Error making HTTP request to OTLP receiver: ", zkErr)
-		return nil, errors.New("error while calling otlp receiver") //TODO: return error
+		zklogger.Info(ZkOtlpReceiverLogTag, fmt.Sprintf("Received Error Status  from OTLP receiver: %v", zkErr.Error.Status))
+		zklogger.Info(ZkOtlpReceiverLogTag, fmt.Sprintf("Received Status  from OTLP receiver: %s", response.Status))
+		zklogger.Info(ZkOtlpReceiverLogTag, fmt.Sprintf("Received Status code from OTLP receiver: %v", response.StatusCode))
+		return nil, errors.New(zkErr.Error.Message) //TODO: return error
 	}
 	zklogger.Info(ZkOtlpReceiverLogTag, fmt.Sprintf("Received Status  from OTLP receiver: %s", response.Status))
 	zklogger.Info(ZkOtlpReceiverLogTag, fmt.Sprintf("Received Status code from OTLP receiver: %v", response.StatusCode))
