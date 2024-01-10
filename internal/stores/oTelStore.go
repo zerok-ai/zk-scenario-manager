@@ -149,8 +149,8 @@ func (t OTelDataHandler) fetchSpanData(keys []typedef.TTraceid, hashResults []*r
 				zkLogger.Error(LoggerTag, fmt.Sprintf("Error while creating nodeIp-traceList map traceId: %s, spanId: %s because Invalid Node IP: %s", traceId, spanId, spanNodeIp), err1)
 				continue
 			}
-			traceSpanId := string(traceId) + "-" + spanId
-			nodeIpMap[spanNodeIp] = append(nodeIpMap[spanNodeIp], traceSpanId)
+			//traceSpanId := string(traceId) + "-" + spanId
+			nodeIpMap[spanNodeIp] = append(nodeIpMap[spanNodeIp], string(traceId))
 		}
 	}
 
