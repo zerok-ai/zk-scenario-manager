@@ -173,7 +173,7 @@ func (t OTelDataHandler) getSpanData(nodeIpTraceIdMap map[string][]string) (map[
 
 	for nodeIp, traceIdSpanIdList := range nodeIpTraceIdMap {
 		//get data from receiver
-		traceDataFromOtlpReceiver, err := otlpReceiverClient.GetSpanData(nodeIp, traceIdSpanIdList, "31603") //TODO: get from config
+		traceDataFromOtlpReceiver, err := otlpReceiverClient.GetSpanData(nodeIp, traceIdSpanIdList, "8047") //TODO: get from config
 		if err != nil {
 			zkLogger.Error(LoggerTag, fmt.Sprintf("Error retrieving data from OTLP receiver with nodeIP: %s for traces : %s", nodeIp, traceIdSpanIdList), err)
 			continue
