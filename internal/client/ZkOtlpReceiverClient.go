@@ -23,12 +23,13 @@ func GetSpanData(nodeIp string, traceIdPrefixList []string, nodePort string) (ma
 	}
 
 	response, zkErr := zkhttp.Create().Post(url, bytes.NewBuffer(requestBody))
-	zklogger.Info(ZkOtlpReceiverLogTag, fmt.Sprintf("Received Status  from OTLP receiver: %s", response.Status))
-	zklogger.Info(ZkOtlpReceiverLogTag, fmt.Sprintf("Received Status code from OTLP receiver: %v", response.StatusCode))
+
 	if zkErr != nil {
 		zklogger.Error(ZkOtlpReceiverLogTag, "Error making HTTP request to OTLP receiver: ", zkErr)
 		return nil, nil //TODO: return error
 	}
+	zklogger.Info(ZkOtlpReceiverLogTag, fmt.Sprintf("Received Status  from OTLP receiver: %s", response.Status))
+	zklogger.Info(ZkOtlpReceiverLogTag, fmt.Sprintf("Received Status code from OTLP receiver: %v", response.StatusCode))
 
 	zklogger.Info(ZkOtlpReceiverLogTag, fmt.Sprintf("Received response from OTLP receiver: %s", response.Body))
 	// Read the response body
