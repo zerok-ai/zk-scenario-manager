@@ -67,6 +67,7 @@ func (e ErrorStore) GetExceptionDataForHashes(tracesFromOTelStore map[typedef.TT
 					} else {
 						exceptionDataMap = attr.(map[string]interface{})
 					}
+					zkLogger.InfoF(LogTag, "Exception data map %v\n", exceptionDataMap)
 					spanEvent.Attributes = typedef.ConvertMapToKVList(exceptionDataMap)
 					spanEvent.Name = event["name"].(string)
 				}
