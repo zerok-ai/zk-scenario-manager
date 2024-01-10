@@ -8,9 +8,10 @@ import (
 	"fmt"
 	"github.com/adjust/rmq/v5"
 	"github.com/google/uuid"
+	zkUtilsCommonModel "github.com/zerok-ai/zk-utils-go/common"
 	"github.com/zerok-ai/zk-utils-go/ds"
 	zkLogger "github.com/zerok-ai/zk-utils-go/logs"
-	zkUtilsEnrichedSpan "github.com/zerok-ai/zk-utils-go/proto/enrichedSpan"
+	"github.com/zerok-ai/zk-utils-go/proto/enrichedSpan"
 	"github.com/zerok-ai/zk-utils-go/scenario"
 	"github.com/zerok-ai/zk-utils-go/scenario/model"
 	zkRedis "github.com/zerok-ai/zk-utils-go/storage/redis"
@@ -169,7 +170,7 @@ func (worker *QueueWorkerOTel) handleMessage(oTelMessage OTELTraceMessage) {
 	spanBuffer := make([]*stores.SpanFromOTel, 0)
 	for _, incident := range newIncidentList {
 		for _, span := range incident.Incident.Spans {
-			span.Span.Attributes = typedef.ConvertMapToKVList(span.SpanAttributes)
+			span.Span.Attributes = enrichedSpan.ConvertMapToKVList(span.SpanAttributes).KeyValueList
 			spanBuffer = append(spanBuffer, span)
 		}
 	}
@@ -232,14 +233,14 @@ func ConvertOtelSpanToResourceSpan(spans []*stores.SpanFromOTel, resourceHashToI
 		if value["attributes_map"] == nil {
 			continue
 		}
-		resourceHashToAttr[key] = typedef.ConvertMapToKVList(value["attributes_map"].(map[string]interface{}))
+		resourceHashToAttr[key] = enrichedSpan.ConvertMapToKVList(value["attributes_map"].(map[string]interface{})).KeyValueList
 	}
 
 	for key, value := range scopeHashToInfoMap {
 		if value["attributes_map"] == nil {
 			continue
 		}
-		scopeHashToAttr[key] = typedef.ConvertMapToKVList(value["attributes_map"].(map[string]interface{}))
+		scopeHashToAttr[key] = enrichedSpan.ConvertMapToKVList(value["attributes_map"].(map[string]interface{})).KeyValueList
 	}
 
 	for resourceHash, scopeMap := range resourceMap {
@@ -433,7 +434,7 @@ func getListOfIssuesForScenario(scenario *model.Scenario, spanMap TMapOfSpanIdTo
 			}
 
 			// 4.a.3. get the group_by object from span for the current scenario
-			groupByForScenario, ok := span.GroupByMap[zkUtilsEnrichedSpan.ScenarioId(scenario.Id)]
+			groupByForScenario, ok := span.GroupByMap[zkUtilsCommonModel.ScenarioId(scenario.Id)]
 			if !ok {
 				//not sure why would this happen
 				continue
