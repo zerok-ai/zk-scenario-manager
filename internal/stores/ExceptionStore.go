@@ -2,6 +2,7 @@ package stores
 
 import (
 	"encoding/json"
+	"github.com/zerok-ai/zk-rawdata-reader/vzReader/utils"
 	zkLogger "github.com/zerok-ai/zk-utils-go/logs"
 	"github.com/zerok-ai/zk-utils-go/storage/redis/clientDBNames"
 	"github.com/zerok-ai/zk-utils-go/storage/redis/config"
@@ -105,6 +106,11 @@ func (e ErrorStore) GetExceptionDetailsFromRedisUsingHashes(hash string) Excepti
 	exceptionDetailsJSON, err := e.redisHandler.Get(hash)
 	if err != nil {
 		zkLogger.ErrorF(LogTag, "Error while getting exception details for hash %s: %v\n", hash, err)
+		return ExceptionDetails
+	}
+
+	if utils.IsEmpty(exceptionDetailsJSON) {
+		zkLogger.InfoF(LogTag, "Exception details for hash %s is Empty or Null \n", hash)
 		return ExceptionDetails
 	}
 
