@@ -202,6 +202,8 @@ github.com/zerok-ai/zk-rawdata-reader v0.5.3 h1:XBbK4Dm7sI+fcsFFRnprrVQrNSkn1kCW
 github.com/zerok-ai/zk-rawdata-reader v0.5.3/go.mod h1:GNFYev1p4/t9IoHMCX43/Yexc6K4j93to/kkcytIsFc=
 github.com/zerok-ai/zk-utils-go v0.5.19-test3.0.20240109090949-115ec93b4e46 h1:5Ib18p/ocfww1dJo7FtpSR4fEX713TiUfPwk0riRwnc=
 github.com/zerok-ai/zk-utils-go v0.5.19-test3.0.20240109090949-115ec93b4e46/go.mod h1:dRfUoayXLkRyhRTf+Sic6TITAVqR41fPKItFChHG1DU=
+github.com/zerok-ai/zk-utils-go v0.5.21-badger.0.20240110111219-08e612240ada h1:ckTmRlGE1y7vPtZav/M1mAalKuahcbZHcEe4d2ygTwM=
+github.com/zerok-ai/zk-utils-go v0.5.21-badger.0.20240110111219-08e612240ada/go.mod h1:x1Mm7fjc+vaXCOsMkRiE5ua8TlaMgpe4v1UDxHpjDfY=
 go.opentelemetry.io/proto/otlp v1.0.0 h1:T0TX0tmXU8a3CbNXzEKGeU5mIVOdf0oykP+u2lIVU/I=
 go.opentelemetry.io/proto/otlp v1.0.0/go.mod h1:Sy6pihPLfYHkr3NkUbEhGHFhINUSI/v80hjKIs5JXpM=
 golang.org/x/crypto v0.0.0-20190308221718-c2843e01d9a2/go.mod h1:djNgcEr1/C05ACkg1iLfiJU5Ep61QUkGW8qpdssI0+w=
