@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"github.com/kataras/iris/v12"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	zkConfig "github.com/zerok-ai/zk-utils-go/config"
 	zkHttpConfig "github.com/zerok-ai/zk-utils-go/http/config"
 	zkLogger "github.com/zerok-ai/zk-utils-go/logs"
@@ -126,6 +127,9 @@ func newApp() *iris.Application {
 		ctx.StatusCode(iris.StatusOK)
 		ctx.WriteString("pong")
 	}).Describe("healthcheck")
+
+	//scraping metrics for prometheus
+	app.Get("/metrics", iris.FromStd(promhttp.Handler()))
 
 	return app
 }
