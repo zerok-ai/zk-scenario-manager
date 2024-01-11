@@ -142,7 +142,7 @@ func (worker *QueueWorkerOTel) handleMessage(oTelMessage OTELTraceMessage) {
 				}
 				span.SpanAttributes["workload_id_list"] = workloadIdSet
 				allWorkloadIdsInTrace = allWorkloadIdsInTrace.Union(workloadIdSet)
-				allGroupByTitleSet.Union(span.GroupByTitleSet)
+				allGroupByTitleSet = allGroupByTitleSet.Union(span.GroupByTitleSet)
 			}
 
 			if span.IsRoot {
