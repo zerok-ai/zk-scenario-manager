@@ -11,12 +11,12 @@ spec:
   selector:
     matchLabels:
       app: zk-scenario-manager
-      {{- include "zk-scenario-manager.labels" . | nindent 8 }}
+      {{- include "zk-scenario-manager.selectorLabels" . | nindent 8 }}
   template:
     metadata:
       labels:
         app: zk-scenario-manager
-        {{- include "zk-scenario-manager.labels" . | nindent 10 }}
+        {{- include "zk-scenario-manager.selectorLabels" . | nindent 10 }}
     spec:
 {{/*      initContainers:*/}}
 {{/*        - command:*/}}
