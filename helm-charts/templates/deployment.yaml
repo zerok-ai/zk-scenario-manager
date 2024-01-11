@@ -4,19 +4,19 @@ metadata:
   name: {{ include "zk-scenario-manager.fullname" . }}
   labels:
     app: zk-scenario-manager
-    {{- include "zk-scenario-manager.labels" . | nindent 4 }}
+    {{- include "zk-scenario-manager.labels" . | nindent 6 }}
   namespace: zk-loadtest
 spec:
   replicas: 1
   selector:
     matchLabels:
       app: zk-scenario-manager
-      {{- include "zk-scenario-manager.labels" . | nindent 4 }}
+      {{- include "zk-scenario-manager.labels" . | nindent 8 }}
   template:
     metadata:
       labels:
         app: zk-scenario-manager
-        {{- include "zk-scenario-manager.labels" . | nindent 4 }}
+        {{- include "zk-scenario-manager.labels" . | nindent 10 }}
     spec:
 {{/*      initContainers:*/}}
 {{/*        - command:*/}}
