@@ -8,8 +8,6 @@ import (
 	"fmt"
 	"github.com/adjust/rmq/v5"
 	"github.com/google/uuid"
-	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/client_golang/prometheus/promauto"
 	zkUtilsCommonModel "github.com/zerok-ai/zk-utils-go/common"
 	"github.com/zerok-ai/zk-utils-go/ds"
 	zkLogger "github.com/zerok-ai/zk-utils-go/logs"
@@ -26,6 +24,7 @@ import (
 	"log"
 	"scenario-manager/config"
 	typedef "scenario-manager/internal"
+	promMetrics "scenario-manager/internal/prometheusMetrics"
 	"scenario-manager/internal/stores"
 	tracePersistenceModel "scenario-manager/internal/tracePersistence/model"
 	"time"
@@ -37,69 +36,6 @@ const (
 )
 
 var ctx = context.Background()
-var (
-	rootSpanNotFoundTotal = promauto.NewCounterVec(
-		prometheus.CounterOpts{
-			Name: "zerok_sm_root_spans_not_found_total",
-			Help: "No Root Span Found Error",
-		},
-		[]string{"scenario-id", "trace-id"}, // Multiple labels
-	)
-
-	//rate limited total incidents for each scenario
-	rateLimitedTotalIncidentsPerScenario = promauto.NewCounterVec(
-		prometheus.CounterOpts{
-			Name: "zerok_sm_scenario_traces_rate_limited_total",
-			Help: "Total rate limited incidents for each scenario",
-		},
-		[]string{"scenario-id"},
-	)
-
-	//span count mismatch for incident
-	spanCountMismatchTotal = promauto.NewCounterVec(
-		prometheus.CounterOpts{
-			Name: "zerok_sm_traces_span_count_mismatch_total",
-			Help: "Total span count mismatch for traces",
-		},
-		[]string{"scenario-id, trace-id"},
-	)
-
-	//total traces received for scenario to process metric
-	totalTracesReceivedForScenarioToProcess = promauto.NewCounterVec(
-		prometheus.CounterOpts{
-			Name: "zerok_sm_traces_received_for_scenario_to_process_total",
-			Help: "Total traces received for scenario to process",
-		},
-		[]string{"scenario-id"},
-	)
-
-	//total traces processed by sm and pushed to pipeline metric
-	totalTracesProcessedForScenario = promauto.NewCounterVec(
-		prometheus.CounterOpts{
-			Name: "zerok_sm_traces_processed_scenario_total",
-			Help: "Total traces processed by scenario manager for scenario",
-		},
-		[]string{"scenario-id"},
-	)
-
-	// total spans processed metric for each scenario
-	totalSpansProcessedForScenario = promauto.NewCounterVec(
-		prometheus.CounterOpts{
-			Name: "zerok_sm_spans_processed_scenario_total",
-			Help: "Total spans processed by scenario manager for scenario",
-		},
-		[]string{"scenario-id"},
-	)
-
-	//total export calls failed for scenario
-	totalExportDataFailedForScenario = promauto.NewCounterVec(
-		prometheus.CounterOpts{
-			Name: "zerok_sm_export_data_failed_scenario_total",
-			Help: "Total export data failed for scenario",
-		},
-		[]string{"scenario-id"},
-	)
-)
 
 type TMapOfSpanIdToSpan map[typedef.TSpanId]*stores.SpanFromOTel
 
@@ -164,13 +100,13 @@ func (worker *QueueWorkerOTel) handleMessage(oTelMessage OTELTraceMessage) {
 	}
 
 	//total traces received for scenario to process metric
-	totalTracesReceivedForScenarioToProcess.WithLabelValues(oTelMessage.Scenario.Id).Add(float64(len(incidents)))
+	promMetrics.TotalTracesReceivedForScenarioToProcess.WithLabelValues(oTelMessage.Scenario.Id).Add(float64(len(incidents)))
 
 	// 3. rate limit incidents
 	newIncidentList := worker.rateLimitIncidents(incidents, oTelMessage.Scenario)
 	//newIncidentList := incidents
 	totalTracesRateLimited := len(incidents) - len(newIncidentList)
-	rateLimitedTotalIncidentsPerScenario.WithLabelValues(oTelMessage.Scenario.Id).Add(float64(totalTracesRateLimited))
+	promMetrics.RateLimitedTotalIncidentsPerScenario.WithLabelValues(oTelMessage.Scenario.Id).Add(float64(totalTracesRateLimited))
 
 	if len(newIncidentList) == 0 {
 		zkLogger.InfoF(LoggerTagOTel, "rate limited %d incidents. nothing to save", len(incidents))
@@ -179,7 +115,7 @@ func (worker *QueueWorkerOTel) handleMessage(oTelMessage OTELTraceMessage) {
 
 	for _, incident := range newIncidentList {
 		if len(tracesFromOTelStore[typedef.TTraceid(incident.Incident.TraceId)].Spans) != len(incident.Incident.Spans) {
-			spanCountMismatchTotal.WithLabelValues(oTelMessage.Scenario.Id, incident.Incident.TraceId).Inc()
+			promMetrics.SpanCountMismatchTotal.WithLabelValues(oTelMessage.Scenario.Id, incident.Incident.TraceId).Inc()
 			zkLogger.ErrorF(LoggerTagOTel, "span count mismatch for incident %v", incident)
 			zkLogger.ErrorF(LoggerTagOTel, "OtelCount: %d, newIncidentCount: %d", len(tracesFromOTelStore[typedef.TTraceid(incident.Incident.TraceId)].Spans), len(incident.Incident.Spans))
 		}
@@ -222,7 +158,7 @@ func (worker *QueueWorkerOTel) handleMessage(oTelMessage OTELTraceMessage) {
 		}
 
 		if rootSpan == nil {
-			rootSpanNotFoundTotal.WithLabelValues(oTelMessage.Scenario.Type, incident.Incident.TraceId).Inc()
+			promMetrics.RootSpanNotFoundTotal.WithLabelValues(oTelMessage.Scenario.Type, incident.Incident.TraceId).Inc()
 			zkLogger.ErrorF(LoggerTagOTel, "no root span found for incident %v", incident)
 			continue
 		}
@@ -270,14 +206,14 @@ func (worker *QueueWorkerOTel) handleMessage(oTelMessage OTELTraceMessage) {
 	response, err := c.Export(context.Background(), &tracesData)
 	if err != nil {
 		//total call to export data failed for scenario
-		totalExportDataFailedForScenario.WithLabelValues(oTelMessage.Scenario.Id).Inc()
+		promMetrics.TotalExportDataFailedForScenario.WithLabelValues(oTelMessage.Scenario.Id).Inc()
 		log.Fatalf("could not send trace data: %v", err)
 	}
 
 	//total traces processed by scenario manager for scenario
-	totalTracesProcessedForScenario.WithLabelValues(oTelMessage.Scenario.Id).Add(float64(len(newIncidentList)))
+	promMetrics.TotalTracesProcessedForScenario.WithLabelValues(oTelMessage.Scenario.Id).Add(float64(len(newIncidentList)))
 	//total spans processed by scenario manager for scenario
-	totalSpansProcessedForScenario.WithLabelValues(oTelMessage.Scenario.Id).Add(float64(len(spanBuffer)))
+	promMetrics.TotalSpansProcessedForScenario.WithLabelValues(oTelMessage.Scenario.Id).Add(float64(len(spanBuffer)))
 
 	log.Printf("Response: %v", response)
 }
