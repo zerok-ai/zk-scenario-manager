@@ -142,9 +142,6 @@ func (worker *QueueWorkerOTel) handleMessage(oTelMessage OTELTraceMessage) {
 				}
 				span.SpanAttributes["workload_id_list"] = workloadIdSet
 				allWorkloadIdsInTrace = allWorkloadIdsInTrace.Union(workloadIdSet)
-				zkLogger.Info(LoggerTagOTel, "workloadIdSet ", workloadIdSet)
-				zkLogger.Info(LoggerTagOTel, "allWorkloadIdsInTrace", allWorkloadIdsInTrace)
-				zkLogger.Info(LoggerTagOTel, "----------")
 				allGroupByTitleSet.Union(span.GroupByTitleSet)
 			}
 
@@ -159,11 +156,11 @@ func (worker *QueueWorkerOTel) handleMessage(oTelMessage OTELTraceMessage) {
 		}
 
 		scenarios := worker.scenarioStore.GetAllValues()
-		scenarioIds, err := scenario.FindMatchingScenarios(allWorkloadIdsInTrace.GetAll(), scenarios)
+		probesName, err := scenario.FindMatchingScenarios(allWorkloadIdsInTrace.GetAll(), scenarios)
 		if err != nil {
 			zkLogger.Error(LoggerTagOTel, "error in getting scenario ids for workload ids", err)
 		} else {
-			rootSpan.SpanAttributes["probes"] = scenarioIds
+			rootSpan.SpanAttributes["probes"] = probesName
 		}
 
 		rootSpan.SpanAttributes["GroupByTitleSet"] = allGroupByTitleSet
