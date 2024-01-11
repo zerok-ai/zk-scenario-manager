@@ -141,7 +141,7 @@ func (worker *QueueWorkerOTel) handleMessage(oTelMessage OTELTraceMessage) {
 					workloadIdSet.Add(workloadId)
 				}
 				span.SpanAttributes["workload_id_list"] = workloadIdSet
-				allWorkloadIdsInTrace.Union(workloadIdSet)
+				allWorkloadIdsInTrace = allWorkloadIdsInTrace.Union(workloadIdSet)
 				zkLogger.Info(LoggerTagOTel, "workloadIdSet ", workloadIdSet)
 				zkLogger.Info(LoggerTagOTel, "allWorkloadIdsInTrace", allWorkloadIdsInTrace)
 				zkLogger.Info(LoggerTagOTel, "----------")
