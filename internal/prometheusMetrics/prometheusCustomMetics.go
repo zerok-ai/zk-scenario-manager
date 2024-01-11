@@ -31,7 +31,7 @@ var (
 			Name: "zerok_sm_traces_span_count_mismatch_total",
 			Help: "Total span count mismatch for traces",
 		},
-		[]string{"scenario, trace"},
+		[]string{"scenario", "trace"},
 	)
 
 	//total traces received for scenario to process metric
@@ -75,26 +75,26 @@ var (
 		Name: "zerok_sm_total_span_data_fetch_calls",
 		Help: "Total spans data fetch calls to receiver by scenario manager",
 	},
-		[]string{"nodeip"})
+		[]string{"nodeIp"})
 
 	//total span data fetch calls errors for scenario
 	TotalSpanDataFetchErrors = promauto.NewCounterVec(prometheus.CounterOpts{
 		Name: "zerok_sm_total_span_data_fetch_errors",
 		Help: "Total spans data fetch errors to receiver by scenario manager",
 	},
-		[]string{"nodeip"})
+		[]string{"nodeIp"})
 
 	//total span data fetch calls success for scenario
 	TotalSpanDataFetchSuccess = promauto.NewCounterVec(prometheus.CounterOpts{
 		Name: "zerok_sm_total_span_data_fetch_success",
 		Help: "Total spans data fetch success to receiver by scenario manager",
 	},
-		[]string{"nodeip"})
+		[]string{"nodeIp"})
 
 	//total traces span data requested from receiver
 	TotalTracesSpanDataRequestedFromReceiver = promauto.NewCounterVec(prometheus.CounterOpts{
 		Name: "zerok_sm_total_traces_span_data_requested_from_receiver",
 		Help: "Total traces span data requested from receiver by scenario manager",
 	},
-		[]string{"nodeip"})
+		[]string{"nodeIp"})
 )
