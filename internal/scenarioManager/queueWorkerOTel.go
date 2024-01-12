@@ -100,13 +100,13 @@ func (worker *QueueWorkerOTel) handleMessage(oTelMessage OTELTraceMessage) {
 	}
 
 	//total traces received for scenario to process metric
-	promMetrics.TotalTracesReceivedForScenarioToProcess.WithLabelValues(oTelMessage.Scenario.Type).Add(float64(len(incidents)))
+	promMetrics.TotalTracesReceivedForScenarioToProcess.WithLabelValues(oTelMessage.Scenario.Title).Add(float64(len(incidents)))
 
 	// 3. rate limit incidents
 	newIncidentList := worker.rateLimitIncidents(incidents, oTelMessage.Scenario)
 	//newIncidentList := incidents
 	totalTracesRateLimited := len(incidents) - len(newIncidentList)
-	promMetrics.RateLimitedTotalIncidentsPerScenario.WithLabelValues(oTelMessage.Scenario.Type).Add(float64(totalTracesRateLimited))
+	promMetrics.RateLimitedTotalIncidentsPerScenario.WithLabelValues(oTelMessage.Scenario.Title).Add(float64(totalTracesRateLimited))
 
 	if len(newIncidentList) == 0 {
 		zkLogger.InfoF(LoggerTagOTel, "rate limited %d incidents. nothing to save", len(incidents))
@@ -115,7 +115,7 @@ func (worker *QueueWorkerOTel) handleMessage(oTelMessage OTELTraceMessage) {
 
 	for _, incident := range newIncidentList {
 		if len(tracesFromOTelStore[typedef.TTraceid(incident.Incident.TraceId)].Spans) != len(incident.Incident.Spans) {
-			promMetrics.SpanCountMismatchTotal.WithLabelValues(oTelMessage.Scenario.Type, incident.Incident.TraceId).Inc()
+			promMetrics.SpanCountMismatchTotal.WithLabelValues(oTelMessage.Scenario.Title, incident.Incident.TraceId).Inc()
 			zkLogger.ErrorF(LoggerTagOTel, "span count mismatch for incident %v", incident)
 			zkLogger.ErrorF(LoggerTagOTel, "OtelCount: %d, newIncidentCount: %d", len(tracesFromOTelStore[typedef.TTraceid(incident.Incident.TraceId)].Spans), len(incident.Incident.Spans))
 		}
@@ -158,7 +158,7 @@ func (worker *QueueWorkerOTel) handleMessage(oTelMessage OTELTraceMessage) {
 		}
 
 		if rootSpan == nil {
-			promMetrics.RootSpanNotFoundTotal.WithLabelValues(oTelMessage.Scenario.Type, incident.Incident.TraceId).Inc()
+			promMetrics.RootSpanNotFoundTotal.WithLabelValues(oTelMessage.Scenario.Title, incident.Incident.TraceId).Inc()
 			zkLogger.ErrorF(LoggerTagOTel, "no root span found for incident %v", incident)
 			continue
 		}
@@ -206,14 +206,14 @@ func (worker *QueueWorkerOTel) handleMessage(oTelMessage OTELTraceMessage) {
 	response, err := c.Export(context.Background(), &tracesData)
 	if err != nil {
 		//total call to export data failed for scenario
-		promMetrics.TotalExportDataFailedForScenario.WithLabelValues(oTelMessage.Scenario.Type).Inc()
+		promMetrics.TotalExportDataFailedForScenario.WithLabelValues(oTelMessage.Scenario.Title).Inc()
 		log.Fatalf("could not send trace data: %v", err)
 	}
 
 	//total traces processed by scenario manager for scenario
-	promMetrics.TotalTracesProcessedForScenario.WithLabelValues(oTelMessage.Scenario.Type).Add(float64(len(newIncidentList)))
+	promMetrics.TotalTracesProcessedForScenario.WithLabelValues(oTelMessage.Scenario.Title).Add(float64(len(newIncidentList)))
 	//total spans processed by scenario manager for scenario
-	promMetrics.TotalSpansProcessedForScenario.WithLabelValues(oTelMessage.Scenario.Type).Add(float64(len(spanBuffer)))
+	promMetrics.TotalSpansProcessedForScenario.WithLabelValues(oTelMessage.Scenario.Title).Add(float64(len(spanBuffer)))
 
 	log.Printf("Response: %v", response)
 }
