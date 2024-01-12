@@ -238,6 +238,7 @@ func (t OTelDataHandler) processResult(keys []typedef.TTraceid, traceSpanData ma
 		for spanId, spanData := range trace {
 			var protoSpan zkUtilsOtel.OtelEnrichedRawSpanForProto
 			zkLogger.InfoF(LoggerTag, "Span data for spanId: %s spanData: %s for traceid:  %s ", spanId, spanData, traceId)
+			zkLogger.InfoF(LoggerTag, "Span bytes:  %v ", []byte(spanData))
 			zkLogger.Info(LoggerTag, "-----------")
 			if err := proto.Unmarshal([]byte(spanData), &protoSpan); err != nil {
 				zkLogger.Error(LoggerTag, fmt.Sprintf("Error unmarshalling span data for spanId: %s spanData: %s for traceid:  %s ", spanId, spanData, traceId), err)
