@@ -7,6 +7,7 @@ require (
 	github.com/golang/protobuf v1.5.3
 	github.com/google/uuid v1.4.0
 	github.com/kataras/iris/v12 v12.2.0
+	github.com/prometheus/client_golang v1.18.0
 	github.com/redis/go-redis/v9 v9.0.5
 	github.com/stretchr/testify v1.8.4
 	github.com/zerok-ai/zk-rawdata-reader v0.5.3
@@ -67,7 +68,6 @@ require (
 	github.com/microcosm-cc/bluemonday v1.0.26 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
-	github.com/prometheus/client_golang v1.18.0 // indirect
 	github.com/prometheus/client_model v0.5.0 // indirect
 	github.com/prometheus/common v0.45.0 // indirect
 	github.com/prometheus/procfs v0.12.0 // indirect
