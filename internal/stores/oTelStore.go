@@ -2,6 +2,7 @@ package stores
 
 import (
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"github.com/redis/go-redis/v9"
 	"github.com/zerok-ai/zk-rawdata-reader/vzReader/utils"
@@ -244,7 +245,18 @@ func (t OTelDataHandler) processResult(keys []typedef.TTraceid, traceSpanData ma
 			//	continue
 			//}
 
-			protoSpan = spanData.(*zkUtilsOtel.OtelEnrichedRawSpanForProto)
+			xx, e1 := json.Marshal(spanData)
+			if e1 != nil {
+				zkLogger.Error(LoggerTag, fmt.Sprintf("Error marshalling span data for spanId: %s spanData: %s for traceid:  %s ", spanId, spanData, traceId), e1)
+				continue
+			}
+			e2 := json.Unmarshal(xx, &protoSpan)
+			if e2 != nil {
+				zkLogger.Error(LoggerTag, fmt.Sprintf("Error unmarshalling span data for spanId: %s spanData: %s for traceid:  %s ", spanId, spanData, traceId), e2)
+				continue
+			}
+
+			//protoSpan = spanData.(*zkUtilsOtel.OtelEnrichedRawSpanForProto)
 
 			var sp SpanFromOTel
 			x := zkUtilsEnrichedSpan.GetEnrichedSpan(protoSpan)
