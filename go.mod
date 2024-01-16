@@ -11,7 +11,7 @@ require (
 	github.com/redis/go-redis/v9 v9.0.5
 	github.com/stretchr/testify v1.8.4
 	github.com/zerok-ai/zk-rawdata-reader v0.5.3
-	github.com/zerok-ai/zk-utils-go v0.5.21-badger.0.20240111124832-08c2fa5c1055
+	github.com/zerok-ai/zk-utils-go v0.5.21-badger.0.20240116135737-93bea541ee75
 	go.opentelemetry.io/proto/otlp v1.0.0
 	google.golang.org/grpc v1.59.0
 )

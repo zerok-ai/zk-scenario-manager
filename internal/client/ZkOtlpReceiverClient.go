@@ -5,9 +5,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/golang/protobuf/proto"
 	zkhttp "github.com/zerok-ai/zk-utils-go/http"
 	zklogger "github.com/zerok-ai/zk-utils-go/logs"
-	zkUtilsOtel "github.com/zerok-ai/zk-utils-go/proto/opentelemetry"
+	__ "github.com/zerok-ai/zk-utils-go/proto/opentelemetry"
 	"io"
 	promMetrics "scenario-manager/internal/prometheusMetrics"
 	"time"
@@ -46,15 +47,23 @@ func GetSpanData(nodeIp string, traceIdPrefixList []string, nodePort string) (ma
 		return nil, err
 	}
 	zklogger.Debug(ZkOtlpReceiverLogTag, fmt.Sprintf("Received response body from OTLP receiver: %s", responseBody))
-	var responseData map[string]*zkUtilsOtel.OtelEnrichedRawSpanForProto
-	// Parse the response JSON
-	err = json.Unmarshal(responseBody, &responseData)
+
+	var result __.BadgerResponseList
+	err = proto.Unmarshal(responseBody, &result)
 	if err != nil {
-		zklogger.Error(ZkOtlpReceiverLogTag, fmt.Sprintf("Error unmarshaling response data: %s received from OTLP receiver", responseData), err)
-		return nil, err
+		zklogger.Error(ZkOtlpReceiverLogTag, "Error while unmarshalling data from badger for given tracePrefixList", err)
 	}
 
-	zklogger.Debug(ZkOtlpReceiverLogTag, fmt.Sprintf("Received response data from OTLP receiver: %s", responseData))
+	//logger.Info(mainLogTag, &result)
+	//var responseData map[string]*zkUtilsOtel.OtelEnrichedRawSpanForProto
+	//// Parse the response JSON
+	//err = json.Unmarshal(responseBody, &responseData)
+	//if err != nil {
+	//	zklogger.Error(ZkOtlpReceiverLogTag, fmt.Sprintf("Error unmarshaling response data: %s received from OTLP receiver", responseData), err)
+	//	return nil, err
+	//}
 
-	return responseData, nil
+	//zklogger.Debug(ZkOtlpReceiverLogTag, fmt.Sprintf("Received response data from OTLP receiver: %s", responseData))
+
+	return nil, nil
 }
