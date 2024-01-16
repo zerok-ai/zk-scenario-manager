@@ -7,6 +7,7 @@ import (
 	"fmt"
 	zkhttp "github.com/zerok-ai/zk-utils-go/http"
 	zklogger "github.com/zerok-ai/zk-utils-go/logs"
+	zkUtilsOtel "github.com/zerok-ai/zk-utils-go/proto/opentelemetry"
 	"io"
 	promMetrics "scenario-manager/internal/prometheusMetrics"
 	"time"
@@ -45,7 +46,7 @@ func GetSpanData(nodeIp string, traceIdPrefixList []string, nodePort string) (ma
 		return nil, err
 	}
 	zklogger.Debug(ZkOtlpReceiverLogTag, fmt.Sprintf("Received response body from OTLP receiver: %s", responseBody))
-	var responseData map[string]interface{}
+	var responseData map[string]*zkUtilsOtel.OtelEnrichedRawSpanForProto
 	// Parse the response JSON
 	err = json.Unmarshal(responseBody, &responseData)
 	if err != nil {
