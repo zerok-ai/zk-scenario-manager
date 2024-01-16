@@ -9,6 +9,7 @@ import (
 	zklogger "github.com/zerok-ai/zk-utils-go/logs"
 	"io"
 	promMetrics "scenario-manager/internal/prometheusMetrics"
+	"time"
 )
 
 const ZkOtlpReceiverLogTag = "ZkOtlpReceiverClient"
@@ -25,7 +26,7 @@ func GetSpanData(nodeIp string, traceIdPrefixList []string, nodePort string) (ma
 	//total traces span data requested from receiver
 	promMetrics.TotalTracesSpanDataRequestedFromReceiver.WithLabelValues(nodeIp).Add(float64(len(traceIdPrefixList)))
 
-	response, zkErr := zkhttp.Create().Post(url, bytes.NewBuffer(requestBody))
+	response, zkErr := zkhttp.CreateWithTimeout(time.Second*30).Post(url, bytes.NewBuffer(requestBody))
 	if zkErr != nil {
 		promMetrics.TotalSpanDataFetchErrors.WithLabelValues(nodeIp).Inc()
 		zklogger.ErrorF(ZkOtlpReceiverLogTag, "Error making HTTP request to OTLP receiver for ip = %s with err: %v.\n", nodeIp, err)
