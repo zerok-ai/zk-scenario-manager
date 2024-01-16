@@ -9,6 +9,8 @@ import (
 	zkUtilsCommonModel "github.com/zerok-ai/zk-utils-go/common"
 	"github.com/zerok-ai/zk-utils-go/ds"
 	zkLogger "github.com/zerok-ai/zk-utils-go/logs"
+	zkUtilsEnrichedSpan "github.com/zerok-ai/zk-utils-go/proto/enrichedSpan"
+	zkUtilsOtel "github.com/zerok-ai/zk-utils-go/proto/opentelemetry"
 	"github.com/zerok-ai/zk-utils-go/storage/redis/clientDBNames"
 	"github.com/zerok-ai/zk-utils-go/storage/redis/config"
 	otlpCommonV1 "go.opentelemetry.io/proto/otlp/common/v1"
@@ -234,40 +236,40 @@ func (t OTelDataHandler) processResult(keys []typedef.TTraceid, traceSpanData ma
 
 		// 4.1 Unmarshal the Spans
 		for spanId, spanData := range trace {
-			//var protoSpan zkUtilsOtel.OtelEnrichedRawSpanForProto
-			//zkLogger.InfoF(LoggerTag, "Span data for spanId: %s spanData: %s for traceid:  %s ", spanId, spanData, traceId)
-			//zkLogger.InfoF(LoggerTag, "Span bytes:  %v ", []byte(spanData))
-			//zkLogger.Info(LoggerTag, "-----------")
-			//if err := proto.Unmarshal([]byte(spanData), &protoSpan); err != nil {
-			//	zkLogger.Error(LoggerTag, fmt.Sprintf("Error unmarshalling span data for spanId: %s spanData: %s for traceid:  %s ", spanId, spanData, traceId), err)
-			//	continue
-			//}
-			//
-			//var sp SpanFromOTel
-			//x := zkUtilsEnrichedSpan.GetEnrichedSpan(&protoSpan)
-			//
-			//sp.Span = x.Span
-			//sp.SpanAttributes = x.SpanAttributes
-			//sp.SpanEvents = x.SpanEvents
-			//sp.ResourceAttributesHash = x.ResourceAttributesHash
-			//sp.ScopeAttributesHash = x.ScopeAttributesHash
-			//sp.WorkloadIDList = x.WorkloadIdList
-			//sp.GroupByMap = x.GroupBy
-			//sp.TraceID = traceId
-			//sp.SpanID = typedef.TSpanId(spanId)
-			//sp.ParentSpanID = typedef.TSpanId(hex.EncodeToString(sp.Span.ParentSpanId))
-			//
-			//traceFromOTel.Spans[typedef.TSpanId(spanId)] = &sp
-
-			var sp SpanFromOTel
-			err2 := json.Unmarshal([]byte(spanData), &sp)
-			if err2 != nil {
-				zkLogger.Error(LoggerTag, "Error retrieving span:", err2)
+			var protoSpan zkUtilsOtel.OtelEnrichedRawSpanForProto
+			zkLogger.InfoF(LoggerTag, "Span data for spanId: %s spanData: %s for traceid:  %s ", spanId, spanData, traceId)
+			zkLogger.InfoF(LoggerTag, "Span bytes:  %v ", []byte(spanData))
+			zkLogger.Info(LoggerTag, "-----------")
+			if err := json.Unmarshal([]byte(spanData), &protoSpan); err != nil {
+				zkLogger.Error(LoggerTag, fmt.Sprintf("Error unmarshalling span data for spanId: %s spanData: %s for traceid:  %s ", spanId, spanData, traceId), err)
 				continue
 			}
+
+			var sp SpanFromOTel
+			x := zkUtilsEnrichedSpan.GetEnrichedSpan(&protoSpan)
+
+			sp.Span = x.Span
+			sp.SpanAttributes = x.SpanAttributes
+			sp.SpanEvents = x.SpanEvents
+			sp.ResourceAttributesHash = x.ResourceAttributesHash
+			sp.ScopeAttributesHash = x.ScopeAttributesHash
+			sp.WorkloadIDList = x.WorkloadIdList
+			sp.GroupByMap = x.GroupBy
 			sp.TraceID = traceId
 			sp.SpanID = typedef.TSpanId(spanId)
 			sp.ParentSpanID = typedef.TSpanId(hex.EncodeToString(sp.Span.ParentSpanId))
+
+			traceFromOTel.Spans[typedef.TSpanId(spanId)] = &sp
+
+			//var sp SpanFromOTel
+			//err2 := json.Unmarshal([]byte(spanData), &sp)
+			//if err2 != nil {
+			//	zkLogger.Error(LoggerTag, "Error retrieving span:", err2)
+			//	continue
+			//}
+			//sp.TraceID = traceId
+			//sp.SpanID = typedef.TSpanId(spanId)
+			//sp.ParentSpanID = typedef.TSpanId(hex.EncodeToString(sp.Span.ParentSpanId))
 
 			traceFromOTel.Spans[typedef.TSpanId(spanId)] = &sp
 		}
