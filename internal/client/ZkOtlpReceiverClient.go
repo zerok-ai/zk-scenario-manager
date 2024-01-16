@@ -14,7 +14,7 @@ import (
 const ZkOtlpReceiverLogTag = "ZkOtlpReceiverClient"
 
 func GetSpanData(nodeIp string, traceIdPrefixList []string, nodePort string) (map[string]string, error) {
-	promMetrics.TotalSpanDataFetchCalls.WithLabelValues(nodeIp).Inc()
+
 	url := "http://" + nodeIp + ":" + nodePort + "/get-trace-data" // Replace with your actual API endpoint
 	zklogger.Info(ZkOtlpReceiverLogTag, fmt.Sprintf("Calling OTLP receiver with traceIdPrefixList: %s on url: %s", traceIdPrefixList, url))
 	requestBody, err := json.Marshal(traceIdPrefixList)
@@ -22,6 +22,7 @@ func GetSpanData(nodeIp string, traceIdPrefixList []string, nodePort string) (ma
 		zklogger.Error(fmt.Sprintf("Error marshaling request data: %s while calling OTLP receiver", traceIdPrefixList), err)
 		return nil, err
 	}
+	promMetrics.TotalSpanDataFetchCalls.WithLabelValues(nodeIp).Inc()
 	//total traces span data requested from receiver
 	promMetrics.TotalTracesSpanDataRequestedFromReceiver.WithLabelValues(nodeIp).Add(float64(len(traceIdPrefixList)))
 

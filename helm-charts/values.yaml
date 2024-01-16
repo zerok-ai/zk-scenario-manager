@@ -32,11 +32,11 @@ redis:
 zkScenarioManager:
   resources:
     limits:
+      cpu: 1
+      memory: 1024Mi
+    requests:
       cpu: 512m
       memory: 512Mi
-    requests:
-      cpu: 256m
-      memory: 256Mi
 
 obfuscatorImage:
   repo: "zk-obfuscator"
