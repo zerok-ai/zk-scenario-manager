@@ -13,7 +13,7 @@ import (
 
 const ZkOtlpReceiverLogTag = "ZkOtlpReceiverClient"
 
-func GetSpanData(nodeIp string, traceIdPrefixList []string, nodePort string) (map[string]string, error) {
+func GetSpanData(nodeIp string, traceIdPrefixList []string, nodePort string) (map[string]interface{}, error) {
 	promMetrics.TotalSpanDataFetchCalls.WithLabelValues(nodeIp).Inc()
 	url := "http://" + nodeIp + ":" + nodePort + "/get-trace-data" // Replace with your actual API endpoint
 	zklogger.Info(ZkOtlpReceiverLogTag, fmt.Sprintf("Calling OTLP receiver with traceIdPrefixList: %s on url: %s", traceIdPrefixList, url))
@@ -44,7 +44,7 @@ func GetSpanData(nodeIp string, traceIdPrefixList []string, nodePort string) (ma
 		return nil, err
 	}
 	zklogger.Debug(ZkOtlpReceiverLogTag, fmt.Sprintf("Received response body from OTLP receiver: %s", responseBody))
-	var responseData map[string]string
+	var responseData map[string]interface{}
 	// Parse the response JSON
 	err = json.Unmarshal(responseBody, &responseData)
 	if err != nil {
