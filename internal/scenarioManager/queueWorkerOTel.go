@@ -291,7 +291,8 @@ func ConvertOtelSpanToResourceSpan(spans []*stores.SpanFromOTel, resourceHashToI
 					Name:    "scopeHashToInfoMap[scopeHash][name].(string)",
 					Version: "scopeHashToInfoMap[scopeHash][version].(string)",
 				},
-				SchemaUrl: scopeHashToInfoMap[scopeHash]["schema_url"].(string),
+				//SchemaUrl: scopeHashToInfoMap[scopeHash]["schema_url"].(string),
+				SchemaUrl: "scopeHashToInfoMap[scopeHash][schema_url].(string)",
 			}
 			scopeSpans.Spans = make([]*otlpTraceV1.Span, 0)
 			for _, span := range spanList {
