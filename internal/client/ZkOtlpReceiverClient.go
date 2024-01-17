@@ -49,6 +49,8 @@ func GetSpanData(nodeIp string, traceIdPrefixList []string, nodePort string) (ma
 	if err != nil {
 		zklogger.Error(ZkOtlpReceiverLogTag, fmt.Sprintf("Error reading trace data request data from response body: %s", response.Body), err)
 		return nil, err
+	} else {
+		zklogger.Info(ZkOtlpReceiverLogTag, fmt.Sprintf("Received response body from OTLP receiver: %s", responseBody))
 	}
 	zklogger.Debug(ZkOtlpReceiverLogTag, fmt.Sprintf("Received response body from OTLP receiver: %s", responseBody))
 
