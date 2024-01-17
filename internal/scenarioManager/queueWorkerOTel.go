@@ -63,6 +63,15 @@ func GetQueueWorkerOTel(cfg config.AppConfigs, scenarioStore *zkRedis.VersionedS
 		scenarioStore:  scenarioStore,
 		exporter:       cfg.Exporter,
 	}
+	//worker1 := QueueWorkerOTel{
+	//	id:             "1" + uuid.New().String(),
+	//	oTelStore:      stores.GetOTelStore(cfg.Redis),
+	//	traceStore:     stores.GetTraceStore(cfg.Redis, TTLForTransientSets),
+	//	attributeStore: stores.GetAttributesStore(cfg.Redis),
+	//	errorStore:     stores.GetErrorStore(cfg.Redis),
+	//	scenarioStore:  scenarioStore,
+	//	exporter:       cfg.Exporter,
+	//}
 
 	// oTel consumer and error store
 	var err error
@@ -102,6 +111,7 @@ func (worker *QueueWorkerOTel) handleMessage(oTelMessage OTELTraceMessage) {
 	//total traces received for scenario to process metric
 	promMetrics.TotalTracesReceivedForScenarioToProcess.WithLabelValues(oTelMessage.Scenario.Title).Add(float64(len(incidents)))
 
+	//TODO :: rate limit logic should be written before fetching the span data
 	// 3. rate limit incidents
 	//newIncidentList := worker.rateLimitIncidents(incidents, oTelMessage.Scenario)
 	newIncidentList := incidents
@@ -540,6 +550,10 @@ func (worker *QueueWorkerOTel) Consume(delivery rmq.Delivery) {
 	worker.handleMessage(oTelMessage)
 	endTime := time.Now()
 	zkLogger.Info(LoggerTagOTel, "Time taken to to process oTel message ", endTime.Sub(startTime))
+	timeTakenForNTraces := endTime.Sub(startTime).Seconds()
+	// Calculate and publish the average time taken per trace
+	averageTimePerTrace := timeTakenForNTraces / float64(len(oTelMessage.Traces))
+	promMetrics.TimeTakenByOtelWorkerToProcessATrace.WithLabelValues(oTelMessage.Scenario.Title).Observe(averageTimePerTrace)
 
 	if err := delivery.Ack(); err != nil {
 		// handle ack error

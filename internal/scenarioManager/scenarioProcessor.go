@@ -10,6 +10,7 @@ import (
 	ticker "github.com/zerok-ai/zk-utils-go/ticker"
 	"scenario-manager/config"
 	typedef "scenario-manager/internal"
+	promMetrics "scenario-manager/internal/prometheusMetrics"
 	"scenario-manager/internal/stores"
 	"sort"
 	"strings"
@@ -92,7 +93,11 @@ func (scenarioProcessor *ScenarioProcessor) scenarioTickHandler() {
 	}
 
 	//	 2. process current scenario
+	startTime := time.Now()
 	scenarioProcessor.processScenario(scenario)
+	endTime := time.Now()
+	timeTakenToProcessEachScenario := endTime.Sub(startTime).Seconds()
+	promMetrics.TimeTakenToProcessEachScenarioByQueue1Worker.WithLabelValues(scenario.Title).Observe(timeTakenToProcessEachScenario)
 }
 
 func (scenarioProcessor *ScenarioProcessor) findScenarioToProcess() *model.Scenario {
