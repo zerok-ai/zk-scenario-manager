@@ -193,7 +193,9 @@ func (t OTelDataHandler) getSpanData(nodeIpTraceIdMap map[string][]string) (map[
 
 		zkLogger.Info(LoggerTag, fmt.Sprintf("Data received from OTLP receiver for nodeIP: %s for traces : %s", nodeIp, traceIdSpanIdList))
 
-		for traceIdSpanId, spanData := range traceDataFromOtlpReceiver {
+		for _, response := range traceDataFromOtlpReceiver.ResponseList {
+			traceIdSpanId := response.Key
+			spanData := response.Value
 			traceId, spanId, err := smUtils.SplitTraceIdSpanId(traceIdSpanId)
 			if err != nil {
 				zkLogger.Error(LoggerTag, fmt.Sprintf("Error splitting traceIdSpanId: %s", traceIdSpanId), err)

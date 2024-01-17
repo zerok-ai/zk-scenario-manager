@@ -84,6 +84,7 @@ func (worker *QueueWorkerOTel) Close() {
 
 func (worker *QueueWorkerOTel) handleMessage(oTelMessage OTELTraceMessage) {
 
+	zkLogger.Error(LoggerTagOTel, "11111111 oTelWorker got a message", oTelMessage)
 	zkLogger.DebugF(LoggerTagOTel, "oTelWorker %v got a message", worker.id)
 
 	// 1. Collect span relation and span data for the traceIDs
@@ -294,6 +295,7 @@ func ConvertOtelSpanToResourceSpan(spans []*stores.SpanFromOTel, resourceHashToI
 }
 
 func (worker *QueueWorkerOTel) getDataFromOTelStore(traceIds []typedef.TTraceid) (map[typedef.TTraceid]*stores.TraceFromOTel, map[string]map[string]interface{}, map[string]map[string]interface{}) {
+	zkLogger.Error(LoggerTagOTel, "222222222222")
 	tracesFromOTelStore, err := worker.oTelStore.GetSpansForTracesFromDB(traceIds)
 	if err != nil {
 		zkLogger.Error(LoggerTagOTel, "error in getting data from OTel zkRedis", err)
