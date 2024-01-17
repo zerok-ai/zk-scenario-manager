@@ -237,16 +237,6 @@ func (t OTelDataHandler) processResult(keys []typedef.TTraceid, traceSpanData ma
 
 		// 4.1 Unmarshal the Spans
 		for spanId, protoSpan := range spanMap {
-			zkLogger.InfoF(LoggerTag, "Span data for spanId: %s spanData: %v for traceid:  %s ", spanId, protoSpan, traceId)
-			//zkLogger.InfoF(LoggerTag, "Span bytes:  %v ", []byte(spanData))
-			zkLogger.Info(LoggerTag, "-----------")
-			//if err := json.Unmarshal([]byte(spanData), &protoSpan); err != nil {
-			//	zkLogger.Error(LoggerTag, fmt.Sprintf("Error unmarshalling span data for spanId: %s spanData: %s for traceid:  %s ", spanId, spanData, traceId), err)
-			//	continue
-			//}
-
-			//protoSpan = spanData.(*zkUtilsOtel.OtelEnrichedRawSpanForProto)
-
 			var sp SpanFromOTel
 			x := zkUtilsEnrichedSpan.GetEnrichedSpan(protoSpan)
 

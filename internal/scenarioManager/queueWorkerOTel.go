@@ -295,7 +295,6 @@ func ConvertOtelSpanToResourceSpan(spans []*stores.SpanFromOTel, resourceHashToI
 }
 
 func (worker *QueueWorkerOTel) getDataFromOTelStore(traceIds []typedef.TTraceid) (map[typedef.TTraceid]*stores.TraceFromOTel, map[string]map[string]interface{}, map[string]map[string]interface{}) {
-	zkLogger.Error(LoggerTagOTel, "222222222222")
 	tracesFromOTelStore, err := worker.oTelStore.GetSpansForTracesFromDB(traceIds)
 	if err != nil {
 		zkLogger.Error(LoggerTagOTel, "error in getting data from OTel zkRedis", err)
