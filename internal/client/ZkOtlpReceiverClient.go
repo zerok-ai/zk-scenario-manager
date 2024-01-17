@@ -54,10 +54,10 @@ func GetSpanData(nodeIp string, traceIdPrefixList []string, nodePort string) (*_
 
 	zklogger.Error("333333333333333333333333333333333333333333333333")
 
-	zklogger.Debug(ZkOtlpReceiverLogTag, fmt.Sprintf("Received response body from OTLP receiver: %s", responseBody))
+	//zklogger.Debug(ZkOtlpReceiverLogTag, fmt.Sprintf("Received response body from OTLP receiver: %s", responseBody))
 
-	var result *__.BadgerResponseList
-	err = proto.Unmarshal(responseBody, result)
+	var result __.BadgerResponseList
+	err = proto.Unmarshal(responseBody, &result)
 	if err != nil {
 		zklogger.Error(ZkOtlpReceiverLogTag, "Error while unmarshalling data from badger for given tracePrefixList", err)
 	}
@@ -73,5 +73,5 @@ func GetSpanData(nodeIp string, traceIdPrefixList []string, nodePort string) (*_
 
 	//zklogger.Debug(ZkOtlpReceiverLogTag, fmt.Sprintf("Received response data from OTLP receiver: %s", responseData))
 
-	return result, nil
+	return &result, nil
 }
