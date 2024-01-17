@@ -194,11 +194,7 @@ func (worker *QueueWorkerOTel) handleMessage(oTelMessage OTELTraceMessage) {
 	// Set up a connection to the server
 	url := fmt.Sprintf("%s:%s", worker.exporter.Host, worker.exporter.Port)
 	zkLogger.Info(LoggerTagOTel, "Connecting to ", url)
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-
-	// Dial the gRPC server with a timeout
-	conn, err := grpc.DialContext(ctx, url, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	conn, err := grpc.Dial(url, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	//conn, err := grpc.Dial("localhost:4319", grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		log.Fatalf("did not connect: %v", err)
