@@ -285,8 +285,11 @@ func ConvertOtelSpanToResourceSpan(spans []*stores.SpanFromOTel, resourceHashToI
 			scopeSpans := otlpTraceV1.ScopeSpans{
 				Scope: &otlpCommonV1.InstrumentationScope{
 					Attributes: scopeHashToAttr[scopeHash],
-					Name:       scopeHashToInfoMap[scopeHash]["name"].(string),
-					Version:    scopeHashToInfoMap[scopeHash]["version"].(string),
+					//TODO :: revert below line
+					//Name:       scopeHashToInfoMap[scopeHash]["name"].(string),
+					//Version:    scopeHashToInfoMap[scopeHash]["version"].(string),
+					Name:    "scopeHashToInfoMap[scopeHash][name].(string)",
+					Version: "scopeHashToInfoMap[scopeHash][version].(string)",
 				},
 				SchemaUrl: scopeHashToInfoMap[scopeHash]["schema_url"].(string),
 			}
