@@ -2,7 +2,6 @@ package stores
 
 import (
 	"encoding/hex"
-	"encoding/json"
 	"fmt"
 	"github.com/redis/go-redis/v9"
 	"github.com/zerok-ai/zk-rawdata-reader/vzReader/utils"
@@ -113,7 +112,7 @@ func (t OTelDataHandler) GetSpansForTracesFromDB(keys []typedef.TTraceid) (resul
 	return result, nil
 }
 
-func (t OTelDataHandler) fetchSpanData(keys []typedef.TTraceid, hashResults []*redis.MapStringStringCmd) (map[string]map[string]interface{}, error) {
+func (t OTelDataHandler) fetchSpanData(keys []typedef.TTraceid, hashResults []*redis.MapStringStringCmd) (map[string]map[string]*zkUtilsOtel.OtelEnrichedRawSpanForProto, error) {
 	// keys will have trace id's
 
 	//hashResults will have the data for each trace id ie map[string]string traceId : map[spanId]NodeIpOfOtlpReceiver
@@ -168,7 +167,7 @@ func (t OTelDataHandler) fetchSpanData(keys []typedef.TTraceid, hashResults []*r
 
 	zkLogger.Info(LoggerTag, fmt.Sprintf("NodeIp-traceList map in redis for all traces: %s", nodeIpMap))
 	//make an api call to fetch all the data for each trace id in go routine
-	var otlpReceiverResultMap map[string]map[string]interface{}
+	var otlpReceiverResultMap map[string]map[string]*zkUtilsOtel.OtelEnrichedRawSpanForProto
 	otlpReceiverResultMap, err := t.getSpanData(nodeIpMap)
 	if err != nil {
 		zkLogger.Error(LoggerTag, "Error retrieving data from OTLP receiver", err)
@@ -179,9 +178,9 @@ func (t OTelDataHandler) fetchSpanData(keys []typedef.TTraceid, hashResults []*r
 	return otlpReceiverResultMap, nil
 }
 
-func (t OTelDataHandler) getSpanData(nodeIpTraceIdMap map[string][]string) (map[string]map[string]interface{}, error) {
+func (t OTelDataHandler) getSpanData(nodeIpTraceIdMap map[string][]string) (map[string]map[string]*zkUtilsOtel.OtelEnrichedRawSpanForProto, error) {
 
-	otlpReceiverResultMap := make(map[string]map[string]interface{})
+	otlpReceiverResultMap := make(map[string]map[string]*zkUtilsOtel.OtelEnrichedRawSpanForProto)
 
 	for nodeIp, traceIdSpanIdList := range nodeIpTraceIdMap {
 		//get data from receiver
@@ -202,9 +201,9 @@ func (t OTelDataHandler) getSpanData(nodeIpTraceIdMap map[string][]string) (map[
 				continue
 			}
 			if len(otlpReceiverResultMap[traceId]) == 0 || otlpReceiverResultMap[traceId] == nil {
-				otlpReceiverResultMap[traceId] = make(map[string]interface{})
-				var spanDataMap map[string]interface{}
-				spanDataMap = make(map[string]interface{})
+				otlpReceiverResultMap[traceId] = make(map[string]*zkUtilsOtel.OtelEnrichedRawSpanForProto)
+				var spanDataMap map[string]*zkUtilsOtel.OtelEnrichedRawSpanForProto
+				spanDataMap = make(map[string]*zkUtilsOtel.OtelEnrichedRawSpanForProto)
 				spanDataMap[spanId] = spanData
 				otlpReceiverResultMap[traceId] = spanDataMap
 			} else {
@@ -216,20 +215,20 @@ func (t OTelDataHandler) getSpanData(nodeIpTraceIdMap map[string][]string) (map[
 	return otlpReceiverResultMap, nil
 }
 
-func (t OTelDataHandler) processResult(keys []typedef.TTraceid, traceSpanData map[string]map[string]interface{}) (result map[typedef.TTraceid]*TraceFromOTel) {
+func (t OTelDataHandler) processResult(keys []typedef.TTraceid, traceSpanData map[string]map[string]*zkUtilsOtel.OtelEnrichedRawSpanForProto) (result map[typedef.TTraceid]*TraceFromOTel) {
 
 	zkLogger.Info(LoggerTag, fmt.Sprintf("Processing data received from OTLP receiver for traceList: %s", traceSpanData))
 	result = make(map[typedef.TTraceid]*TraceFromOTel)
 	for i := range keys {
 		traceId := keys[i]
-		trace := traceSpanData[string(traceId)]
+		spanMap := traceSpanData[string(traceId)]
 
-		if trace == nil {
+		if spanMap == nil {
 			zkLogger.Error(LoggerTag, fmt.Sprintf("Error retrieving data from otlp receiver got null data for traceId : %s", traceId), nil)
 			continue
 		}
 
-		if len(trace) == 0 {
+		if len(spanMap) == 0 {
 			zkLogger.DebugF(LoggerTag, "No trace data found for traceId: %s in OTel store", traceId)
 			continue
 		}
@@ -237,26 +236,14 @@ func (t OTelDataHandler) processResult(keys []typedef.TTraceid, traceSpanData ma
 		traceFromOTel := &TraceFromOTel{Spans: map[typedef.TSpanId]*SpanFromOTel{}}
 
 		// 4.1 Unmarshal the Spans
-		for spanId, spanData := range trace {
-			var protoSpan *zkUtilsOtel.OtelEnrichedRawSpanForProto
-			zkLogger.InfoF(LoggerTag, "Span data for spanId: %s spanData: %s for traceid:  %s ", spanId, spanData, traceId)
+		for spanId, protoSpan := range spanMap {
+			zkLogger.InfoF(LoggerTag, "Span data for spanId: %s spanData: %v for traceid:  %s ", spanId, protoSpan, traceId)
 			//zkLogger.InfoF(LoggerTag, "Span bytes:  %v ", []byte(spanData))
 			zkLogger.Info(LoggerTag, "-----------")
 			//if err := json.Unmarshal([]byte(spanData), &protoSpan); err != nil {
 			//	zkLogger.Error(LoggerTag, fmt.Sprintf("Error unmarshalling span data for spanId: %s spanData: %s for traceid:  %s ", spanId, spanData, traceId), err)
 			//	continue
 			//}
-
-			xx, e1 := json.Marshal(spanData)
-			if e1 != nil {
-				zkLogger.Error(LoggerTag, fmt.Sprintf("Error marshalling span data for spanId: %s spanData: %s for traceid:  %s ", spanId, spanData, traceId), e1)
-				continue
-			}
-			e2 := json.Unmarshal(xx, &protoSpan)
-			if e2 != nil {
-				zkLogger.Error(LoggerTag, fmt.Sprintf("Error unmarshalling span data for spanId: %s spanData: %s for traceid:  %s ", spanId, spanData, traceId), e2)
-				continue
-			}
 
 			//protoSpan = spanData.(*zkUtilsOtel.OtelEnrichedRawSpanForProto)
 
