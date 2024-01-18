@@ -84,8 +84,8 @@ func (worker *QueueWorkerOTel) Close() {
 
 func (worker *QueueWorkerOTel) handleMessage(oTelMessage OTELTraceMessage) {
 
-	zkLogger.Error(LoggerTagOTel, "11111111 oTelWorker got a message", oTelMessage)
-	zkLogger.DebugF(LoggerTagOTel, "oTelWorker %v got a message", worker.id)
+	//zkLogger.Error(LoggerTagOTel, "11111111 oTelWorker got a message", oTelMessage)
+	//zkLogger.DebugF(LoggerTagOTel, "oTelWorker %v got a message", worker.id)
 
 	// 1. Collect span relation and span data for the traceIDs
 	tracesFromOTelStore, resourceHashToInfoMap, scopeHashToInfoMap := worker.getDataFromOTelStore(oTelMessage.Traces)
@@ -531,7 +531,7 @@ func (worker *QueueWorkerOTel) Consume(delivery rmq.Delivery) {
 	}
 
 	// perform task
-	zkLogger.DebugF(LoggerTagOTel, "got message %v", oTelMessage)
+	//zkLogger.DebugF(LoggerTagOTel, "got message %v", oTelMessage)
 
 	startTime := time.Now()
 	worker.handleMessage(oTelMessage)

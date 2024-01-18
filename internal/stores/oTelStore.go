@@ -173,7 +173,7 @@ func (t OTelDataHandler) fetchSpanData(keys []typedef.TTraceid, hashResults []*r
 		zkLogger.Error(LoggerTag, "Error retrieving data from OTLP receiver", err)
 		return otlpReceiverResultMap, err
 	}
-	zkLogger.Info("OTLP receiver final result map of traces and span data", fmt.Sprintf("%s", otlpReceiverResultMap))
+	//zkLogger.Info("OTLP receiver final result map of traces and span data", fmt.Sprintf("%s", otlpReceiverResultMap))
 
 	return otlpReceiverResultMap, nil
 }
@@ -190,7 +190,7 @@ func (t OTelDataHandler) getSpanData(nodeIpTraceIdMap map[string][]string) (map[
 			continue
 		}
 
-		zkLogger.Info(LoggerTag, fmt.Sprintf("Data received from OTLP receiver for nodeIP: %s for traces : %s", nodeIp, traceIdSpanIdList))
+		//zkLogger.Info(LoggerTag, fmt.Sprintf("Data received from OTLP receiver for nodeIP: %s for traces : %s", nodeIp, traceIdSpanIdList))
 
 		for _, response := range traceDataFromOtlpReceiver.ResponseList {
 			traceIdSpanId := response.Key
@@ -217,7 +217,7 @@ func (t OTelDataHandler) getSpanData(nodeIpTraceIdMap map[string][]string) (map[
 
 func (t OTelDataHandler) processResult(keys []typedef.TTraceid, traceSpanData map[string]map[string]*zkUtilsOtel.OtelEnrichedRawSpanForProto) (result map[typedef.TTraceid]*TraceFromOTel) {
 
-	zkLogger.Info(LoggerTag, fmt.Sprintf("Processing data received from OTLP receiver for traceList: %s", traceSpanData))
+	//zkLogger.Info(LoggerTag, fmt.Sprintf("Processing data received from OTLP receiver for traceList: %s", traceSpanData))
 	result = make(map[typedef.TTraceid]*TraceFromOTel)
 	for i := range keys {
 		traceId := keys[i]
