@@ -192,13 +192,29 @@ func (worker *QueueWorkerOTel) handleMessage(oTelMessage OTELTraceMessage) {
 			spanBuffer = append(spanBuffer, span)
 		}
 	}
-	var tracesData pb.ExportTraceServiceRequest
 	resourceBuffer := ConvertOtelSpanToResourceSpan(spanBuffer, resourceHashToInfoMap, scopeHashToInfoMap)
-	tracesData.ResourceSpans = resourceBuffer
 
 	//resourceBufferByteArr, _ := json.Marshal(resourceBuffer)
 	//fmt.Printf("resourceBufferByteArr: %v", resourceBufferByteArr)
 
+	batchSize := 200
+	nextIndexToExecute := 0
+	for i := 0; i+batchSize < len(resourceBuffer); i = nextIndexToExecute {
+		go sendDataToCollector(resourceBuffer[i:i+batchSize], worker, oTelMessage)
+		nextIndexToExecute = i + batchSize
+	}
+
+	go sendDataToCollector(resourceBuffer[nextIndexToExecute:], worker, oTelMessage)
+
+	//total traces processed by scenario manager for scenario
+	promMetrics.TotalTracesProcessedForScenario.WithLabelValues(oTelMessage.Scenario.Title).Add(float64(len(newIncidentList)))
+	//total spans processed by scenario manager for scenario
+	promMetrics.TotalSpansProcessedForScenario.WithLabelValues(oTelMessage.Scenario.Title).Add(float64(len(spanBuffer)))
+}
+
+func sendDataToCollector(resourceSpans []*otlpTraceV1.ResourceSpans, worker *QueueWorkerOTel, oTelMessage OTELTraceMessage) {
+	var tracesData pb.ExportTraceServiceRequest
+	tracesData.ResourceSpans = resourceSpans
 	fmt.Println("Testing")
 	// Set up a connection to the server
 	url := fmt.Sprintf("%s:%s", worker.exporter.Host, worker.exporter.Port)
@@ -219,11 +235,6 @@ func (worker *QueueWorkerOTel) handleMessage(oTelMessage OTELTraceMessage) {
 		promMetrics.TotalExportDataFailedForScenario.WithLabelValues(oTelMessage.Scenario.Title).Inc()
 		log.Fatalf("could not send trace data: %v", err)
 	}
-
-	//total traces processed by scenario manager for scenario
-	promMetrics.TotalTracesProcessedForScenario.WithLabelValues(oTelMessage.Scenario.Title).Add(float64(len(newIncidentList)))
-	//total spans processed by scenario manager for scenario
-	promMetrics.TotalSpansProcessedForScenario.WithLabelValues(oTelMessage.Scenario.Title).Add(float64(len(spanBuffer)))
 
 	log.Printf("Response: %v", response)
 }
