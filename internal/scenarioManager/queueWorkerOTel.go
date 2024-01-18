@@ -27,6 +27,7 @@ import (
 	promMetrics "scenario-manager/internal/prometheusMetrics"
 	"scenario-manager/internal/stores"
 	tracePersistenceModel "scenario-manager/internal/tracePersistence/model"
+	"sync"
 	"time"
 )
 
@@ -197,14 +198,19 @@ func (worker *QueueWorkerOTel) handleMessage(oTelMessage OTELTraceMessage) {
 	//resourceBufferByteArr, _ := json.Marshal(resourceBuffer)
 	//fmt.Printf("resourceBufferByteArr: %v", resourceBufferByteArr)
 
+	var wg sync.WaitGroup
 	batchSize := 200
-	nextIndexToExecute := 0
-	for i := 0; i+batchSize < len(resourceBuffer); i = nextIndexToExecute {
-		go sendDataToCollector(resourceBuffer[i:i+batchSize], worker, oTelMessage)
-		nextIndexToExecute = i + batchSize
-	}
+	bufferLen := len(resourceBuffer)
 
-	go sendDataToCollector(resourceBuffer[nextIndexToExecute:], worker, oTelMessage)
+	for i := 0; i < bufferLen; i += batchSize {
+		wg.Add(1)
+
+		go func(startIndex, endIndex int) {
+			defer wg.Done()
+			sendDataToCollector(resourceBuffer[startIndex:endIndex], worker, oTelMessage)
+		}(i, min(i+batchSize, bufferLen))
+	}
+	wg.Wait()
 
 	//total traces processed by scenario manager for scenario
 	promMetrics.TotalTracesProcessedForScenario.WithLabelValues(oTelMessage.Scenario.Title).Add(float64(len(newIncidentList)))
@@ -233,9 +239,9 @@ func sendDataToCollector(resourceSpans []*otlpTraceV1.ResourceSpans, worker *Que
 	if err != nil {
 		//total call to export data failed for scenario
 		promMetrics.TotalExportDataFailedForScenario.WithLabelValues(oTelMessage.Scenario.Title).Inc()
-		log.Fatalf("could not send trace data: %v", err)
+		//log.Fatalf("could not send trace data: %v", err)
+		zkLogger.Error(LoggerTagOTel, "could not send trace data to otel from sm", err)
 	}
-
 	log.Printf("Response: %v", response)
 }
 
