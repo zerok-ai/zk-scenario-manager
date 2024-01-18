@@ -219,7 +219,7 @@ func (worker *QueueWorkerOTel) handleMessage(oTelMessage OTELTraceMessage) {
 	//fmt.Printf("resourceBufferByteArr: %v", resourceBufferByteArr)
 
 	var wg sync.WaitGroup
-	batchSize := 100
+	batchSize := 30
 	bufferLen := len(resourceBuffer)
 
 	for i := 0; i < bufferLen; i += batchSize {
@@ -598,7 +598,7 @@ func (worker *QueueWorkerOTel) Consume(delivery rmq.Delivery) {
 	startTime := time.Now()
 	worker.handleMessage(oTelMessage)
 	endTime := time.Now()
-	zkLogger.Info(LoggerTagOTel, "Time taken to to process oTel message ", endTime.Sub(startTime))
+	zkLogger.InfoF(LoggerTagOTel, "Time taken to to process oTel message:%s with trace count: %s ", endTime.Sub(startTime), len(oTelMessage.Traces))
 	timeTakenForNTraces := endTime.Sub(startTime).Seconds()
 	// Calculate and publish the average time taken per trace
 	averageTimePerTrace := timeTakenForNTraces / float64(len(oTelMessage.Traces))
