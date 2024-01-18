@@ -219,7 +219,7 @@ func (worker *QueueWorkerOTel) handleMessage(oTelMessage OTELTraceMessage) {
 	//fmt.Printf("resourceBufferByteArr: %v", resourceBufferByteArr)
 
 	var wg sync.WaitGroup
-	batchSize := 200
+	batchSize := 100
 	bufferLen := len(resourceBuffer)
 
 	for i := 0; i < bufferLen; i += batchSize {
