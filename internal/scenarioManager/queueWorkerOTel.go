@@ -74,9 +74,29 @@ func GetQueueWorkerOTel(cfg config.AppConfigs, scenarioStore *zkRedis.VersionedS
 		exporter:       cfg.Exporter,
 	}
 
+	worker2 := QueueWorkerOTel{
+		id:             "2" + uuid.New().String(),
+		oTelStore:      stores.GetOTelStore(cfg.Redis),
+		traceStore:     stores.GetTraceStore(cfg.Redis, TTLForTransientSets),
+		attributeStore: stores.GetAttributesStore(cfg.Redis),
+		errorStore:     stores.GetErrorStore(cfg.Redis),
+		scenarioStore:  scenarioStore,
+		exporter:       cfg.Exporter,
+	}
+
+	worker3 := QueueWorkerOTel{
+		id:             "2" + uuid.New().String(),
+		oTelStore:      stores.GetOTelStore(cfg.Redis),
+		traceStore:     stores.GetTraceStore(cfg.Redis, TTLForTransientSets),
+		attributeStore: stores.GetAttributesStore(cfg.Redis),
+		errorStore:     stores.GetErrorStore(cfg.Redis),
+		scenarioStore:  scenarioStore,
+		exporter:       cfg.Exporter,
+	}
+
 	// oTel consumer and error store
 	var err error
-	worker.oTelConsumer, err = stores.GetTraceConsumer(cfg.Redis, []rmq.Consumer{&worker, &worker1}, OTelQueue)
+	worker.oTelConsumer, err = stores.GetTraceConsumer(cfg.Redis, []rmq.Consumer{&worker, &worker1, &worker2, &worker3}, OTelQueue)
 	if err != nil {
 		return nil
 	}
