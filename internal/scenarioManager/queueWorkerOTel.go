@@ -187,10 +187,6 @@ func (worker *QueueWorkerOTel) handleMessage(oTelMessage OTELTraceMessage) {
 	resourceBuffer := ConvertOtelSpanToResourceSpan(spanBuffer, resourceHashToInfoMap, scopeHashToInfoMap)
 	tracesData.ResourceSpans = resourceBuffer
 
-	//resourceBufferByteArr, _ := json.Marshal(resourceBuffer)
-	//fmt.Printf("resourceBufferByteArr: %v", resourceBufferByteArr)
-
-	fmt.Println("Testing")
 	// Set up a connection to the server
 	url := fmt.Sprintf("%s:%s", worker.exporter.Host, worker.exporter.Port)
 	zkLogger.Info(LoggerTagOTel, "Connecting to ", url)
