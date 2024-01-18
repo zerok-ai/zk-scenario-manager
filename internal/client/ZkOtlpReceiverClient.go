@@ -36,18 +36,19 @@ func GetSpanData(nodeIp string, traceIdPrefixList []string, nodePort string) (*_
 		return nil, errors.New(zkErr.Error.Message) //TODO: return error
 	}
 
-	promMetrics.TotalSpanDataFetchSuccess.WithLabelValues(nodeIp).Inc()
-	zklogger.Debug(ZkOtlpReceiverLogTag, fmt.Sprintf("Received Status  from OTLP receiver: %s", response.Status))
-	zklogger.Debug(ZkOtlpReceiverLogTag, fmt.Sprintf("Received Status code from OTLP receiver: %v", response.StatusCode))
+	if response.StatusCode != 200 {
+		promMetrics.TotalSpanDataFetchErrors.WithLabelValues(nodeIp).Inc()
+		zklogger.Error(ZkOtlpReceiverLogTag, fmt.Sprintf("Received Status  from OTLP receiver: %s", response.Status))
+		zklogger.Error(ZkOtlpReceiverLogTag, fmt.Sprintf("Received Status code from OTLP receiver: %v", response.StatusCode))
+		return nil, errors.New(response.Status) //TODO: return error
+	}
 
-	zklogger.Debug(ZkOtlpReceiverLogTag, fmt.Sprintf("Received response from OTLP receiver: %s", response.Body))
+	promMetrics.TotalSpanDataFetchSuccess.WithLabelValues(nodeIp).Inc()
 	// Read the response body
 	responseBody, err := io.ReadAll(response.Body)
 	if err != nil {
 		zklogger.Error(ZkOtlpReceiverLogTag, fmt.Sprintf("Error reading trace data request data from response body: %s", response.Body), err)
 		return nil, err
-	} else {
-		zklogger.Info(ZkOtlpReceiverLogTag, fmt.Sprintf("Received response body from OTLP receiver: %s", responseBody))
 	}
 
 	var result __.BadgerResponseList
