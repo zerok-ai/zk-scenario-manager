@@ -228,7 +228,7 @@ func (worker *QueueWorkerOTel) handleMessage(oTelMessage OTELTraceMessage) {
 		go func(startIndex, endIndex int) {
 			defer wg.Done()
 			sendDataToCollector(resourceBuffer[startIndex:endIndex], worker, oTelMessage)
-		}(i, min(i+batchSize, bufferLen))
+		}(i, getMin(i+batchSize, bufferLen))
 	}
 	wg.Wait()
 
@@ -236,6 +236,14 @@ func (worker *QueueWorkerOTel) handleMessage(oTelMessage OTELTraceMessage) {
 	promMetrics.TotalTracesProcessedForScenario.WithLabelValues(oTelMessage.Scenario.Title).Add(float64(len(newIncidentList)))
 	//total spans processed by scenario manager for scenario
 	promMetrics.TotalSpansProcessedForScenario.WithLabelValues(oTelMessage.Scenario.Title).Add(float64(len(spanBuffer)))
+}
+
+// TODO :: should move to utils repo
+func getMin(a int, b int) int {
+	if a < b {
+		return a
+	}
+	return b
 }
 
 func sendDataToCollector(resourceSpans []*otlpTraceV1.ResourceSpans, worker *QueueWorkerOTel, oTelMessage OTELTraceMessage) {
