@@ -598,7 +598,7 @@ func (worker *QueueWorkerOTel) Consume(delivery rmq.Delivery) {
 	startTime := time.Now()
 	worker.handleMessage(oTelMessage)
 	endTime := time.Now()
-	zkLogger.InfoF(LoggerTagOTel, "Time taken to to process oTel message:%s with trace count: %s ", endTime.Sub(startTime), len(oTelMessage.Traces))
+	zkLogger.InfoF(LoggerTagOTel, "Time taken to to process %s scenario oTel message with trace count: %d  is: %s  ", oTelMessage.Scenario.Title, len(oTelMessage.Traces), endTime.Sub(startTime))
 	timeTakenForNTraces := endTime.Sub(startTime).Seconds()
 	// Calculate and publish the average time taken per trace
 	averageTimePerTrace := timeTakenForNTraces / float64(len(oTelMessage.Traces))
