@@ -104,8 +104,8 @@ func (worker *QueueWorkerOTel) handleMessage(oTelMessage OTELTraceMessage) {
 	promMetrics.TotalTracesReceivedForScenarioToProcess.WithLabelValues(oTelMessage.Scenario.Id).Add(float64(len(incidents)))
 
 	// 3. rate limit incidents
-	newIncidentList := worker.rateLimitIncidents(incidents, oTelMessage.Scenario)
-	//newIncidentList := incidents
+	//newIncidentList := worker.rateLimitIncidents(incidents, oTelMessage.Scenario)
+	newIncidentList := incidents
 	totalTracesRateLimited := len(incidents) - len(newIncidentList)
 	promMetrics.RateLimitedTotalIncidentsPerScenario.WithLabelValues(oTelMessage.Scenario.Id).Add(float64(totalTracesRateLimited))
 
