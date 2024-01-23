@@ -27,6 +27,7 @@ import (
 	promMetrics "scenario-manager/internal/prometheusMetrics"
 	"scenario-manager/internal/stores"
 	tracePersistenceModel "scenario-manager/internal/tracePersistence/model"
+	"sync"
 	"time"
 )
 
@@ -63,10 +64,39 @@ func GetQueueWorkerOTel(cfg config.AppConfigs, scenarioStore *zkRedis.VersionedS
 		scenarioStore:  scenarioStore,
 		exporter:       cfg.Exporter,
 	}
+	worker1 := QueueWorkerOTel{
+		id:             "1" + uuid.New().String(),
+		oTelStore:      stores.GetOTelStore(cfg.Redis),
+		traceStore:     stores.GetTraceStore(cfg.Redis, TTLForTransientSets),
+		attributeStore: stores.GetAttributesStore(cfg.Redis),
+		errorStore:     stores.GetErrorStore(cfg.Redis),
+		scenarioStore:  scenarioStore,
+		exporter:       cfg.Exporter,
+	}
+
+	worker2 := QueueWorkerOTel{
+		id:             "2" + uuid.New().String(),
+		oTelStore:      stores.GetOTelStore(cfg.Redis),
+		traceStore:     stores.GetTraceStore(cfg.Redis, TTLForTransientSets),
+		attributeStore: stores.GetAttributesStore(cfg.Redis),
+		errorStore:     stores.GetErrorStore(cfg.Redis),
+		scenarioStore:  scenarioStore,
+		exporter:       cfg.Exporter,
+	}
+
+	worker3 := QueueWorkerOTel{
+		id:             "2" + uuid.New().String(),
+		oTelStore:      stores.GetOTelStore(cfg.Redis),
+		traceStore:     stores.GetTraceStore(cfg.Redis, TTLForTransientSets),
+		attributeStore: stores.GetAttributesStore(cfg.Redis),
+		errorStore:     stores.GetErrorStore(cfg.Redis),
+		scenarioStore:  scenarioStore,
+		exporter:       cfg.Exporter,
+	}
 
 	// oTel consumer and error store
 	var err error
-	worker.oTelConsumer, err = stores.GetTraceConsumer(cfg.Redis, []rmq.Consumer{&worker}, OTelQueue)
+	worker.oTelConsumer, err = stores.GetTraceConsumer(cfg.Redis, []rmq.Consumer{&worker, &worker1, &worker2, &worker3}, OTelQueue)
 	if err != nil {
 		return nil
 	}
@@ -101,13 +131,14 @@ func (worker *QueueWorkerOTel) handleMessage(oTelMessage OTELTraceMessage) {
 	}
 
 	//total traces received for scenario to process metric
-	promMetrics.TotalTracesReceivedForScenarioToProcess.WithLabelValues(oTelMessage.Scenario.Id).Add(float64(len(incidents)))
+	promMetrics.TotalTracesReceivedForScenarioToProcess.WithLabelValues(oTelMessage.Scenario.Title).Add(float64(len(incidents)))
 
+	//TODO :: rate limit logic should be written before fetching the span data
 	// 3. rate limit incidents
 	//newIncidentList := worker.rateLimitIncidents(incidents, oTelMessage.Scenario)
 	newIncidentList := incidents
 	totalTracesRateLimited := len(incidents) - len(newIncidentList)
-	promMetrics.RateLimitedTotalIncidentsPerScenario.WithLabelValues(oTelMessage.Scenario.Id).Add(float64(totalTracesRateLimited))
+	promMetrics.RateLimitedTotalIncidentsPerScenario.WithLabelValues(oTelMessage.Scenario.Title).Add(float64(totalTracesRateLimited))
 
 	if len(newIncidentList) == 0 {
 		zkLogger.InfoF(LoggerTagOTel, "rate limited %d incidents. nothing to save", len(incidents))
@@ -116,7 +147,7 @@ func (worker *QueueWorkerOTel) handleMessage(oTelMessage OTELTraceMessage) {
 
 	for _, incident := range newIncidentList {
 		if len(tracesFromOTelStore[typedef.TTraceid(incident.Incident.TraceId)].Spans) != len(incident.Incident.Spans) {
-			promMetrics.SpanCountMismatchTotal.WithLabelValues(oTelMessage.Scenario.Id, incident.Incident.TraceId).Inc()
+			promMetrics.SpanCountMismatchTotal.WithLabelValues(oTelMessage.Scenario.Title, incident.Incident.TraceId).Inc()
 			zkLogger.ErrorF(LoggerTagOTel, "span count mismatch for incident %v", incident)
 			zkLogger.ErrorF(LoggerTagOTel, "OtelCount: %d, newIncidentCount: %d", len(tracesFromOTelStore[typedef.TTraceid(incident.Incident.TraceId)].Spans), len(incident.Incident.Spans))
 		}
@@ -159,7 +190,7 @@ func (worker *QueueWorkerOTel) handleMessage(oTelMessage OTELTraceMessage) {
 		}
 
 		if rootSpan == nil {
-			promMetrics.RootSpanNotFoundTotal.WithLabelValues(oTelMessage.Scenario.Type, incident.Incident.TraceId).Inc()
+			promMetrics.RootSpanNotFoundTotal.WithLabelValues(oTelMessage.Scenario.Title, incident.Incident.TraceId).Inc()
 			zkLogger.ErrorF(LoggerTagOTel, "no root span found for incident %v", incident)
 			continue
 		}
@@ -183,10 +214,43 @@ func (worker *QueueWorkerOTel) handleMessage(oTelMessage OTELTraceMessage) {
 			spanBuffer = append(spanBuffer, span)
 		}
 	}
-	var tracesData pb.ExportTraceServiceRequest
 	resourceBuffer := ConvertOtelSpanToResourceSpan(spanBuffer, resourceHashToInfoMap, scopeHashToInfoMap)
-	tracesData.ResourceSpans = resourceBuffer
 
+	//resourceBufferByteArr, _ := json.Marshal(resourceBuffer)
+	//fmt.Printf("resourceBufferByteArr: %v", resourceBufferByteArr)
+
+	var wg sync.WaitGroup
+	batchSize := 30
+	bufferLen := len(resourceBuffer)
+
+	for i := 0; i < bufferLen; i += batchSize {
+		wg.Add(1)
+
+		go func(startIndex, endIndex int) {
+			defer wg.Done()
+			sendDataToCollector(resourceBuffer[startIndex:endIndex], worker, oTelMessage)
+		}(i, getMin(i+batchSize, bufferLen))
+	}
+	wg.Wait()
+
+	//total traces processed by scenario manager for scenario
+	promMetrics.TotalTracesProcessedForScenario.WithLabelValues(oTelMessage.Scenario.Title).Add(float64(len(newIncidentList)))
+	//total spans processed by scenario manager for scenario
+	promMetrics.TotalSpansProcessedForScenario.WithLabelValues(oTelMessage.Scenario.Title).Add(float64(len(spanBuffer)))
+}
+
+// TODO :: should move to utils repo
+func getMin(a int, b int) int {
+	if a < b {
+		return a
+	}
+	return b
+}
+
+func sendDataToCollector(resourceSpans []*otlpTraceV1.ResourceSpans, worker *QueueWorkerOTel, oTelMessage OTELTraceMessage) {
+	var tracesData pb.ExportTraceServiceRequest
+	tracesData.ResourceSpans = resourceSpans
+	fmt.Println("Testing")
 	// Set up a connection to the server
 	url := fmt.Sprintf("%s:%s", worker.exporter.Host, worker.exporter.Port)
 	zkLogger.Info(LoggerTagOTel, "Connecting to ", url)
@@ -203,15 +267,10 @@ func (worker *QueueWorkerOTel) handleMessage(oTelMessage OTELTraceMessage) {
 	response, err := c.Export(context.Background(), &tracesData)
 	if err != nil {
 		//total call to export data failed for scenario
-		promMetrics.TotalExportDataFailedForScenario.WithLabelValues(oTelMessage.Scenario.Id).Inc()
-		log.Fatalf("could not send trace data: %v", err)
+		promMetrics.TotalExportDataFailedForScenario.WithLabelValues(oTelMessage.Scenario.Title).Inc()
+		//log.Fatalf("could not send trace data: %v", err)
+		zkLogger.Error(LoggerTagOTel, "could not send trace data to otel from sm", err)
 	}
-
-	//total traces processed by scenario manager for scenario
-	promMetrics.TotalTracesProcessedForScenario.WithLabelValues(oTelMessage.Scenario.Id).Add(float64(len(newIncidentList)))
-	//total spans processed by scenario manager for scenario
-	promMetrics.TotalSpansProcessedForScenario.WithLabelValues(oTelMessage.Scenario.Id).Add(float64(len(spanBuffer)))
-
 	log.Printf("Response: %v", response)
 }
 
@@ -272,10 +331,14 @@ func ConvertOtelSpanToResourceSpan(spans []*stores.SpanFromOTel, resourceHashToI
 			scopeSpans := otlpTraceV1.ScopeSpans{
 				Scope: &otlpCommonV1.InstrumentationScope{
 					Attributes: scopeHashToAttr[scopeHash],
-					Name:       scopeHashToInfoMap[scopeHash]["name"].(string),
-					Version:    scopeHashToInfoMap[scopeHash]["version"].(string),
+					//TODO :: revert below line
+					//Name:       scopeHashToInfoMap[scopeHash]["name"].(string),
+					//Version:    scopeHashToInfoMap[scopeHash]["version"].(string),
+					Name:    "scopeHashToInfoMap[scopeHash][name].(string)",
+					Version: "scopeHashToInfoMap[scopeHash][version].(string)",
 				},
-				SchemaUrl: scopeHashToInfoMap[scopeHash]["schema_url"].(string),
+				//SchemaUrl: scopeHashToInfoMap[scopeHash]["schema_url"].(string),
+				SchemaUrl: "scopeHashToInfoMap[scopeHash][schema_url].(string)",
 			}
 			scopeSpans.Spans = make([]*otlpTraceV1.Span, 0)
 			for _, span := range spanList {
@@ -536,7 +599,11 @@ func (worker *QueueWorkerOTel) Consume(delivery rmq.Delivery) {
 	startTime := time.Now()
 	worker.handleMessage(oTelMessage)
 	endTime := time.Now()
-	zkLogger.Info(LoggerTagOTel, "Time taken to to process oTel message ", endTime.Sub(startTime))
+	zkLogger.InfoF(LoggerTagOTel, "Time taken to to process %s scenario oTel message with trace count: %d  is: %s  ", oTelMessage.Scenario.Title, len(oTelMessage.Traces), endTime.Sub(startTime))
+	timeTakenForNTraces := endTime.Sub(startTime).Seconds()
+	// Calculate and publish the average time taken per trace
+	averageTimePerTrace := timeTakenForNTraces / float64(len(oTelMessage.Traces))
+	promMetrics.TimeTakenByOtelWorkerToProcessATrace.WithLabelValues(oTelMessage.Scenario.Title).Observe(averageTimePerTrace)
 
 	if err := delivery.Ack(); err != nil {
 		// handle ack error

@@ -97,4 +97,20 @@ var (
 		Help: "Total traces span data requested from receiver by scenario manager",
 	},
 		[]string{"nodeIp"})
+
+	TimeTakenByOtelWorkerToProcessATrace = promauto.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Name: "zerok_sm_time_taken_by_otel_worker_to_process_a_trace",
+			Help: "Time taken by otel worker to process a trace",
+		},
+		[]string{"scenario"},
+	)
+
+	TimeTakenToProcessEachScenarioByQueue1Worker = promauto.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Name: "zerok_sm_time_taken_to_process_each_scenario_by_queue1_worker",
+			Help: "Time taken to process each scenario by queue1 worker",
+		},
+		[]string{"scenario"},
+	)
 )

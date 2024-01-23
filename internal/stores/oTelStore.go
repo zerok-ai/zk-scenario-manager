@@ -165,6 +165,7 @@ func (t OTelDataHandler) fetchSpanData(keys []typedef.TTraceid, hashResults []*r
 		}
 	}
 
+	//zkLogger.Info(LoggerTag, fmt.Sprintf("NodeIp-traceList map in redis for all traces: %s", nodeIpMap))
 	//make an api call to fetch all the data for each trace id in go routine
 	var otlpReceiverResultMap map[string]map[string]*zkUtilsOtel.OtelEnrichedRawSpanForProto
 	otlpReceiverResultMap, err := t.getSpanData(nodeIpMap)
