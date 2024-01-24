@@ -48,17 +48,18 @@ type Exporter struct {
 
 // AppConfigs is an application configuration structure
 type AppConfigs struct {
-	Redis          storage.RedisConfig             `yaml:"redis"`
-	Postgres       zkPostgresConfig.PostgresConfig `yaml:"postgres"`
-	Server         ServerConfig                    `yaml:"server"`
-	AuthConfig     AuthConfig                      `yaml:"auth"`
-	LogsConfig     zkLogsConfig.LogsConfig         `yaml:"logs"`
-	Http           zkHttpConfig.HttpConfig         `yaml:"http"`
-	Pixie          PixieConfig                     `yaml:"pixie"`
-	Router         RouterConfigs                   `yaml:"router"`
-	Greeting       string                          `env:"GREETING" env-description:"Greeting phrase" env-default:"Hello!"`
-	SuprSend       SuprSendConfig                  `yaml:"suprsend"`
-	ScenarioConfig ScenariosConfig                 `yaml:"scenarioConfig"`
-	Workload       WorkLoadConfig                  `yaml:"workLoad"`
-	Exporter       Exporter                        `yaml:"exporter"`
+	Redis                storage.RedisConfig             `yaml:"redis"`
+	Postgres             zkPostgresConfig.PostgresConfig `yaml:"postgres"`
+	Server               ServerConfig                    `yaml:"server"`
+	AuthConfig           AuthConfig                      `yaml:"auth"`
+	LogsConfig           zkLogsConfig.LogsConfig         `yaml:"logs"`
+	Http                 zkHttpConfig.HttpConfig         `yaml:"http"`
+	Pixie                PixieConfig                     `yaml:"pixie"`
+	Router               RouterConfigs                   `yaml:"router"`
+	Greeting             string                          `env:"GREETING" env-description:"Greeting phrase" env-default:"Hello!"`
+	SuprSend             SuprSendConfig                  `yaml:"suprsend"`
+	ScenarioConfig       ScenariosConfig                 `yaml:"scenarioConfig"`
+	Workload             WorkLoadConfig                  `yaml:"workLoad"`
+	Exporter             Exporter                        `yaml:"exporter"`
+	OtelQueueWorkerCount int                             `yaml:"otelQueueWorkerCount"`
 }

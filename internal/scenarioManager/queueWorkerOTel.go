@@ -54,54 +54,40 @@ type QueueWorkerOTel struct {
 
 func GetQueueWorkerOTel(cfg config.AppConfigs, scenarioStore *zkRedis.VersionedStore[model.Scenario]) *QueueWorkerOTel {
 
-	// initialize worker
-	worker := QueueWorkerOTel{
-		id:             "O" + uuid.New().String(),
-		oTelStore:      stores.GetOTelStore(cfg.Redis),
-		traceStore:     stores.GetTraceStore(cfg.Redis, TTLForTransientSets),
-		attributeStore: stores.GetAttributesStore(cfg.Redis),
-		errorStore:     stores.GetErrorStore(cfg.Redis),
-		scenarioStore:  scenarioStore,
-		exporter:       cfg.Exporter,
-	}
-	worker1 := QueueWorkerOTel{
-		id:             "1" + uuid.New().String(),
-		oTelStore:      stores.GetOTelStore(cfg.Redis),
-		traceStore:     stores.GetTraceStore(cfg.Redis, TTLForTransientSets),
-		attributeStore: stores.GetAttributesStore(cfg.Redis),
-		errorStore:     stores.GetErrorStore(cfg.Redis),
-		scenarioStore:  scenarioStore,
-		exporter:       cfg.Exporter,
+	var workers []*QueueWorkerOTel
+	numOtelQueueWorkers := cfg.OtelQueueWorkerCount
+	if numOtelQueueWorkers <= 0 {
+		numOtelQueueWorkers = 1
 	}
 
-	worker2 := QueueWorkerOTel{
-		id:             "2" + uuid.New().String(),
-		oTelStore:      stores.GetOTelStore(cfg.Redis),
-		traceStore:     stores.GetTraceStore(cfg.Redis, TTLForTransientSets),
-		attributeStore: stores.GetAttributesStore(cfg.Redis),
-		errorStore:     stores.GetErrorStore(cfg.Redis),
-		scenarioStore:  scenarioStore,
-		exporter:       cfg.Exporter,
+	for i := 0; i < numOtelQueueWorkers; i++ {
+		worker := QueueWorkerOTel{
+			id:             fmt.Sprintf("%d%s", i, uuid.New().String()),
+			oTelStore:      stores.GetOTelStore(cfg.Redis),
+			traceStore:     stores.GetTraceStore(cfg.Redis, TTLForTransientSets),
+			attributeStore: stores.GetAttributesStore(cfg.Redis),
+			errorStore:     stores.GetErrorStore(cfg.Redis),
+			scenarioStore:  scenarioStore,
+			exporter:       cfg.Exporter,
+		}
+		workers = append(workers, &worker)
 	}
 
-	worker3 := QueueWorkerOTel{
-		id:             "2" + uuid.New().String(),
-		oTelStore:      stores.GetOTelStore(cfg.Redis),
-		traceStore:     stores.GetTraceStore(cfg.Redis, TTLForTransientSets),
-		attributeStore: stores.GetAttributesStore(cfg.Redis),
-		errorStore:     stores.GetErrorStore(cfg.Redis),
-		scenarioStore:  scenarioStore,
-		exporter:       cfg.Exporter,
-	}
-
-	// oTel consumer and error store
+	// Otel consumer and error store
 	var err error
-	worker.oTelConsumer, err = stores.GetTraceConsumer(cfg.Redis, []rmq.Consumer{&worker, &worker1, &worker2, &worker3}, OTelQueue)
+	workerInterfaces := make([]rmq.Consumer, len(workers))
+	for i, worker := range workers {
+		workerInterfaces[i] = worker
+	}
+
+	firstWorker := workers[0]
+
+	firstWorker.oTelConsumer, err = stores.GetTraceConsumer(cfg.Redis, workerInterfaces, OTelQueue)
 	if err != nil {
 		return nil
 	}
 
-	return &worker
+	return firstWorker
 }
 
 func (worker *QueueWorkerOTel) Close() {

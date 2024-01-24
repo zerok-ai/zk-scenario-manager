@@ -26,6 +26,7 @@ data:
     exporter:
       host: opentelemetry-collector.opentelemetry-operator-system.svc.cluster.local
       port: 4319
+    otelQueueWorkerCount: {{ .Values.otelQueueWorkerCount }}
 kind: ConfigMap
 metadata:
   name: {{ include "zk-scenario-manager.fullname" . }}

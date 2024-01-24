@@ -16,6 +16,7 @@ serviceConfigs:
 
 workLoadTtl: 900
 workLoadTickerDuration: 60
+otelQueueWorkerCount: 4
 
 redis:
   host: redis.zk-client.svc.cluster.local
@@ -121,3 +122,9 @@ nodeSelector: {}
 tolerations: []
 
 affinity: {}
+
+ports:
+- port: 80
+  protocol: TCP
+  targetPort: 80
+

@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: zk-scenario-manager
+  labels:
+    app.kubernetes.io/name: zk-scenario-manager
+spec:
+  selector:
+    app.kubernetes.io/name: zk-scenario-manager
+  ports:
+  {{- .Values.ports | toYaml | nindent 2 -}}
