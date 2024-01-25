@@ -33,7 +33,7 @@ metadata:
   labels:
     app: {{ include "zk-scenario-manager.fullname" . }}
     name: {{ include "zk-scenario-manager.fullname" . }}
-  namespace: zk-client
+  namespace: zk-loadtest
 ---
 apiVersion: v1
 data:
@@ -46,4 +46,4 @@ data:
 kind: ConfigMap
 metadata:
   name: zk-obfuscator
-  namespace: zk-client
+  namespace: zk-loadtest

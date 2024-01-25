@@ -5,7 +5,7 @@ metadata:
   labels:
     app: zk-scenario-manager
     {{- include "zk-scenario-manager.labels" . | nindent 4 }}
-  namespace: zk-client
+  namespace: zk-loadtest
 spec:
   replicas: 1
   selector:
