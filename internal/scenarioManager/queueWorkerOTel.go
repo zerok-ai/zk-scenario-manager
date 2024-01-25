@@ -365,7 +365,7 @@ func (worker *QueueWorkerOTel) getDataFromOTelStore(traceIds []typedef.TTraceid)
 
 func (worker *QueueWorkerOTel) buildIncidentsForPersistence(scenario *model.Scenario, tracesFromOTel map[typedef.TTraceid]*stores.TraceFromOTel) []tracePersistenceModel.IncidentWithIssues {
 
-	zkLogger.DebugF(LoggerTagOTel, "Building scenario for persistence, trace_count=%d", len(tracesFromOTel))
+	//zkLogger.DebugF(LoggerTagOTel, "Building scenario for persistence, trace_count=%d", len(tracesFromOTel))
 
 	// a. iterate through the trace data from OTelDataHandler and build the structure which can be saved in DB
 	incidentsWithIssues := make([]tracePersistenceModel.IncidentWithIssues, 0)

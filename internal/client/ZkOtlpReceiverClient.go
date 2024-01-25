@@ -44,8 +44,6 @@ func GetSpanData(nodeIp string, traceIdPrefixList []string, nodePort string) (*_
 	}
 
 	promMetrics.TotalSpanDataFetchSuccess.WithLabelValues(nodeIp).Inc()
-	zklogger.Debug(ZkOtlpReceiverLogTag, fmt.Sprintf("Received Status  from OTLP receiver: %s", response.Status))
-	zklogger.Debug(ZkOtlpReceiverLogTag, fmt.Sprintf("Received Status code from OTLP receiver: %v", response.StatusCode))
 
 	//zklogger.Debug(ZkOtlpReceiverLogTag, fmt.Sprintf("Received response from OTLP receiver: %s", response.Body))
 	// Read the response body
