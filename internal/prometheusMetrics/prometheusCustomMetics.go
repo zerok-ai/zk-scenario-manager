@@ -52,6 +52,14 @@ var (
 		[]string{"scenario"},
 	)
 
+	//total spans sent to collector
+	TotalSpansSentToCollector = promauto.NewCounter(
+		prometheus.CounterOpts{
+			Name: "zerok_sm_spans_sent_to_collector_total",
+			Help: "Total spans sent to collector",
+		},
+	)
+
 	// total spans processed metric for each scenario
 	TotalSpansProcessedForScenario = promauto.NewCounterVec(
 		prometheus.CounterOpts{
