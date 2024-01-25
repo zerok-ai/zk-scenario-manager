@@ -18,7 +18,7 @@ const ZkOtlpReceiverLogTag = "ZkOtlpReceiverClient"
 
 func GetSpanData(nodeIp string, traceIdPrefixList []string, nodePort string) (*__.BadgerResponseList, error) {
 	url := "http://" + nodeIp + ":" + nodePort + "/get-trace-data" // Replace with your actual API endpoint
-	zklogger.Info(ZkOtlpReceiverLogTag, fmt.Sprintf("Calling OTLP receiver with traceIdPrefixList: %s on url: %s", traceIdPrefixList, url))
+	//zklogger.Info(ZkOtlpReceiverLogTag, fmt.Sprintf("Calling OTLP receiver with traceIdPrefixList: %s on url: %s", traceIdPrefixList, url))
 	requestBody, err := json.Marshal(traceIdPrefixList)
 	if err != nil {
 		zklogger.Error(fmt.Sprintf("Error marshaling request data: %s while calling OTLP receiver", traceIdPrefixList), err)
