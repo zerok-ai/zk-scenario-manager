@@ -5,9 +5,8 @@ import (
 	"strings"
 )
 
-func SplitTraceIdSpanId(traceIdSpanId string) (string, string, error) {
-
-	parts := strings.Split(traceIdSpanId, "-")
+func SplitTraceIdSpanId(traceIdSpanId string, separator string) (string, string, error) {
+	parts := strings.Split(traceIdSpanId, separator)
 
 	// Check if there are at least two parts
 	if len(parts) >= 2 {

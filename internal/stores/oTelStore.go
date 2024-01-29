@@ -8,12 +8,13 @@ import (
 	zkUtilsCommonModel "github.com/zerok-ai/zk-utils-go/common"
 	"github.com/zerok-ai/zk-utils-go/ds"
 	zkLogger "github.com/zerok-ai/zk-utils-go/logs"
+	zkUtilsOtel "github.com/zerok-ai/zk-utils-go/proto"
 	zkUtilsEnrichedSpan "github.com/zerok-ai/zk-utils-go/proto/enrichedSpan"
-	zkUtilsOtel "github.com/zerok-ai/zk-utils-go/proto/opentelemetry"
 	"github.com/zerok-ai/zk-utils-go/storage/redis/clientDBNames"
 	"github.com/zerok-ai/zk-utils-go/storage/redis/config"
 	otlpCommonV1 "go.opentelemetry.io/proto/otlp/common/v1"
 	otlpTraceV1 "go.opentelemetry.io/proto/otlp/trace/v1"
+	"google.golang.org/protobuf/encoding/protojson"
 	"net"
 	"regexp"
 	smUtils "scenario-manager/internal"
@@ -183,33 +184,71 @@ func (t OTelDataHandler) getSpanData(nodeIpTraceIdMap map[string][]string) (map[
 	otlpReceiverResultMap := make(map[string]map[string]*zkUtilsOtel.OtelEnrichedRawSpanForProto)
 
 	for nodeIp, traceIdSpanIdList := range nodeIpTraceIdMap {
+
 		//get data from receiver
+		//Ques: How is the node port 8147?
 		traceDataFromOtlpReceiver, err := otlpReceiverClient.GetSpanData(nodeIp, traceIdSpanIdList, "8147") //TODO: get from config
 		if err != nil {
 			zkLogger.Error(LoggerTag, fmt.Sprintf("Error retrieving data from OTLP receiver with nodeIP: %s for traces : %s", nodeIp, traceIdSpanIdList), err)
 			continue
 		}
 
-		//zkLogger.Info(LoggerTag, fmt.Sprintf("Data received from OTLP receiver for nodeIP: %s for traces : %s", nodeIp, traceIdSpanIdList))
-
+		//Iterate over the response list and create a map of traceId to spanId to spanData.
 		for _, response := range traceDataFromOtlpReceiver.ResponseList {
+
 			traceIdSpanId := response.Key
 			spanData := response.Value
-			traceId, spanId, err := smUtils.SplitTraceIdSpanId(traceIdSpanId)
+			//TODO: This separator might change if we decide to -o- as separator.
+			traceId, spanId, err := smUtils.SplitTraceIdSpanId(traceIdSpanId, "-")
+
 			if err != nil {
 				zkLogger.Error(LoggerTag, fmt.Sprintf("Error splitting traceIdSpanId: %s", traceIdSpanId), err)
 				continue
 			}
+
 			if len(otlpReceiverResultMap[traceId]) == 0 || otlpReceiverResultMap[traceId] == nil {
 				otlpReceiverResultMap[traceId] = make(map[string]*zkUtilsOtel.OtelEnrichedRawSpanForProto)
-				var spanDataMap map[string]*zkUtilsOtel.OtelEnrichedRawSpanForProto
-				spanDataMap = make(map[string]*zkUtilsOtel.OtelEnrichedRawSpanForProto)
+				spanDataMap := make(map[string]*zkUtilsOtel.OtelEnrichedRawSpanForProto)
 				spanDataMap[spanId] = spanData
 				otlpReceiverResultMap[traceId] = spanDataMap
 			} else {
 				otlpReceiverResultMap[traceId][spanId] = spanData
 			}
 		}
+
+		//Iterate over the ebpf response list and update the map of traceId to spanId to spanData with ebpf data.
+		for _, response := range traceDataFromOtlpReceiver.EbpfResponseList {
+
+			traceIdSpanId := response.Key
+			ebpfData := response.Value
+			traceId, spanId, err := smUtils.SplitTraceIdSpanId(traceIdSpanId, "-e-")
+
+			if err != nil {
+				zkLogger.Error(LoggerTag, fmt.Sprintf("Error splitting traceIdSpanId: %s", traceIdSpanId), err)
+				continue
+			}
+
+			if otlpReceiverResultMap[traceId] != nil {
+				spanData, ok := otlpReceiverResultMap[traceId][spanId]
+				if ok {
+					//Converting ebpf data to a json string for readability
+					marshaledJson, err := protojson.Marshal(ebpfData)
+					if err != nil {
+						zkLogger.Error(LoggerTag, "Error during JSON marshaling: ", err)
+						continue
+					}
+					ebpfDataStr := string(marshaledJson)
+
+					//Adding the ebpf data as an attribute to already existing spanData
+					newAttribute := &otlpCommonV1.KeyValue{
+						Key:   "ebpf_data",
+						Value: &otlpCommonV1.AnyValue{Value: &otlpCommonV1.AnyValue_StringValue{StringValue: ebpfDataStr}},
+					}
+					spanData.SpanAttributes.KeyValueList = append(spanData.SpanAttributes.KeyValueList, newAttribute)
+				}
+			}
+		}
+
 	}
 
 	return otlpReceiverResultMap, nil

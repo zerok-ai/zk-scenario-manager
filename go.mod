@@ -11,9 +11,10 @@ require (
 	github.com/redis/go-redis/v9 v9.0.5
 	github.com/stretchr/testify v1.8.4
 	github.com/zerok-ai/zk-rawdata-reader v0.5.3
-	github.com/zerok-ai/zk-utils-go v0.5.21-badger.0.20240125113153-e4ee4e535c49
+	github.com/zerok-ai/zk-utils-go v0.5.21-badger.0.20240129091613-cc2d1629cf6c
 	go.opentelemetry.io/proto/otlp v1.0.0
 	google.golang.org/grpc v1.59.0
+	google.golang.org/protobuf v1.31.0
 )
 
 require (
@@ -89,7 +90,6 @@ require (
 	golang.org/x/time v0.3.0 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20230822172742-b8732ec3820d // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20231016165738-49dd2c1f3d0b // indirect
-	google.golang.org/protobuf v1.31.0 // indirect
 	gopkg.in/ini.v1 v1.67.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 	olympos.io/encoding/edn v0.0.0-20201019073823-d3554ca0b0a3 // indirect
