@@ -14,7 +14,6 @@ import (
 	"github.com/zerok-ai/zk-utils-go/storage/redis/config"
 	otlpCommonV1 "go.opentelemetry.io/proto/otlp/common/v1"
 	otlpTraceV1 "go.opentelemetry.io/proto/otlp/trace/v1"
-	"google.golang.org/protobuf/encoding/protojson"
 	"net"
 	"regexp"
 	smUtils "scenario-manager/internal"
@@ -231,27 +230,54 @@ func (t OTelDataHandler) getSpanData(nodeIpTraceIdMap map[string][]string) (map[
 			if otlpReceiverResultMap[traceId] != nil {
 				spanData, ok := otlpReceiverResultMap[traceId][spanId]
 				if ok {
-					//Converting ebpf data to a json string for readability
-					marshaledJson, err := protojson.Marshal(ebpfData)
-					if err != nil {
-						zkLogger.Error(LoggerTag, "Error during JSON marshaling: ", err)
-						continue
-					}
-					ebpfDataStr := string(marshaledJson)
-
-					//Adding the ebpf data as an attribute to already existing spanData
-					newAttribute := &otlpCommonV1.KeyValue{
-						Key:   "ebpf_data",
-						Value: &otlpCommonV1.AnyValue{Value: &otlpCommonV1.AnyValue_StringValue{StringValue: ebpfDataStr}},
-					}
-					spanData.SpanAttributes.KeyValueList = append(spanData.SpanAttributes.KeyValueList, newAttribute)
+					spanData.SpanAttributes.KeyValueList = append(spanData.SpanAttributes.KeyValueList, t.getEbpfAttributes(ebpfData)...)
 				}
 			}
 		}
-
 	}
 
 	return otlpReceiverResultMap, nil
+}
+
+func (t OTelDataHandler) getEbpfAttributes(ebpfData *zkUtilsOtel.EbpfEntryDataForSpan) []*otlpCommonV1.KeyValue {
+	keyValueList := []*otlpCommonV1.KeyValue{}
+	if ebpfData != nil {
+
+		requestBody := ebpfData.ReqBody
+		keyValueList = append(keyValueList, t.getAttribute("zk_request_body", requestBody))
+
+		responseBody := ebpfData.RespBody
+		keyValueList = append(keyValueList, t.getAttribute("zk_response_body", responseBody))
+
+		contentType := ebpfData.ContentType
+		keyValueList = append(keyValueList, t.getAttribute("zk_content_type", contentType))
+
+		reqPath := ebpfData.ReqPath
+		keyValueList = append(keyValueList, t.getAttribute("zk_request_path", reqPath))
+
+		reqMethod := ebpfData.ReqMethod
+		keyValueList = append(keyValueList, t.getAttribute("zk_request_method", reqMethod))
+
+		respStatus := ebpfData.RespStatus
+		keyValueList = append(keyValueList, t.getAttribute("zk_response_status", respStatus))
+
+		//TODO: Change the headers to keyvalue list after checking the string format.
+		requestHeaders := ebpfData.ReqHeaders
+		keyValueList = append(keyValueList, t.getAttribute("zk_request_headers", requestHeaders))
+
+		responseHeaders := ebpfData.RespHeaders
+		keyValueList = append(keyValueList, t.getAttribute("zk_response_headers", responseHeaders))
+
+	}
+
+	return keyValueList
+}
+
+func (t OTelDataHandler) getAttribute(key, value string) *otlpCommonV1.KeyValue {
+	return &otlpCommonV1.KeyValue{
+		Key:   key,
+		Value: &otlpCommonV1.AnyValue{Value: &otlpCommonV1.AnyValue_StringValue{StringValue: value}},
+	}
 }
 
 func (t OTelDataHandler) processResult(keys []typedef.TTraceid, traceSpanData map[string]map[string]*zkUtilsOtel.OtelEnrichedRawSpanForProto) (result map[typedef.TTraceid]*TraceFromOTel) {
