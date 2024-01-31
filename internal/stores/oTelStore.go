@@ -97,7 +97,7 @@ func (t OTelDataHandler) GetSpansForTracesFromDB(keys []typedef.TTraceid) (resul
 	// 3. Execute the transaction
 	_, err = pipe.Exec(ctx)
 	if err != nil {
-		fmt.Println("Error executing transaction:", err)
+		zkLogger.Error(LogTag, "Error executing transaction:", err)
 		return nil, err
 	}
 

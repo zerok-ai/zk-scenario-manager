@@ -2,7 +2,7 @@ package populatedata
 
 import (
 	"encoding/json"
-	"fmt"
+	zklogger "github.com/zerok-ai/zk-utils-go/logs"
 	"github.com/zerok-ai/zk-utils-go/scenario/model"
 	"github.com/zerok-ai/zk-utils-go/storage/redis/clientDBNames"
 	"github.com/zerok-ai/zk-utils-go/storage/redis/config"
@@ -16,7 +16,7 @@ func PopulateScenarios(redisConfig config.RedisConfig) {
 	var scenario model.Scenario
 	err := json.Unmarshal(scenarioString, &scenario)
 	if err != nil {
-		fmt.Println("Error in unmarshalling scenario", err)
+		zklogger.Error(LogTag, "Error in unmarshalling scenario", err)
 		return
 	}
 
@@ -38,7 +38,7 @@ func PopulateTraces(redisConfig config.RedisConfig) {
 func GetBytesFromFile(path string) []byte {
 	file, err := os.Open(path)
 	if err != nil {
-		fmt.Println("Error opening file:", err)
+		zklogger.Error(LogTag, "Error opening file:", err)
 		return nil
 	}
 	defer file.Close()
@@ -46,7 +46,7 @@ func GetBytesFromFile(path string) []byte {
 	// Read the file content
 	content, err := io.ReadAll(file)
 	if err != nil {
-		fmt.Println("Error reading file:", err)
+		zklogger.Error(LogTag, "Error reading file:", err)
 		return nil
 	}
 

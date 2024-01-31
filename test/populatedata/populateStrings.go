@@ -1,8 +1,10 @@
 package populatedata
 
 import (
+	"errors"
 	"fmt"
 	"github.com/zerok-ai/zk-utils-go/interfaces"
+	zklogger "github.com/zerok-ai/zk-utils-go/logs"
 
 	"github.com/zerok-ai/zk-utils-go/storage/redis"
 	storage "github.com/zerok-ai/zk-utils-go/storage/redis"
@@ -11,6 +13,8 @@ import (
 	ticker "github.com/zerok-ai/zk-utils-go/ticker"
 	"time"
 )
+
+var LogTag = "PopulateData"
 
 type RedisVal string
 
@@ -58,8 +62,8 @@ func (sp StringPopulator) Start(timeInterval time.Duration) error {
 func (sp StringPopulator) populateData(counter int) {
 	key := fmt.Sprintf("%s%n", sp.keyPrefix, counter)
 	err := sp.versionedStore.SetValue(key, RedisVal(key))
-	if err != nil && err != redis.LATEST {
-		fmt.Println("populateData error in setting value ", err.Error())
+	if err != nil && !errors.Is(err, redis.LATEST) {
+		zklogger.Error(LogTag, "populateData error in setting value ", err.Error())
 		return
 	}
 }
