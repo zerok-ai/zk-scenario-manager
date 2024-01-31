@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/redis/go-redis/v9"
+	zklogger "github.com/zerok-ai/zk-utils-go/logs"
 	"github.com/zerok-ai/zk-utils-go/storage/redis/config"
 )
 
@@ -50,7 +51,7 @@ func (sp SetPopulator) PopulateData() {
 		// Use SAdd command to add the data to the set
 		_, err := sp.redisClient.SAdd(ctx, sp.setName, data).Result()
 		if err != nil {
-			fmt.Println("Error adding data to Redis set:", err)
+			zklogger.Error(LogTag, "Error adding data to Redis set:", err)
 			return
 		}
 

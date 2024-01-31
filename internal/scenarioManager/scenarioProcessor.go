@@ -193,16 +193,12 @@ func (scenarioProcessor *ScenarioProcessor) processScenario(scenario *model.Scen
 		allValues = append(allValues, value...)
 	}
 
-	fmt.Println("allValues: ", len(allValues))
-
 	// evaluate scenario and get all traceIds
 	allTraceIds := NewTraceEvaluator(scenarioProcessor.cfg, scenario, scenarioProcessor.traceStore, namesOfAllSets, TTLForScenarioSets).EvalScenario()
 	if allTraceIds == nil || len(allTraceIds) == 0 {
 		zkLogger.DebugF(LoggerTagScenarioProcessor, "No traces satisfying the scenario")
 		return
 	}
-	fmt.Println("-------------")
-	fmt.Println("allTraceIds: ", len(allTraceIds))
 
 	// mark all traceIds as processed in redis
 	setName := fmt.Sprintf("%s_%s_%d", SetPrefixOTelProcessed, scenario.Id, time.Now().UnixMilli())

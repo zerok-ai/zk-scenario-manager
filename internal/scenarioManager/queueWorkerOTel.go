@@ -104,7 +104,6 @@ func (worker *QueueWorkerOTel) handleMessage(oTelMessage OTELTraceMessage) {
 	//zkLogger.DebugF(LoggerTagOTel, "oTelWorker %v got a message", worker.id)
 
 	// 1. Collect span relation and span data for the traceIDs
-	fmt.Println("otelmessage len of traces", len(oTelMessage.Traces))
 	tracesFromOTelStore, resourceHashToInfoMap, scopeHashToInfoMap := worker.getDataFromOTelStore(oTelMessage.Traces)
 	if tracesFromOTelStore == nil || len(tracesFromOTelStore) == 0 {
 		return
@@ -116,8 +115,6 @@ func (worker *QueueWorkerOTel) handleMessage(oTelMessage OTELTraceMessage) {
 		zkLogger.ErrorF(LoggerTagOTel, "no incidents to save")
 		return
 	}
-
-	fmt.Println("incidents len", len(incidents))
 
 	//total traces received for scenario to process metric
 	promMetrics.TotalTracesReceivedForScenarioToProcess.WithLabelValues(oTelMessage.Scenario.Title).Add(float64(len(incidents)))
@@ -205,9 +202,6 @@ func (worker *QueueWorkerOTel) handleMessage(oTelMessage OTELTraceMessage) {
 	}
 	resourceBuffer := ConvertOtelSpanToResourceSpan(spanBuffer, resourceHashToInfoMap, scopeHashToInfoMap)
 
-	//resourceBufferByteArr, _ := json.Marshal(resourceBuffer)
-	//fmt.Printf("resourceBufferByteArr: %v", resourceBufferByteArr)
-
 	var wg sync.WaitGroup
 	batchSize := 20
 	bufferLen := len(resourceBuffer)
@@ -219,7 +213,6 @@ func (worker *QueueWorkerOTel) handleMessage(oTelMessage OTELTraceMessage) {
 		}
 	}
 	promMetrics.TotalSpansSentToCollector.Add(float64(totalSpans))
-	fmt.Println("total spans************************************ ", totalSpans)
 
 	for i := 0; i < bufferLen; i += batchSize {
 		wg.Add(1)
