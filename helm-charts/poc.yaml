@@ -4,15 +4,8 @@
 
 replicaCount: 1
 
-postgres:
-  host:  ""
-  port: 5432
-  user:  ""
-  password:  ""
-  dbname:  ""
-
 image:
-  repo: "us-west1-docker.pkg.dev/zerok-dev/zerok-cli/zk-scenario-manager"
+  repo: "us-west1-docker.pkg.dev/zerok-dev/zerok-cli/zk-scenario-manager" #TODO::remove or change path
   tag: "latest"
   imagePullPolicy: Always
 

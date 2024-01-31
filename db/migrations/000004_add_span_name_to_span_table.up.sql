@@ -1,2 +1,0 @@
-ALTER TABLE span
-    ADD COLUMN span_name VARCHAR(255) DEFAULT '';
