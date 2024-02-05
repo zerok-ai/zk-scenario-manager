@@ -2,7 +2,7 @@
 Expand the name of the chart.
 */}}
 {{- define "zk-scenario-manager.name" -}}
-{{- default .Chart.Name .Values.nameOverzride | trunc 63 | trimSuffix "-" }}
+{{- default .Chart.Name .Values.nameOverride | trunc 63 | trimSuffix "-" }}
 {{- end }}
 
 {{/*
