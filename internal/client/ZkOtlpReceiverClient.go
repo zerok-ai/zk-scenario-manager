@@ -10,7 +10,7 @@ import (
 	zklogger "github.com/zerok-ai/zk-utils-go/logs"
 	__ "github.com/zerok-ai/zk-utils-go/proto/opentelemetry"
 	"io"
-	promMetrics "scenario-manager/internal/prometheusMetrics"
+	promMetrics "scenario-manager/internal/metrics"
 	"time"
 )
 

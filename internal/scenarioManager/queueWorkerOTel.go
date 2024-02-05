@@ -24,7 +24,7 @@ import (
 	"log"
 	"scenario-manager/config"
 	typedef "scenario-manager/internal"
-	promMetrics "scenario-manager/internal/prometheusMetrics"
+	promMetrics "scenario-manager/internal/metrics"
 	"scenario-manager/internal/stores"
 	tracePersistenceModel "scenario-manager/internal/tracePersistence/model"
 	"sync"

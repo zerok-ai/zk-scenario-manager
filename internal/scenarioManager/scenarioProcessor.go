@@ -10,7 +10,7 @@ import (
 	ticker "github.com/zerok-ai/zk-utils-go/ticker"
 	"scenario-manager/config"
 	typedef "scenario-manager/internal"
-	promMetrics "scenario-manager/internal/prometheusMetrics"
+	promMetrics "scenario-manager/internal/metrics"
 	"scenario-manager/internal/stores"
 	"sort"
 	"strings"
