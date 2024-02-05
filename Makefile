@@ -1,11 +1,15 @@
 NAME = zk-scenario-manager
-IMAGE_NAME = zk-scenario-manager
-IMAGE_NAME_MIGRATION_SUFFIX = -migration
-IMAGE_VERSION = latest
 
-LOCATION ?= us-west1
-PROJECT_ID ?= zerok-dev
-REPOSITORY ?= zk-client
+# VERSION defines the project version for the project.
+# Update this value when you upgrade the version of your project.
+IMAGE_VERSION ?= latest
+
+#Docker image location
+#change this to your docker hub username
+DOCKER_HUB ?= muditkmathur
+IMAGE_NAME ?= zk-scenario-manager
+ART_Repo_URI ?= $(DOCKER_HUB)/$(IMAGE_NAME)
+IMG ?= $(ART_Repo_URI):$(IMAGE_VERSION)
 
 export GO111MODULE=on
 export BUILDER_NAME=multi-platform-builder
@@ -28,42 +32,11 @@ docker-build-multi-arch: sync
 	GOOS=linux GOARCH=arm64 CGO_ENABLED=0 go build -v -o bin/$(NAME)-arm64 cmd/main.go
 	docker buildx rm ${BUILDER_NAME} || true
 	docker buildx create --use --platform=linux/arm64,linux/amd64 --name ${BUILDER_NAME}
-	docker buildx build --platform=linux/arm64,linux/amd64 --push --tag ${CLIENT_IMG} -f Dockerfile .
+	docker buildx build --platform=linux/arm64,linux/amd64 --push --tag ${IMG} -f Dockerfile .
 	docker buildx rm ${BUILDER_NAME}
 
 docker-push:
-	docker push $(IMAGE_PREFIX)$(IMAGE_NAME)$(IMAGE_NAME_SUFFIX):$(IMAGE_VERSION)
-
-
-# ------- GKE ------------
-
-# build app image
-docker-build-gke: GOOS := GOOS=linux
-docker-build-gke: ARCH := GOARCH=amd64
-docker-build-gke: IMAGE_PREFIX := $(LOCATION)-docker.pkg.dev/$(PROJECT_ID)/$(REPOSITORY)/
-docker-build-gke: DockerFile := -f Dockerfile
-docker-build-gke: docker-build
-
-# build migration image
-docker-build-migration-gke: GOOS := GOOS=linux
-docker-build-migration-gke: ARCH := GOARCH=amd64
-docker-build-migration-gke: IMAGE_PREFIX := $(LOCATION)-docker.pkg.dev/$(PROJECT_ID)/$(REPOSITORY)/
-docker-build-migration-gke: DockerFile := -f Dockerfile-Migration
-docker-build-migration-gke: IMAGE_NAME_SUFFIX := $(IMAGE_NAME_MIGRATION_SUFFIX)
-docker-build-migration-gke: docker-build
-
-# push app image
-docker-push-gke: IMAGE_PREFIX := $(LOCATION)-docker.pkg.dev/$(PROJECT_ID)/$(REPOSITORY)/
-docker-push-gke: docker-push
-
-# push migration image
-docker-push-migration-gke: IMAGE_PREFIX := $(LOCATION)-docker.pkg.dev/$(PROJECT_ID)/$(REPOSITORY)/
-docker-push-migration-gke: IMAGE_NAME_SUFFIX := $(IMAGE_NAME_MIGRATION_SUFFIX)
-docker-push-migration-gke: docker-push
-
-# build and push
-docker-build-push-gke: docker-build-gke docker-push-gke
-docker-build-push-migration-gke: docker-build-migration-gke docker-push-migration-gke
+	docker push $(ART_Repo_URI):$(IMAGE_VERSION)
 
 # ------- CI-CD ------------
 ci-cd-build: sync
