@@ -3,7 +3,7 @@
 # Declare variables to be passed into your templates.
 
 global:
-  dockerBase: "us-west1-docker.pkg.dev/zerok-dev/zk-client"
+  dockerBase: "zerokai"
 
 obfuscate: false
 
