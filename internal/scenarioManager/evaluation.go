@@ -82,9 +82,7 @@ func (te TraceEvaluator) getValidTracesForProcessing(traceSetForScenario string)
 }
 
 func (te TraceEvaluator) evalFilter(f model.Filter) *string {
-
 	var workloadTraceSetNames []string
-
 	if f.Type == model.WORKLOAD {
 
 		// shortlist the sets matching the workloadID prefix

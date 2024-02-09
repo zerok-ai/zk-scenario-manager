@@ -8,24 +8,22 @@ import (
 	zkredis "github.com/zerok-ai/zk-utils-go/storage/redis"
 	"github.com/zerok-ai/zk-utils-go/storage/redis/clientDBNames"
 	zktick "github.com/zerok-ai/zk-utils-go/ticker"
+	"log"
 	"scenario-manager/config"
 	"scenario-manager/internal/redis"
 	"time"
-)
-
-const (
-	TickerInterval = 1 * time.Minute
-	WorkloadTTL    = 15 * time.Minute
 )
 
 var workloadLogTag = "WorkloadKeyHandler"
 
 // WorkloadKeyHandler handles periodic tasks to manage workload keys in Redis.
 type WorkloadKeyHandler struct {
-	RedisHandler  redis.RedisHandlerInterface
-	UUID          string
-	scenarioStore *zkredis.VersionedStore[zkmodel.Scenario]
-	ticker        *zktick.TickerTask
+	RedisHandler   redis.RedisHandlerInterface
+	UUID           string
+	scenarioStore  *zkredis.VersionedStore[zkmodel.Scenario]
+	ticker         *zktick.TickerTask
+	workLoadTtl    time.Duration
+	tickerInterval time.Duration
 }
 
 func NewWorkloadKeyHandler(cfg *config.AppConfigs, store *zkredis.VersionedStore[zkmodel.Scenario]) (*WorkloadKeyHandler, error) {
@@ -44,7 +42,10 @@ func NewWorkloadKeyHandler(cfg *config.AppConfigs, store *zkredis.VersionedStore
 		scenarioStore: store,
 	}
 
-	handler.ticker = zktick.GetNewTickerTask("workload_rename", TickerInterval, handler.manageWorkloadKeys)
+	handler.workLoadTtl = time.Duration(cfg.Workload.WorkLoadTtl) * time.Second
+	handler.tickerInterval = time.Duration(cfg.Workload.WorkLoadTickerDuration) * time.Second
+
+	handler.ticker = zktick.GetNewTickerTask("workload_rename", handler.tickerInterval, handler.manageWorkloadKeys)
 	handler.ticker.Start()
 
 	return handler, nil
@@ -86,8 +87,7 @@ func (wh *WorkloadKeyHandler) ManageWorkloadKey(workloadID string) error {
 	}
 
 	// 2. Create a key with value(rename_worker_<workload_id>) as the UUID of the pod with ttl as 1min
-
-	if err = wh.RedisHandler.SetWithTTL(lockKeyName, wh.UUID, TickerInterval); err != nil {
+	if err = wh.RedisHandler.SetNXWithTTL(lockKeyName, wh.UUID, wh.tickerInterval); err != nil {
 		return fmt.Errorf("error setting key with TTL: %v", err)
 	}
 
@@ -121,30 +121,44 @@ func (wh *WorkloadKeyHandler) ManageWorkloadKey(workloadID string) error {
 		return nil
 	}
 
-	// 4. Go back and check if the value of the key created in step 1 is still its own UUID.
-	currentValue, err = wh.RedisHandler.Get(lockKeyName)
-	if err != nil {
-		return fmt.Errorf("error getting value for key %s: %v", lockKeyName, err)
-	}
-
-	if currentValue != wh.UUID {
-		logger.Debug(workloadLogTag, "UUID mismatch, ignoring rename operation")
-		return nil
-	}
-
-	// If it’s the same, then rename the key workload_latest to the new key calculated in step 2 and set the ttl as 15mins.
 	newKeyName := fmt.Sprintf("%s_%d", workloadID, (highestSuffix+1)%60)
 	oldKeyName := fmt.Sprintf("%s_latest", workloadID)
-	if err = wh.RedisHandler.RenameKeyWithTTL(oldKeyName, newKeyName, WorkloadTTL); err != nil {
-		err = wh.RedisHandler.RemoveKey(lockKeyName)
-		if err != nil {
-			logger.Error(workloadLogTag, "Error removing the lock key for workloadId ", workloadID)
-			return fmt.Errorf("error removing the lock key for workloadId %s", workloadID)
-		}
-		return fmt.Errorf("error renaming key: %v", err)
-	}
+	wh.renameKeyAndRemoveLock(newKeyName, lockKeyName, oldKeyName)
 
 	return nil
+}
+
+func (wh *WorkloadKeyHandler) renameKeyAndRemoveLock(newKeyName, lockKeyName, oldKeyName string) {
+	script := `
+    local lockKeyName = KEYS[1]
+	local oldKeyName = KEYS[2]
+    local uuid = ARGV[1]
+	local newKeyName = ARGV[2]
+	local WorkloadTTL = ARGV[3]
+
+    local currentValue = redis.call('GET', lockKeyName)
+    if currentValue == nil then
+    	return 'Error: Key does not exist'
+	end
+
+    if currentValue ~= uuid then
+        return 'Error: UUID mismatch, ignoring rename operation.'
+    end
+
+	if redis.call('EXISTS', oldKeyName) == 1 then
+        redis.call('RENAME', oldKeyName, newKeyName)
+        redis.call('EXPIRE', newKeyName, WorkloadTTL)
+	end
+
+	redis.call('DEL', lockKeyName) 
+
+    return 'Success'
+    `
+
+	_, err := wh.RedisHandler.Eval(script, []string{lockKeyName, oldKeyName}, wh.UUID, newKeyName, int(wh.workLoadTtl/time.Second)).Result()
+	if err != nil {
+		log.Fatalf("Error running Lua script: %v", err)
+	}
 }
 
 func (wh *WorkloadKeyHandler) Close() {

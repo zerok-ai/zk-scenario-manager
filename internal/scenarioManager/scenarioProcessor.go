@@ -3,8 +3,6 @@ package scenarioManager
 import (
 	"fmt"
 	"github.com/google/uuid"
-	"github.com/pkg/errors"
-	"github.com/zerok-ai/zk-rawdata-reader/vzReader"
 	zkLogger "github.com/zerok-ai/zk-utils-go/logs"
 	"github.com/zerok-ai/zk-utils-go/scenario/model"
 	zkRedis "github.com/zerok-ai/zk-utils-go/storage/redis"
@@ -12,10 +10,9 @@ import (
 	ticker "github.com/zerok-ai/zk-utils-go/ticker"
 	"scenario-manager/config"
 	typedef "scenario-manager/internal"
+	promMetrics "scenario-manager/internal/metrics"
 	"scenario-manager/internal/stores"
-	tracePersistence "scenario-manager/internal/tracePersistence/service"
 	"sort"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -23,23 +20,21 @@ import (
 
 const (
 	LoggerTagScenarioProcessor       = "scenario-processor"
-	currentProcessingWorkerKeyPrefix = "CPV"
+	currentProcessingWorkerKeyPrefix = "CPW"
 )
 
 type ScenarioProcessor struct {
-	id                      string
-	cfg                     config.AppConfigs
-	scenarioStore           *zkRedis.VersionedStore[model.Scenario]
-	tracePersistenceService *tracePersistence.TracePersistenceService
-	traceStore              *stores.TraceStore
-	oTelStore               *stores.OTelDataHandler
-	oTelProducer            *stores.TraceQueue
-	traceRawDataCollector   *vzReader.VzReader
-	issueRateMap            typedef.IssueRateMap
-	mutex                   sync.Mutex
+	id            string
+	cfg           config.AppConfigs
+	scenarioStore *zkRedis.VersionedStore[model.Scenario]
+	traceStore    *stores.TraceStore
+	oTelStore     *stores.OTelDataHandler
+	oTelProducer  *stores.TraceQueue
+	issueRateMap  typedef.IssueRateMap
+	mutex         sync.Mutex
 }
 
-func NewScenarioProcessor(cfg config.AppConfigs, tps *tracePersistence.TracePersistenceService) (*ScenarioProcessor, error) {
+func NewScenarioProcessor(cfg config.AppConfigs) (*ScenarioProcessor, error) {
 
 	vs, err := zkRedis.GetVersionedStore[model.Scenario](&cfg.Redis, clientDBNames.ScenariosDBName, ScenarioRefreshInterval)
 	if err != nil {
@@ -52,19 +47,13 @@ func NewScenarioProcessor(cfg config.AppConfigs, tps *tracePersistence.TracePers
 	}
 
 	fp := ScenarioProcessor{
-		id:                      "S" + uuid.New().String(),
-		scenarioStore:           vs,
-		traceStore:              stores.GetTraceStore(cfg.Redis, TTLForTransientSets),
-		oTelProducer:            oTelProducer,
-		tracePersistenceService: tps,
-		cfg:                     cfg,
+		id:            "S" + uuid.New().String(),
+		scenarioStore: vs,
+		traceStore:    stores.GetTraceStore(cfg.Redis, TTLForTransientSets),
+		oTelProducer:  oTelProducer,
+		cfg:           cfg,
 	}
 
-	reader, err := GetNewVZReader(cfg)
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to get new VZ reader")
-	}
-	fp.traceRawDataCollector = reader
 	fp.oTelStore = stores.GetOTelStore(cfg.Redis)
 
 	returnValue := fp.init()
@@ -80,7 +69,6 @@ func (scenarioProcessor *ScenarioProcessor) Close() {
 	scenarioProcessor.traceStore.Close()
 	scenarioProcessor.oTelStore.Close()
 	scenarioProcessor.oTelProducer.Close()
-	scenarioProcessor.traceRawDataCollector.Close()
 }
 
 func (scenarioProcessor *ScenarioProcessor) init() *ScenarioProcessor {
@@ -105,7 +93,11 @@ func (scenarioProcessor *ScenarioProcessor) scenarioTickHandler() {
 	}
 
 	//	 2. process current scenario
+	startTime := time.Now()
 	scenarioProcessor.processScenario(scenario)
+	endTime := time.Now()
+	timeTakenToProcessEachScenario := endTime.Sub(startTime).Seconds()
+	promMetrics.TimeTakenToProcessEachScenarioByQueue1Worker.WithLabelValues(scenario.Title).Observe(timeTakenToProcessEachScenario)
 }
 
 func (scenarioProcessor *ScenarioProcessor) findScenarioToProcess() *model.Scenario {
@@ -113,8 +105,7 @@ func (scenarioProcessor *ScenarioProcessor) findScenarioToProcess() *model.Scena
 	// declare variables
 	var currentScenarioIndex int64
 	var err error
-	var scenarioIds []int
-	var sid int
+	var scenarioIds []string
 
 	// 1. get all scenarios
 	scenarios := scenarioProcessor.scenarioStore.GetAllValues()
@@ -131,32 +122,26 @@ func (scenarioProcessor *ScenarioProcessor) findScenarioToProcess() *model.Scena
 	index := int(currentScenarioIndex % int64(len(scenarios)))
 
 	// 3. sort all the scenarios based on the scenario ids.
-	for key := range scenarios {
-		// convert key to integer
-		if sid, err = strconv.Atoi(key); err != nil {
-			continue
-		}
-		scenarioIds = append(scenarioIds, sid)
+	for _, scenario := range scenarios {
+		scenarioIds = append(scenarioIds, scenario.Id)
 	}
-	sort.Ints(scenarioIds)
+	sort.Strings(scenarioIds)
 
 	// 4. get the scenario to process
-	scenarioToProcess := scenarios[fmt.Sprintf("%d", scenarioIds[index])]
+	scenarioToProcess := scenarios[fmt.Sprintf("%s", scenarioIds[index])]
 
 	return scenarioToProcess
 }
 
-func (scenarioProcessor *ScenarioProcessor) markProcessingEnd(scenario *model.Scenario, processedWorkloadSets string) {
-	scenarioProcessor.FinishedProcessingScenario(scenario.Id, scenarioProcessor.id, processedWorkloadSets)
-}
-
-func (scenarioProcessor *ScenarioProcessor) FinishedProcessingScenario(scenarioId, scenarioProcessorId, lastProcessedSets string) {
+func (scenarioProcessor *ScenarioProcessor) FinishedProcessingScenario(scenarioId string) {
 	// remove the Key for currently processing worker
+	scenarioProcessorId := scenarioProcessor.id
 	key := fmt.Sprintf("%s_%s", currentProcessingWorkerKeyPrefix, scenarioId)
 	result := scenarioProcessor.traceStore.GetValueForKey(key)
 	if result != scenarioProcessorId {
 		return
 	}
+
 	err := scenarioProcessor.traceStore.DeleteSets([]string{key})
 	if err != nil {
 		zkLogger.Error(LoggerTagScenarioProcessor, "Error deleting currently processing worker:", err)
@@ -165,20 +150,14 @@ func (scenarioProcessor *ScenarioProcessor) FinishedProcessingScenario(scenarioI
 }
 
 func (scenarioProcessor *ScenarioProcessor) AllowedToProcessScenarioId(scenarioId, scenarioProcessorId string, scenarioProcessingTime time.Duration) bool {
-
 	key := fmt.Sprintf("%s_%s", currentProcessingWorkerKeyPrefix, scenarioId)
-	result := scenarioProcessor.traceStore.GetValueForKey(key)
-
-	if result == "" || result != scenarioProcessorId {
-		key := fmt.Sprintf("%s_%s", currentProcessingWorkerKeyPrefix, scenarioId)
-		err := scenarioProcessor.traceStore.SetValueForKeyWithExpiry(key, scenarioProcessorId, scenarioProcessingTime)
-		if err != nil {
-			zkLogger.Error(LoggerTagScenarioProcessor, "Error setting last processed workload set:", err)
-			return false
-		}
-		return true
+	success, err := scenarioProcessor.traceStore.SetValueForKeyWithExpiryIfNotExist(key, scenarioProcessorId, scenarioProcessingTime)
+	if err != nil {
+		zkLogger.Error(LoggerTagScenarioProcessor, "Error setting currently processing worker:", err)
+		return false
 	}
-	return false
+
+	return success
 }
 
 func (scenarioProcessor *ScenarioProcessor) processScenario(scenario *model.Scenario) {
@@ -191,12 +170,25 @@ func (scenarioProcessor *ScenarioProcessor) processScenario(scenario *model.Scen
 		zkLogger.Info(LoggerTagScenarioProcessor, "Another processor is already processing the scenario")
 		return
 	}
+	// mark the processing end for the current scenario
+	defer scenarioProcessor.FinishedProcessingScenario(scenario.Id)
 
 	// get all the workload sets to process for the current scenario
-	namesOfAllSets, lastWorkloadSetsToProcess := scenarioProcessor.getWorkLoadSetsToProcess(scenario)
+	namesOfAllSets := scenarioProcessor.getWorkLoadSetsToProcess(scenario)
+	if len(namesOfAllSets) == 0 {
+		zkLogger.DebugF(LoggerTagScenarioProcessor, "No workload sets to process for the scenario")
+		return
+	}
 
-	// mark the processing end for the current scenario
-	defer scenarioProcessor.markProcessingEnd(scenario, lastWorkloadSetsToProcess)
+	allValues := make([]string, 0)
+	for _, setName := range namesOfAllSets {
+		value, err := scenarioProcessor.traceStore.GetAllValuesFromSet(setName)
+		if err != nil {
+			zkLogger.DebugF(LoggerTagScenarioProcessor, "Error getting value for key %s : %v", setName, err)
+			continue
+		}
+		allValues = append(allValues, value...)
+	}
 
 	// evaluate scenario and get all traceIds
 	allTraceIds := NewTraceEvaluator(scenarioProcessor.cfg, scenario, scenarioProcessor.traceStore, namesOfAllSets, TTLForScenarioSets).EvalScenario()
@@ -228,13 +220,11 @@ func (scenarioProcessor *ScenarioProcessor) processScenario(scenario *model.Scen
 
 // getWorkLoadSetsToProcess gets all the workload sets to process for the current scenario
 // the function also returns a comma separated string of the last workload set to process for each workload
-func (scenarioProcessor *ScenarioProcessor) getWorkLoadSetsToProcess(scenario *model.Scenario) ([]string, string) {
+func (scenarioProcessor *ScenarioProcessor) getWorkLoadSetsToProcess(scenario *model.Scenario) []string {
 
 	//  iterate over workload sets of the current scenario and get all the workload sets to process
 	workloadSetsToProcess := make([]string, 0)
-	lastWorkloadSetToProcess := make(map[string]string)
-	for workloadId, _ := range *scenario.Workloads {
-
+	for workloadId := range *scenario.Workloads {
 		//	 get all the sets from redis with the workloadId prefix
 		setNames, err := scenarioProcessor.traceStore.GetAllKeysWithPrefixAndRegex(workloadId+"_", `[0-9]+$`)
 		if err != nil {
@@ -245,7 +235,7 @@ func (scenarioProcessor *ScenarioProcessor) getWorkLoadSetsToProcess(scenario *m
 		workloadSetsToProcess = append(workloadSetsToProcess, setNames...)
 	}
 
-	return workloadSetsToProcess, joinValuesInMapToCSV(lastWorkloadSetToProcess)
+	return workloadSetsToProcess
 }
 
 func joinValuesInMapToCSV(data map[string]string) string {

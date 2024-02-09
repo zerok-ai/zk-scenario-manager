@@ -1,19 +1,28 @@
 package stores
 
 import (
-	"encoding/json"
+	"encoding/hex"
 	"fmt"
 	"github.com/redis/go-redis/v9"
-	zkCommon "github.com/zerok-ai/zk-utils-go/common"
+	"github.com/zerok-ai/zk-rawdata-reader/vzReader/utils"
+	zkUtilsCommonModel "github.com/zerok-ai/zk-utils-go/common"
+	"github.com/zerok-ai/zk-utils-go/ds"
 	zkLogger "github.com/zerok-ai/zk-utils-go/logs"
+	zkUtilsEnrichedSpan "github.com/zerok-ai/zk-utils-go/proto/enrichedSpan"
+	zkUtilsOtel "github.com/zerok-ai/zk-utils-go/proto/opentelemetry"
 	"github.com/zerok-ai/zk-utils-go/storage/redis/clientDBNames"
 	"github.com/zerok-ai/zk-utils-go/storage/redis/config"
+	otlpCommonV1 "go.opentelemetry.io/proto/otlp/common/v1"
+	otlpTraceV1 "go.opentelemetry.io/proto/otlp/trace/v1"
+	"net"
+	"regexp"
+	smUtils "scenario-manager/internal"
 	typedef "scenario-manager/internal"
-	tracePersistenceModel "scenario-manager/internal/tracePersistence/model"
+	otlpReceiverClient "scenario-manager/internal/client"
 )
 
-type TWorkLoadIdToSpan map[typedef.TWorkloadId]*tracePersistenceModel.Span
-type TWorkLoadIdToSpanArray map[typedef.TWorkloadId][]*tracePersistenceModel.Span
+type TWorkLoadIdToSpan map[typedef.TWorkloadId]*SpanFromOTel
+type TWorkLoadIdToSpanArray map[typedef.TWorkloadId][]*SpanFromOTel
 
 type OTelDataHandler struct {
 	redisClient *redis.Client
@@ -44,103 +53,20 @@ type OTelError struct {
 }
 
 type SpanFromOTel struct {
-	TraceID      typedef.TTraceid
-	SpanID       typedef.TSpanId
-	ParentSpanID typedef.TSpanId `json:"parent_span_id"`
-
-	SpanName   string `json:"span_name"`
-	Kind       string `json:"span_kind"`
-	Method     string `json:"method"`
-	OTelSchema string `json:"schema_version"`
-
-	StartTimeNS uint64 `json:"start_ns"`
-	LatencyNS   uint64 `json:"latency_ns"`
-
-	ServiceName string `json:"service_name"`
-	Source      string `json:"source"`
-	SourceIP    string `json:"source_ip"`
-	Destination string `json:"destination"`
-	DestIP      string `json:"destination_ip"`
-
-	Errors   []OTelError          `json:"errors"`
-	Protocol typedef.ProtocolType `json:"protocol"`
-
-	GroupByMap tracePersistenceModel.GroupByMap `json:"group_by"`
-
-	WorkloadIDList []string `json:"workload_id_list"`
-
-	// attributes
-	SpanAttributes     zkCommon.GenericMap `json:"attributes"`
-	ResourceAttributes zkCommon.GenericMap `json:"resource_attributes"`
-	ScopeAttributes    zkCommon.GenericMap `json:"scope_attributes"`
-
-	SpanForPersistence *tracePersistenceModel.Span
-	Children           []SpanFromOTel
-
-	// Protocol properties.
-	Route    string   `json:"route"`
-	Scheme   string   `json:"scheme"`
-	Path     string   `json:"path"`
-	Query    string   `json:"query"`
-	Status   *float64 `json:"status"`
-	Username string   `json:"username"`
-}
-
-func (spanFromOTel *SpanFromOTel) createAndPopulateSpanForPersistence() {
-
-	spanFromOTel.SpanForPersistence = &tracePersistenceModel.Span{
-		TraceID:           string(spanFromOTel.TraceID),
-		SpanID:            string(spanFromOTel.SpanID),
-		SpanName:          spanFromOTel.SpanName,
-		OTelSchemaVersion: spanFromOTel.OTelSchema,
-		Kind:              spanFromOTel.Kind,
-		ParentSpanID:      string(spanFromOTel.ParentSpanID),
-		StartTime:         EpochNanoSecondsToTime(spanFromOTel.StartTimeNS),
-		Latency:           spanFromOTel.LatencyNS,
-		WorkloadIDList:    spanFromOTel.WorkloadIDList,
-		GroupByMap:        spanFromOTel.GroupByMap,
-		Method:            spanFromOTel.Method,
-
-		ServiceName:   spanFromOTel.ServiceName,
-		Source:        spanFromOTel.Source,
-		SourceIP:      spanFromOTel.SourceIP,
-		Destination:   spanFromOTel.Destination,
-		DestinationIP: spanFromOTel.DestIP,
-		Protocol:      spanFromOTel.Protocol,
-
-		SpanAttributes:     spanFromOTel.SpanAttributes,
-		ResourceAttributes: spanFromOTel.ResourceAttributes,
-		ScopeAttributes:    spanFromOTel.ScopeAttributes,
-
-		Status:   spanFromOTel.Status,
-		Route:    spanFromOTel.Route,
-		Scheme:   spanFromOTel.Scheme,
-		Query:    spanFromOTel.Query,
-		Path:     spanFromOTel.Path,
-		Username: spanFromOTel.Username,
-	}
-}
-
-func (spanFromOTel *SpanFromOTel) populateErrorAttributeMap() []string {
-
-	errorIds := make([]string, 0)
-
-	spanForPersistence := spanFromOTel.SpanForPersistence
-	// set protocol for exception
-	if spanFromOTel.Errors != nil && len(spanFromOTel.Errors) > 0 {
-
-		for _, oTelError := range spanFromOTel.Errors {
-			errorIds = append(errorIds, oTelError.Hash)
-		}
-
-		bytesOTelErrors, err := json.Marshal(spanFromOTel.Errors)
-		if err != nil {
-			zkLogger.Error(LoggerTag, "populateErrorAttributeMap: err=", err)
-			return errorIds
-		}
-		spanForPersistence.Errors = string(bytesOTelErrors)
-	}
-	return errorIds
+	Span                   *otlpTraceV1.Span               `json:"span"`
+	SpanAttributes         zkUtilsCommonModel.GenericMap   `json:"span_attributes,omitempty"`
+	SpanEvents             []zkUtilsCommonModel.GenericMap `json:"span_events,omitempty"`
+	ResourceAttributesHash string                          `json:"resource_attributes_hash,omitempty"`
+	ScopeAttributesHash    string                          `json:"scope_attributes_hash,omitempty"`
+	WorkloadIDList         []string                        `json:"workload_id_list"`
+	GroupByMap             zkUtilsCommonModel.GroupByMap   `json:"group_by"`
+	ScopeAttributes        []*otlpCommonV1.KeyValue        `json:"scope_attributes,omitempty"`
+	ResourceAttributes     []*otlpCommonV1.KeyValue        `json:"resource_attributes,omitempty"`
+	TraceID                typedef.TTraceid                `json:"trace_id"`
+	IsRoot                 bool                            `json:"is_root"`
+	GroupByTitleSet        ds.Set[string]                  `json:"group_by_title_set"`
+	SpanID                 typedef.TSpanId                 `json:"span_id"`
+	ParentSpanID           typedef.TSpanId                 `json:"parent_span_id"`
 }
 
 type SpanAttributes interface {
@@ -156,7 +82,7 @@ type TraceFromOTel struct {
 // GetSpansForTracesFromDB retrieves the spans for the given traceIds from the database
 // Returns a map of traceId to TraceFromOTel
 // Returns a map of protocol to array of traces
-func (t OTelDataHandler) GetSpansForTracesFromDB(keys []typedef.TTraceid) (result map[typedef.TTraceid]*TraceFromOTel, oTelErrors []string, err error) {
+func (t OTelDataHandler) GetSpansForTracesFromDB(keys []typedef.TTraceid) (result map[typedef.TTraceid]*TraceFromOTel, err error) {
 
 	redisClient := t.redisClient
 
@@ -171,31 +97,133 @@ func (t OTelDataHandler) GetSpansForTracesFromDB(keys []typedef.TTraceid) (resul
 	// 3. Execute the transaction
 	_, err = pipe.Exec(ctx)
 	if err != nil {
-		fmt.Println("Error executing transaction:", err)
-		return nil, nil, err
+		zkLogger.Error(LogTag, "Error executing transaction:", err)
+		return nil, err
 	}
 
 	// 4. Process the results
-	result, oTelErrors = t.processResult(keys, hashResults)
+	data, err := t.fetchSpanData(keys, hashResults)
+	if err != nil {
+		return nil, err
+	}
 
-	return result, oTelErrors, nil
+	result = t.processResult(keys, data)
+
+	return result, nil
 }
 
-func (t OTelDataHandler) processResult(keys []typedef.TTraceid, hashResults []*redis.MapStringStringCmd) (result map[typedef.TTraceid]*TraceFromOTel, errors []string) {
+func (t OTelDataHandler) fetchSpanData(keys []typedef.TTraceid, hashResults []*redis.MapStringStringCmd) (map[string]map[string]*zkUtilsOtel.OtelEnrichedRawSpanForProto, error) {
+	// keys will have trace id's
 
-	result = make(map[typedef.TTraceid]*TraceFromOTel)
-	errors = make([]string, 0)
+	//hashResults will have the data for each trace id ie map[string]string traceId : map[spanId]NodeIpOfOtlpReceiver
 
-	for i, hashResult := range hashResults {
+	// map[string]string
+	//map[ip][traces]
+	//getting list of trace id's
+
+	//create map[nodeId][]traceId+'-'+spanId
+
+	//and make an api call to fetch all the data for each trace id in go routine
+
+	// result will map of traceId+'-'+spanId to TraceFromOTel
+
+	//and the convert above data to in below format
+
+	// combine all the data again
+	nodeIpMap := make(map[string][]string)
+	otlpNodeIpEncounterGivenTraceMap := make(map[string]map[string]bool)
+
+	for i, nodeIp := range hashResults {
 		traceId := keys[i]
-		trace, err1 := hashResult.Result()
+		traceSpanNodeIpMap, err1 := nodeIp.Result()
 
 		if err1 != nil {
-			zkLogger.Error(LoggerTag, "Error retrieving trace:", err1)
+			zkLogger.Error(LoggerTag, "Error retrieving trace's SpanId NodeIp Map from redis DB3 result set", err1)
+			continue
+		}
+		if len(traceSpanNodeIpMap) == 0 {
+			zkLogger.DebugF(LoggerTag, "No trace data found for traceId: %s in OTel store", traceId)
+			continue
+		}
+		for spanId, spanNodeIp := range traceSpanNodeIpMap {
+			//validate if the string is an ip address
+			if isValidNodeIP(spanNodeIp) == false {
+				zkLogger.Error(LoggerTag, fmt.Sprintf("Error while creating nodeIp-traceList map traceId: %s, spanId: %s because Invalid Node IP: %s", traceId, spanId, spanNodeIp), err1)
+				continue
+			}
+			//initialize the map for the given nodeIp if not present
+			if otlpNodeIpEncounterGivenTraceMap[spanNodeIp] == nil || len(otlpNodeIpEncounterGivenTraceMap[spanNodeIp]) == 0 {
+				otlpNodeIpEncounterGivenTraceMap[spanNodeIp] = make(map[string]bool)
+			}
+			//check if the nodeIp encountered for the given traceId
+			if otlpNodeIpEncounterGivenTraceMap[spanNodeIp][string(traceId)] == true {
+				continue
+			}
+			otlpNodeIpEncounterGivenTraceMap[spanNodeIp][string(traceId)] = true
+			//traceSpanId := string(traceId) + "-" + spanId
+			nodeIpMap[spanNodeIp] = append(nodeIpMap[spanNodeIp], string(traceId))
+		}
+	}
+
+	//make an api call to fetch all the data for each trace id in go routine
+	var otlpReceiverResultMap map[string]map[string]*zkUtilsOtel.OtelEnrichedRawSpanForProto
+	otlpReceiverResultMap, err := t.getSpanData(nodeIpMap)
+	if err != nil {
+		zkLogger.Error(LoggerTag, "Error retrieving data from OTLP receiver", err)
+		return otlpReceiverResultMap, err
+	}
+
+	return otlpReceiverResultMap, nil
+}
+
+func (t OTelDataHandler) getSpanData(nodeIpTraceIdMap map[string][]string) (map[string]map[string]*zkUtilsOtel.OtelEnrichedRawSpanForProto, error) {
+
+	otlpReceiverResultMap := make(map[string]map[string]*zkUtilsOtel.OtelEnrichedRawSpanForProto)
+
+	for nodeIp, traceIdSpanIdList := range nodeIpTraceIdMap {
+		//get data from receiver
+		traceDataFromOtlpReceiver, err := otlpReceiverClient.GetSpanData(nodeIp, traceIdSpanIdList, "8147") //TODO: get from config
+		if err != nil {
+			zkLogger.Error(LoggerTag, fmt.Sprintf("Error retrieving data from OTLP receiver with nodeIP: %s for traces : %s", nodeIp, traceIdSpanIdList), err)
 			continue
 		}
 
-		if len(trace) == 0 {
+		for _, response := range traceDataFromOtlpReceiver.ResponseList {
+			traceIdSpanId := response.Key
+			spanData := response.Value
+			traceId, spanId, err := smUtils.SplitTraceIdSpanId(traceIdSpanId)
+			if err != nil {
+				zkLogger.Error(LoggerTag, fmt.Sprintf("Error splitting traceIdSpanId: %s", traceIdSpanId), err)
+				continue
+			}
+			if len(otlpReceiverResultMap[traceId]) == 0 || otlpReceiverResultMap[traceId] == nil {
+				otlpReceiverResultMap[traceId] = make(map[string]*zkUtilsOtel.OtelEnrichedRawSpanForProto)
+				var spanDataMap map[string]*zkUtilsOtel.OtelEnrichedRawSpanForProto
+				spanDataMap = make(map[string]*zkUtilsOtel.OtelEnrichedRawSpanForProto)
+				spanDataMap[spanId] = spanData
+				otlpReceiverResultMap[traceId] = spanDataMap
+			} else {
+				otlpReceiverResultMap[traceId][spanId] = spanData
+			}
+		}
+	}
+
+	return otlpReceiverResultMap, nil
+}
+
+func (t OTelDataHandler) processResult(keys []typedef.TTraceid, traceSpanData map[string]map[string]*zkUtilsOtel.OtelEnrichedRawSpanForProto) (result map[typedef.TTraceid]*TraceFromOTel) {
+
+	result = make(map[typedef.TTraceid]*TraceFromOTel)
+	for i := range keys {
+		traceId := keys[i]
+		spanMap := traceSpanData[string(traceId)]
+
+		if spanMap == nil {
+			zkLogger.Error(LoggerTag, fmt.Sprintf("Error retrieving data from otlp receiver got null data for traceId : %s", traceId), nil)
+			continue
+		}
+
+		if len(spanMap) == 0 {
 			zkLogger.DebugF(LoggerTag, "No trace data found for traceId: %s in OTel store", traceId)
 			continue
 		}
@@ -203,19 +231,22 @@ func (t OTelDataHandler) processResult(keys []typedef.TTraceid, hashResults []*r
 		traceFromOTel := &TraceFromOTel{Spans: map[typedef.TSpanId]*SpanFromOTel{}}
 
 		// 4.1 Unmarshal the Spans
-		for spanId, spanData := range trace {
+		for spanId, protoSpan := range spanMap {
 			var sp SpanFromOTel
-			err2 := json.Unmarshal([]byte(spanData), &sp)
-			if err2 != nil {
-				zkLogger.Error(LoggerTag, "Error retrieving span:", err2)
-				continue
-			}
+			x := zkUtilsEnrichedSpan.GetEnrichedSpan(protoSpan)
+
+			sp.Span = x.Span
+			sp.SpanAttributes = x.SpanAttributes
+			sp.SpanEvents = x.SpanEvents
+			sp.ResourceAttributesHash = x.ResourceAttributesHash
+			sp.ScopeAttributesHash = x.ScopeAttributesHash
+			sp.WorkloadIDList = x.WorkloadIdList
+			sp.GroupByMap = x.GroupBy
 			sp.TraceID = traceId
 			sp.SpanID = typedef.TSpanId(spanId)
-			sp.createAndPopulateSpanForPersistence()
+			sp.ParentSpanID = typedef.TSpanId(hex.EncodeToString(sp.Span.ParentSpanId))
 
-			// handle exceptions
-			errors = append(errors, sp.populateErrorAttributeMap()...)
+			traceFromOTel.Spans[typedef.TSpanId(spanId)] = &sp
 
 			traceFromOTel.Spans[typedef.TSpanId(spanId)] = &sp
 		}
@@ -223,10 +254,8 @@ func (t OTelDataHandler) processResult(keys []typedef.TTraceid, hashResults []*r
 		// 4.2 set the parent-child relationships and find root span
 		var rootSpan *SpanFromOTel
 		for _, spanFromOTel := range traceFromOTel.Spans {
-			parentSpan, ok := traceFromOTel.Spans[spanFromOTel.ParentSpanID]
-			if ok {
-				parentSpan.Children = append(parentSpan.Children, *spanFromOTel)
-			} else {
+			_, ok := traceFromOTel.Spans[spanFromOTel.ParentSpanID]
+			if !ok && utils.IsEmpty(string(spanFromOTel.ParentSpanID)) {
 				rootSpan = spanFromOTel
 			}
 		}
@@ -236,11 +265,35 @@ func (t OTelDataHandler) processResult(keys []typedef.TTraceid, hashResults []*r
 			continue
 		}
 
-		rootSpan.SpanForPersistence.IsRoot = true
+		rootSpan.IsRoot = true
 		traceFromOTel.RootSpanID = rootSpan.SpanID
 
 		result[traceId] = traceFromOTel
 	}
 
-	return result, errors
+	return result
+}
+
+type GroupByValueItem struct {
+	WorkloadId string `json:"workload_id"`
+	Title      string `json:"title"`
+	Hash       string `json:"hash"`
+}
+
+type GroupByValues []*GroupByValueItem
+type ScenarioId string
+type GroupByMap map[ScenarioId]GroupByValues
+
+func isValidIP(ip string) bool {
+	parsedIP := net.ParseIP(ip)
+	return parsedIP != nil
+}
+
+// isNodeIP checks if the input string is a valid Node IP (IPv4 or IPv6)
+func isValidNodeIP(ip string) bool {
+	// Use a regular expression to check if the string is in the form of a valid IP
+	// This is just a basic example, you may need to adjust the regex based on your specific requirements
+	ipRegex := regexp.MustCompile(`^(\d{1,3}\.){3}\d{1,3}$|^([0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}$`)
+
+	return ipRegex.MatchString(ip) && isValidIP(ip)
 }

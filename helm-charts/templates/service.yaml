@@ -8,7 +8,6 @@ spec:
   type: ClusterIP
   selector:
     app: zk-scenario-manager
+    app.kubernetes.io/name: zk-scenario-manager
   ports:
-    - name: web
-      port: 80
-      targetPort: 80
+  {{- .Values.ports | toYaml | nindent 2 -}}

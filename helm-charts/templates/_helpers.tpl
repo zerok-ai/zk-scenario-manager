@@ -35,7 +35,8 @@ Common labels
 */}}
 {{- define "zk-scenario-manager.labels" -}}
 helm.sh/chart: {{ include "zk-scenario-manager.chart" . }}
-{{ include "zk-scenario-manager.selectorLabels" . }}
+app.kubernetes.io/name: {{ include "zk-scenario-manager.name" . }}
+app.kubernetes.io/instance: {{ .Release.Name }}
 {{- if .Chart.AppVersion }}
 app.kubernetes.io/version: {{ .Chart.AppVersion | quote }}
 {{- end }}
