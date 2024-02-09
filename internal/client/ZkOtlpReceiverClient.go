@@ -8,7 +8,7 @@ import (
 	"github.com/golang/protobuf/proto"
 	zkhttp "github.com/zerok-ai/zk-utils-go/http"
 	zklogger "github.com/zerok-ai/zk-utils-go/logs"
-	__ "github.com/zerok-ai/zk-utils-go/proto/opentelemetry"
+	badgerResponse "github.com/zerok-ai/zk-utils-go/proto/opentelemetry"
 	"io"
 	promMetrics "scenario-manager/internal/metrics"
 	"time"
@@ -16,9 +16,8 @@ import (
 
 const ZkOtlpReceiverLogTag = "ZkOtlpReceiverClient"
 
-func GetSpanData(nodeIp string, traceIdPrefixList []string, nodePort string) (*__.BadgerResponseList, error) {
+func GetSpanData(nodeIp string, traceIdPrefixList []string, nodePort string) (*badgerResponse.BadgerResponseList, error) {
 	url := "http://" + nodeIp + ":" + nodePort + "/get-trace-data" // Replace with your actual API endpoint
-	//zklogger.Info(ZkOtlpReceiverLogTag, fmt.Sprintf("Calling OTLP receiver with traceIdPrefixList: %s on url: %s", traceIdPrefixList, url))
 	requestBody, err := json.Marshal(traceIdPrefixList)
 	if err != nil {
 		zklogger.Error(fmt.Sprintf("Error marshaling request data: %s while calling OTLP receiver", traceIdPrefixList), err)
@@ -45,7 +44,6 @@ func GetSpanData(nodeIp string, traceIdPrefixList []string, nodePort string) (*_
 
 	promMetrics.TotalSpanDataFetchSuccess.WithLabelValues(nodeIp).Inc()
 
-	//zklogger.Debug(ZkOtlpReceiverLogTag, fmt.Sprintf("Received response from OTLP receiver: %s", response.Body))
 	// Read the response body
 	responseBody, err := io.ReadAll(response.Body)
 	if err != nil {
@@ -53,7 +51,7 @@ func GetSpanData(nodeIp string, traceIdPrefixList []string, nodePort string) (*_
 		return nil, err
 	}
 
-	var result __.BadgerResponseList
+	var result badgerResponse.BadgerResponseList
 	err = proto.Unmarshal(responseBody, &result)
 	if err != nil {
 		zklogger.Error(ZkOtlpReceiverLogTag, "Error while unmarshalling data from badger for given tracePrefixList", err)

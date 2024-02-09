@@ -165,7 +165,6 @@ func (t OTelDataHandler) fetchSpanData(keys []typedef.TTraceid, hashResults []*r
 		}
 	}
 
-	//zkLogger.Info(LoggerTag, fmt.Sprintf("NodeIp-traceList map in redis for all traces: %s", nodeIpMap))
 	//make an api call to fetch all the data for each trace id in go routine
 	var otlpReceiverResultMap map[string]map[string]*zkUtilsOtel.OtelEnrichedRawSpanForProto
 	otlpReceiverResultMap, err := t.getSpanData(nodeIpMap)
@@ -173,7 +172,6 @@ func (t OTelDataHandler) fetchSpanData(keys []typedef.TTraceid, hashResults []*r
 		zkLogger.Error(LoggerTag, "Error retrieving data from OTLP receiver", err)
 		return otlpReceiverResultMap, err
 	}
-	//zkLogger.Info("OTLP receiver final result map of traces and span data", fmt.Sprintf("%s", otlpReceiverResultMap))
 
 	return otlpReceiverResultMap, nil
 }
@@ -189,8 +187,6 @@ func (t OTelDataHandler) getSpanData(nodeIpTraceIdMap map[string][]string) (map[
 			zkLogger.Error(LoggerTag, fmt.Sprintf("Error retrieving data from OTLP receiver with nodeIP: %s for traces : %s", nodeIp, traceIdSpanIdList), err)
 			continue
 		}
-
-		//zkLogger.Info(LoggerTag, fmt.Sprintf("Data received from OTLP receiver for nodeIP: %s for traces : %s", nodeIp, traceIdSpanIdList))
 
 		for _, response := range traceDataFromOtlpReceiver.ResponseList {
 			traceIdSpanId := response.Key
@@ -217,7 +213,6 @@ func (t OTelDataHandler) getSpanData(nodeIpTraceIdMap map[string][]string) (map[
 
 func (t OTelDataHandler) processResult(keys []typedef.TTraceid, traceSpanData map[string]map[string]*zkUtilsOtel.OtelEnrichedRawSpanForProto) (result map[typedef.TTraceid]*TraceFromOTel) {
 
-	//zkLogger.Info(LoggerTag, fmt.Sprintf("Processing data received from OTLP receiver for traceList: %s", traceSpanData))
 	result = make(map[typedef.TTraceid]*TraceFromOTel)
 	for i := range keys {
 		traceId := keys[i]
@@ -252,16 +247,6 @@ func (t OTelDataHandler) processResult(keys []typedef.TTraceid, traceSpanData ma
 			sp.ParentSpanID = typedef.TSpanId(hex.EncodeToString(sp.Span.ParentSpanId))
 
 			traceFromOTel.Spans[typedef.TSpanId(spanId)] = &sp
-
-			//var sp SpanFromOTel
-			//err2 := json.Unmarshal([]byte(spanData), &sp)
-			//if err2 != nil {
-			//	zkLogger.Error(LoggerTag, "Error retrieving span:", err2)
-			//	continue
-			//}
-			//sp.TraceID = traceId
-			//sp.SpanID = typedef.TSpanId(spanId)
-			//sp.ParentSpanID = typedef.TSpanId(hex.EncodeToString(sp.Span.ParentSpanId))
 
 			traceFromOTel.Spans[typedef.TSpanId(spanId)] = &sp
 		}

@@ -133,12 +133,9 @@ func (scenarioProcessor *ScenarioProcessor) findScenarioToProcess() *model.Scena
 	return scenarioToProcess
 }
 
-func (scenarioProcessor *ScenarioProcessor) markProcessingEnd(scenario *model.Scenario) {
-	scenarioProcessor.FinishedProcessingScenario(scenario.Id, scenarioProcessor.id)
-}
-
-func (scenarioProcessor *ScenarioProcessor) FinishedProcessingScenario(scenarioId, scenarioProcessorId string) {
+func (scenarioProcessor *ScenarioProcessor) FinishedProcessingScenario(scenarioId string) {
 	// remove the Key for currently processing worker
+	scenarioProcessorId := scenarioProcessor.id
 	key := fmt.Sprintf("%s_%s", currentProcessingWorkerKeyPrefix, scenarioId)
 	result := scenarioProcessor.traceStore.GetValueForKey(key)
 	if result != scenarioProcessorId {
@@ -174,7 +171,7 @@ func (scenarioProcessor *ScenarioProcessor) processScenario(scenario *model.Scen
 		return
 	}
 	// mark the processing end for the current scenario
-	defer scenarioProcessor.markProcessingEnd(scenario)
+	defer scenarioProcessor.FinishedProcessingScenario(scenario.Id)
 
 	// get all the workload sets to process for the current scenario
 	namesOfAllSets := scenarioProcessor.getWorkLoadSetsToProcess(scenario)
