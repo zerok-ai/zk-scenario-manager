@@ -1,7 +1,6 @@
 package stores
 
 import (
-	"fmt"
 	"github.com/redis/go-redis/v9"
 	zkLogger "github.com/zerok-ai/zk-utils-go/logs"
 	clientDBNames "github.com/zerok-ai/zk-utils-go/storage/redis/clientDBNames"
@@ -59,7 +58,7 @@ func (t TraceStore) SetKeysIfDoNotExist(entries []RedisEntry) bool {
 	_, err := pipe.Exec(ctx)
 
 	if err != nil {
-		fmt.Printf("Error executing transaction: %v\n", err)
+		zkLogger.ErrorF(LogTag, "Error executing transaction: %v\n", err)
 		return false
 	}
 	return true
@@ -84,7 +83,7 @@ func (t TraceStore) DecrementKeys(entries []RedisDecrByEntry) bool {
 	_, err := pipe.Exec(ctx)
 
 	if err != nil {
-		fmt.Printf("Error executing transaction: %v\n", err)
+		zkLogger.ErrorF(LogTag, "Error executing transaction: %v\n", err)
 		return false
 	}
 	return true
@@ -109,7 +108,7 @@ func (t TraceStore) GetValuesForKeys(keyPattern string) (map[string]string, erro
 	// Execute the transaction
 	results, err := pipe.Exec(ctx)
 	if err != nil {
-		fmt.Printf("Error executing transaction: %v\n", err)
+		zkLogger.ErrorF(LogTag, "Error executing transaction: %v\n", err)
 		return nil, err
 	}
 
@@ -119,7 +118,7 @@ func (t TraceStore) GetValuesForKeys(keyPattern string) (map[string]string, erro
 		if result.Err() == nil {
 			key := iter.Val()
 			value := result.(*redis.StringCmd).Val()
-			fmt.Printf("Key: %s, Value: %s\n", key, value)
+			zkLogger.InfoF(LogTag, "Key: %s, Value: %s\n", key, value)
 			resultMap[key] = value
 		}
 	}
@@ -160,7 +159,7 @@ func (t TraceStore) GetAllKeysWithPrefixAndRegex(prefix, regex string) ([]string
 	}
 
 	if err := iter.Err(); err != nil {
-		fmt.Printf("Error scanning keys: %v\n", err)
+		zkLogger.ErrorF(LogTag, "Error scanning keys: %v\n", err)
 	}
 
 	return allKeys, nil
@@ -284,6 +283,10 @@ func (t TraceStore) DeleteSets(keys []string) error {
 func (t TraceStore) SetValueForKeyWithExpiry(key, value string, expiration time.Duration) error {
 	err := t.redisClient.Set(ctx, key, value, expiration).Err()
 	return err
+}
+
+func (t TraceStore) SetValueForKeyWithExpiryIfNotExist(key, value string, expiration time.Duration) (bool, error) {
+	return t.redisClient.SetNX(ctx, key, value, expiration).Result()
 }
 
 func (t TraceStore) GetValueForKey(key string) string {

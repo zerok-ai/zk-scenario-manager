@@ -8,16 +8,26 @@ import (
 	"fmt"
 	"github.com/adjust/rmq/v5"
 	"github.com/google/uuid"
+	zkUtilsCommonModel "github.com/zerok-ai/zk-utils-go/common"
 	"github.com/zerok-ai/zk-utils-go/ds"
 	zkLogger "github.com/zerok-ai/zk-utils-go/logs"
+	"github.com/zerok-ai/zk-utils-go/proto/enrichedSpan"
+	"github.com/zerok-ai/zk-utils-go/scenario"
 	"github.com/zerok-ai/zk-utils-go/scenario/model"
 	zkRedis "github.com/zerok-ai/zk-utils-go/storage/redis"
-	zkErrors "github.com/zerok-ai/zk-utils-go/zkerrors"
+	pb "go.opentelemetry.io/proto/otlp/collector/trace/v1"
+	otlpCommonV1 "go.opentelemetry.io/proto/otlp/common/v1"
+	v1 "go.opentelemetry.io/proto/otlp/resource/v1"
+	otlpTraceV1 "go.opentelemetry.io/proto/otlp/trace/v1"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
+	"log"
 	"scenario-manager/config"
 	typedef "scenario-manager/internal"
+	promMetrics "scenario-manager/internal/metrics"
 	"scenario-manager/internal/stores"
 	tracePersistenceModel "scenario-manager/internal/tracePersistence/model"
-	tracePersistence "scenario-manager/internal/tracePersistence/service"
+	"sync"
 	"time"
 )
 
@@ -28,61 +38,73 @@ const (
 
 var ctx = context.Background()
 
-type TMapOfSpanIdToSpan map[typedef.TSpanId]*tracePersistenceModel.Span
+type TMapOfSpanIdToSpan map[typedef.TSpanId]*stores.SpanFromOTel
 
 type QueueWorkerOTel struct {
-	id                      string
-	oTelStore               *stores.OTelDataHandler
-	errorCacheSaveHooks     ErrorCacheSaveHooks[string]
-	errorStoreReader        *zkRedis.LocalCacheKVStore[string]
-	traceStore              *stores.TraceStore
-	tracePersistenceService *tracePersistence.TracePersistenceService
-	oTelConsumer            *stores.TraceQueue
-	ebpfProducer            *stores.TraceQueue
+	id             string
+	oTelStore      *stores.OTelDataHandler
+	attributeStore *stores.AttributesStore
+	errorStore     *stores.ErrorStore
+	traceStore     *stores.TraceStore
+	oTelConsumer   *stores.TraceQueue
+	ebpfProducer   *stores.TraceQueue
+	scenarioStore  *zkRedis.VersionedStore[model.Scenario]
+	exporter       config.Exporter
 }
 
-func GetQueueWorkerOTel(cfg config.AppConfigs, tps *tracePersistence.TracePersistenceService) *QueueWorkerOTel {
+func GetQueueWorkerOTel(cfg config.AppConfigs, scenarioStore *zkRedis.VersionedStore[model.Scenario]) *QueueWorkerOTel {
 
-	// initialize worker
-	worker := QueueWorkerOTel{
-		id:                      "O" + uuid.New().String(),
-		oTelStore:               stores.GetOTelStore(cfg.Redis),
-		tracePersistenceService: tps,
-		traceStore:              stores.GetTraceStore(cfg.Redis, TTLForTransientSets),
+	var workers []*QueueWorkerOTel
+	numOtelQueueWorkers := cfg.OtelQueueWorkerCount
+	if numOtelQueueWorkers <= 0 {
+		numOtelQueueWorkers = 1
 	}
 
-	// oTel consumer and error store
+	for i := 0; i < numOtelQueueWorkers; i++ {
+		worker := QueueWorkerOTel{
+			id:             fmt.Sprintf("%d%s", i, uuid.New().String()),
+			oTelStore:      stores.GetOTelStore(cfg.Redis),
+			traceStore:     stores.GetTraceStore(cfg.Redis, TTLForTransientSets),
+			attributeStore: stores.GetAttributesStore(cfg.Redis),
+			errorStore:     stores.GetErrorStore(cfg.Redis),
+			scenarioStore:  scenarioStore,
+			exporter:       cfg.Exporter,
+		}
+		workers = append(workers, &worker)
+	}
+
+	// Otel consumer and error store
 	var err error
-	worker.oTelConsumer, err = stores.GetTraceConsumer(cfg.Redis, []rmq.Consumer{&worker}, OTelQueue)
+	workerInterfaces := make([]rmq.Consumer, len(workers))
+	for i, worker := range workers {
+		workerInterfaces[i] = worker
+	}
+
+	firstWorker := workers[0]
+
+	firstWorker.oTelConsumer, err = stores.GetTraceConsumer(cfg.Redis, workerInterfaces, OTelQueue)
 	if err != nil {
 		return nil
 	}
-	worker.errorCacheSaveHooks = ErrorCacheSaveHooks[string]{oTelMessageConsumer: &worker}
-	worker.errorStoreReader = GetLRUCacheStore(cfg.Redis, &worker.errorCacheSaveHooks, ctx)
 
-	// ebpf producer
-	worker.ebpfProducer, err = stores.GetTraceProducer(cfg.Redis, ebpfQueue)
-	if err != nil {
-		return nil
-	}
-
-	return &worker
+	return firstWorker
 }
 
 func (worker *QueueWorkerOTel) Close() {
 	worker.oTelStore.Close()
-	worker.errorStoreReader.Close()
+	worker.attributeStore.Close()
+	worker.errorStore.Close()
 	worker.traceStore.Close()
 	worker.oTelConsumer.Close()
-	worker.ebpfProducer.Close()
 }
 
 func (worker *QueueWorkerOTel) handleMessage(oTelMessage OTELTraceMessage) {
 
-	zkLogger.DebugF(LoggerTagOTel, "oTelWorker %v got a message", worker.id)
+	//zkLogger.Error(LoggerTagOTel, "11111111 oTelWorker got a message", oTelMessage)
+	//zkLogger.DebugF(LoggerTagOTel, "oTelWorker %v got a message", worker.id)
 
 	// 1. Collect span relation and span data for the traceIDs
-	tracesFromOTelStore := worker.getDataFromOTelStore(oTelMessage.Traces)
+	tracesFromOTelStore, resourceHashToInfoMap, scopeHashToInfoMap := worker.getDataFromOTelStore(oTelMessage.Traces)
 	if tracesFromOTelStore == nil || len(tracesFromOTelStore) == 0 {
 		return
 	}
@@ -94,92 +116,249 @@ func (worker *QueueWorkerOTel) handleMessage(oTelMessage OTELTraceMessage) {
 		return
 	}
 
+	//total traces received for scenario to process metric
+	promMetrics.TotalTracesReceivedForScenarioToProcess.WithLabelValues(oTelMessage.Scenario.Title).Add(float64(len(incidents)))
+
+	//TODO :: rate limit logic should be written before fetching the span data
 	// 3. rate limit incidents
-	newIncidentList := worker.rateLimitIncidents(incidents, oTelMessage.Scenario)
+	//newIncidentList := worker.rateLimitIncidents(incidents, oTelMessage.Scenario)
+	newIncidentList := incidents
+	totalTracesRateLimited := len(incidents) - len(newIncidentList)
+	promMetrics.RateLimitedTotalIncidentsPerScenario.WithLabelValues(oTelMessage.Scenario.Title).Add(float64(totalTracesRateLimited))
 
 	if len(newIncidentList) == 0 {
 		zkLogger.InfoF(LoggerTagOTel, "rate limited %d incidents. nothing to save", len(incidents))
 		return
 	}
 
-	// 4. save incidents in persistent storage
-	zkLogger.InfoF(LoggerTagOTel, "Sending incidents for persistence, incident count: %d", len(newIncidentList))
-	saveError := (*worker.tracePersistenceService).SaveIncidents(newIncidentList)
-	if saveError != nil {
-		zkLogger.Error(LoggerTagOTel, "Error saving incidents", saveError)
-	}
-
-	// 5. publish traces to ebpf queue
-	tracesFromOTel := make([]TraceFromOTel, 0)
 	for _, incident := range newIncidentList {
+		if len(tracesFromOTelStore[typedef.TTraceid(incident.Incident.TraceId)].Spans) != len(incident.Incident.Spans) {
+			promMetrics.SpanCountMismatchTotal.WithLabelValues(oTelMessage.Scenario.Title, incident.Incident.TraceId).Inc()
+			zkLogger.ErrorF(LoggerTagOTel, "span count mismatch for incident %v", incident)
+			zkLogger.ErrorF(LoggerTagOTel, "OtelCount: %d, newIncidentCount: %d", len(tracesFromOTelStore[typedef.TTraceid(incident.Incident.TraceId)].Spans), len(incident.Incident.Spans))
+		}
+	}
 
-		trace := TraceFromOTel{
-			TraceId: incident.Incident.TraceId,
+	//for _, incident := range newIncidentList {
+	//	isRootSpanPresent := false
+	//	for _, span := range incident.Incident.Spans {
+	//		if span.IsRoot {
+	//			isRootSpanPresent = true
+	//			break
+	//		}
+	//	}
+	//	if !isRootSpanPresent {
+	//		zkLogger.ErrorF(LoggerTagOTel, "no root span found for incident %v", incident)
+	//	}
+	//}
+
+	// 3.1 move scenario id to root span
+	for incidentIndex := 0; incidentIndex < len(newIncidentList); incidentIndex++ {
+		incident := &newIncidentList[incidentIndex]
+		var rootSpan *stores.SpanFromOTel
+		allWorkloadIdsInTrace := make(ds.Set[string])
+		allGroupByTitleSet := make(ds.Set[string])
+		for spanIndex := 0; spanIndex < len(incident.Incident.Spans); spanIndex++ {
+			span := incident.Incident.Spans[spanIndex]
+			if span.WorkloadIDList != nil && len(span.WorkloadIDList) != 0 {
+				workloadIdSet := make(ds.Set[string])
+				for _, workloadId := range span.WorkloadIDList {
+					workloadIdSet.Add(workloadId)
+				}
+				span.SpanAttributes["workload_id_list"] = workloadIdSet
+				allWorkloadIdsInTrace = allWorkloadIdsInTrace.Union(workloadIdSet)
+				allGroupByTitleSet = allGroupByTitleSet.Union(span.GroupByTitleSet)
+			}
+
+			if span.IsRoot {
+				rootSpan = span
+			}
 		}
 
-		rootSpan := getRootSpanFromIncident(incident.Incident)
-		if rootSpan != nil {
-			trace.RootSpanId = rootSpan.SpanID
-			trace.RootSpanParent = rootSpan.ParentSpanID
-			trace.RootSpanKind = rootSpan.Kind
+		if rootSpan == nil {
+			promMetrics.RootSpanNotFoundTotal.WithLabelValues(oTelMessage.Scenario.Title, incident.Incident.TraceId).Inc()
+			zkLogger.ErrorF(LoggerTagOTel, "no root span found for incident %v", incident)
+			continue
 		}
 
-		tracesFromOTel = append(tracesFromOTel, trace)
+		scenarios := worker.scenarioStore.GetAllValues()
+		probesName, err := scenario.FindMatchingScenarios(allWorkloadIdsInTrace.GetAll(), scenarios)
+		if err != nil {
+			zkLogger.Error(LoggerTagOTel, "error in getting scenario ids for workload ids", err)
+		} else {
+			rootSpan.SpanAttributes["probes"] = probesName
+		}
+
+		rootSpan.SpanAttributes["GroupByTitleSet"] = allGroupByTitleSet
 	}
 
-	if len(tracesFromOTel) == 0 {
-		zkLogger.Debug(LoggerTagOTel, "nothing to publish to ebpf queue")
-		return
+	// 4. save attributes details
+	spanBuffer := make([]*stores.SpanFromOTel, 0)
+	for _, incident := range newIncidentList {
+		for _, span := range incident.Incident.Spans {
+			span.Span.Attributes = enrichedSpan.ConvertMapToKVList(span.SpanAttributes).KeyValueList
+			spanBuffer = append(spanBuffer, span)
+		}
 	}
+	resourceBuffer := ConvertOtelSpanToResourceSpan(spanBuffer, resourceHashToInfoMap, scopeHashToInfoMap)
 
-	traceMessage := EBPFTraceMessage{
-		Scenario:   oTelMessage.Scenario,
-		ProducerId: worker.id,
-		Traces:     tracesFromOTel,
+	var wg sync.WaitGroup
+	batchSize := 20
+	bufferLen := len(resourceBuffer)
+	totalSpans := 0
+	// count total spans in the resourceBuffer
+	for _, resourceSpan := range resourceBuffer {
+		for _, scopeSpan := range resourceSpan.ScopeSpans {
+			totalSpans += len(scopeSpan.Spans)
+		}
 	}
-	err := worker.ebpfProducer.PublishTracesToQueue(traceMessage)
+	promMetrics.TotalSpansSentToCollector.Add(float64(totalSpans))
+
+	for i := 0; i < bufferLen; i += batchSize {
+		wg.Add(1)
+
+		go func(startIndex, endIndex int) {
+			defer wg.Done()
+			sendDataToCollector(resourceBuffer[startIndex:endIndex], worker, oTelMessage)
+		}(i, getMin(i+batchSize, bufferLen))
+	}
+	wg.Wait()
+
+	//total traces processed by scenario manager for scenario
+	promMetrics.TotalTracesProcessedForScenario.WithLabelValues(oTelMessage.Scenario.Title).Add(float64(len(newIncidentList)))
+	//total spans processed by scenario manager for scenario
+	promMetrics.TotalSpansProcessedForScenario.WithLabelValues(oTelMessage.Scenario.Title).Add(float64(len(spanBuffer)))
+}
+
+// TODO :: should move to utils repo
+func getMin(a int, b int) int {
+	if a < b {
+		return a
+	}
+	return b
+}
+
+func sendDataToCollector(resourceSpans []*otlpTraceV1.ResourceSpans, worker *QueueWorkerOTel, oTelMessage OTELTraceMessage) {
+	var tracesData pb.ExportTraceServiceRequest
+	tracesData.ResourceSpans = resourceSpans
+	fmt.Println("Testing")
+	// Set up a connection to the server
+	url := fmt.Sprintf("%s:%s", worker.exporter.Host, worker.exporter.Port)
+	zkLogger.Info(LoggerTagOTel, "Connecting to ", url)
+	conn, err := grpc.Dial(url, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	//conn, err := grpc.Dial("localhost:4319", grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
-		zkLogger.Error(LoggerTagOTel, "Error publishing traces to raw data queue", err)
+		log.Fatalf("did not connect: %v", err)
 	}
 
+	defer conn.Close()
+	c := pb.NewTraceServiceClient(conn)
+
+	// Contact the server and print out its response.
+	response, err := c.Export(context.Background(), &tracesData)
+	if err != nil {
+		//total call to export data failed for scenario
+		promMetrics.TotalExportDataFailedForScenario.WithLabelValues(oTelMessage.Scenario.Title).Inc()
+		//log.Fatalf("could not send trace data: %v", err)
+		zkLogger.Error(LoggerTagOTel, "could not send trace data to otel from sm", err)
+	}
+	log.Printf("Response: %v", response)
 }
 
-func getRootSpanFromIncident(incident tracePersistenceModel.Incident) *tracePersistenceModel.Span {
-	spans := incident.Spans
+func ConvertOtelSpanToResourceSpan(spans []*stores.SpanFromOTel, resourceHashToInfoMap, scopeHashToInfoMap map[string]map[string]interface{}) []*otlpTraceV1.ResourceSpans {
+
+	resourceMap := make(map[string]map[string][]stores.SpanFromOTel)
+
+	// make a map from resourceHash to scopeHash to spans
 	for _, span := range spans {
-		if span.IsRoot {
-			return span
+		if scopeMap, resourceHashFound := resourceMap[span.ResourceAttributesHash]; resourceHashFound {
+			spanList := make([]stores.SpanFromOTel, 0)
+			if s, scopeHashFound := scopeMap[span.ScopeAttributesHash]; scopeHashFound {
+				spanList = s
+			} else {
+				spanList = make([]stores.SpanFromOTel, 0)
+			}
+			scopeMap[span.ScopeAttributesHash] = append(spanList, *span)
+		} else {
+			spanList := make([]stores.SpanFromOTel, 0)
+			resourceMap[span.ResourceAttributesHash] = map[string][]stores.SpanFromOTel{
+				span.ScopeAttributesHash: append(spanList, *span),
+			}
 		}
 	}
-	return nil
+
+	resourceSpans := make([]*otlpTraceV1.ResourceSpans, 0)
+
+	resourceHashToAttr := make(map[string][]*otlpCommonV1.KeyValue)
+	scopeHashToAttr := make(map[string][]*otlpCommonV1.KeyValue)
+
+	for key, value := range resourceHashToInfoMap {
+		if value["attributes_map"] == nil {
+			continue
+		}
+		resourceHashToAttr[key] = enrichedSpan.ConvertMapToKVList(value["attributes_map"].(map[string]interface{})).KeyValueList
+	}
+
+	for key, value := range scopeHashToInfoMap {
+		if value["attributes_map"] == nil {
+			continue
+		}
+		scopeHashToAttr[key] = enrichedSpan.ConvertMapToKVList(value["attributes_map"].(map[string]interface{})).KeyValueList
+	}
+
+	for resourceHash, scopeMap := range resourceMap {
+		scopeSpansList := make([]*otlpTraceV1.ScopeSpans, 0)
+		if resourceHashToInfoMap[resourceHash]["schema_url"] == nil {
+			zkLogger.ErrorF(LoggerTagOTel, "schema_url not found for resourceHash %s", resourceHash)
+		}
+
+		resource := otlpTraceV1.ResourceSpans{
+			Resource: &v1.Resource{
+				Attributes: resourceHashToAttr[resourceHash],
+			},
+			SchemaUrl: resourceHashToInfoMap[resourceHash]["schema_url"].(string),
+		}
+		for scopeHash, spanList := range scopeMap {
+			scopeSpans := otlpTraceV1.ScopeSpans{
+				Scope: &otlpCommonV1.InstrumentationScope{
+					Attributes: scopeHashToAttr[scopeHash],
+					//TODO :: revert below line
+					//Name:       scopeHashToInfoMap[scopeHash]["name"].(string),
+					//Version:    scopeHashToInfoMap[scopeHash]["version"].(string),
+					Name:    "scopeHashToInfoMap[scopeHash][name].(string)",
+					Version: "scopeHashToInfoMap[scopeHash][version].(string)",
+				},
+				//SchemaUrl: scopeHashToInfoMap[scopeHash]["schema_url"].(string),
+				SchemaUrl: "scopeHashToInfoMap[scopeHash][schema_url].(string)",
+			}
+			scopeSpans.Spans = make([]*otlpTraceV1.Span, 0)
+			for _, span := range spanList {
+				scopeSpans.Spans = append(scopeSpans.Spans, span.Span)
+			}
+			scopeSpansList = append(scopeSpansList, &scopeSpans)
+		}
+		resource.ScopeSpans = scopeSpansList
+		resourceSpans = append(resourceSpans, &resource)
+	}
+
+	return resourceSpans
 }
 
-func (worker *QueueWorkerOTel) getDataFromOTelStore(traceIds []typedef.TTraceid) map[typedef.TTraceid]*stores.TraceFromOTel {
-	tracesFromOTelStore, oTelErrors, err := worker.oTelStore.GetSpansForTracesFromDB(traceIds)
+func (worker *QueueWorkerOTel) getDataFromOTelStore(traceIds []typedef.TTraceid) (map[typedef.TTraceid]*stores.TraceFromOTel, map[string]map[string]interface{}, map[string]map[string]interface{}) {
+	tracesFromOTelStore, err := worker.oTelStore.GetSpansForTracesFromDB(traceIds)
 	if err != nil {
 		zkLogger.Error(LoggerTagOTel, "error in getting data from OTel zkRedis", err)
 	}
 
-	if oTelErrors != nil && len(oTelErrors) > 0 {
-		errorData := make([]tracePersistenceModel.ErrorData, 0)
-		for _, errorID := range oTelErrors {
-			expStrPtr, isFromCache := worker.errorStoreReader.Get(errorID)
-			if !isFromCache {
-				expData := tracePersistenceModel.ErrorData{Id: errorID, Data: *expStrPtr}
-				errorData = append(errorData, expData)
-			}
-		}
-		if len(errorData) > 0 {
-			(*worker.tracePersistenceService).SaveErrors(errorData)
-		}
-	}
+	resourceHashToInfoMap, scopeHashToInfoMap := worker.attributeStore.GetResourceScopeInfoForHashes(tracesFromOTelStore)
+	tracesFromOTelStore = worker.errorStore.GetExceptionDataForHashes(tracesFromOTelStore)
 
-	return tracesFromOTelStore
+	return tracesFromOTelStore, resourceHashToInfoMap, scopeHashToInfoMap
 }
 
 func (worker *QueueWorkerOTel) buildIncidentsForPersistence(scenario *model.Scenario, tracesFromOTel map[typedef.TTraceid]*stores.TraceFromOTel) []tracePersistenceModel.IncidentWithIssues {
 
-	zkLogger.DebugF(LoggerTagOTel, "Building scenario for persistence, trace_count=%d", len(tracesFromOTel))
+	//zkLogger.DebugF(LoggerTagOTel, "Building scenario for persistence, trace_count=%d", len(tracesFromOTel))
 
 	// a. iterate through the trace data from OTelDataHandler and build the structure which can be saved in DB
 	incidentsWithIssues := make([]tracePersistenceModel.IncidentWithIssues, 0)
@@ -187,7 +366,7 @@ func (worker *QueueWorkerOTel) buildIncidentsForPersistence(scenario *model.Scen
 	for traceId, traceFromOTel := range tracesFromOTel {
 		spanMapOfPersistentSpans := make(TMapOfSpanIdToSpan)
 		for _, spanFromOTel := range traceFromOTel.Spans {
-			spanMapOfPersistentSpans[spanFromOTel.SpanID] = spanFromOTel.SpanForPersistence
+			spanMapOfPersistentSpans[spanFromOTel.SpanID] = spanFromOTel
 		}
 		traceTreeForPersistence[traceId] = &spanMapOfPersistentSpans
 
@@ -201,7 +380,7 @@ func (worker *QueueWorkerOTel) buildIncidentsForPersistence(scenario *model.Scen
 
 func (worker *QueueWorkerOTel) evaluateIncidents(traceId typedef.TTraceid, scenario *model.Scenario, spansOfTrace TMapOfSpanIdToSpan) tracePersistenceModel.IncidentWithIssues {
 
-	spans := make([]*tracePersistenceModel.Span, 0)
+	spans := make([]*stores.SpanFromOTel, 0)
 	for key := range spansOfTrace {
 		spans = append(spans, spansOfTrace[key])
 	}
@@ -289,7 +468,7 @@ func getListOfIssuesForScenario(scenario *model.Scenario, spanMap TMapOfSpanIdTo
 		for _, workloadId := range workloadIdList {
 			spans, ok := workloadIdToSpanArrayMap[typedef.TWorkloadId(workloadId)]
 			if !ok {
-				spans = make([]*tracePersistenceModel.Span, 0)
+				spans = make([]*stores.SpanFromOTel, 0)
 			}
 			workloadIdToSpanArrayMap[typedef.TWorkloadId(workloadId)] = append(spans, span)
 		}
@@ -297,7 +476,7 @@ func getListOfIssuesForScenario(scenario *model.Scenario, spanMap TMapOfSpanIdTo
 
 	// 3. do a cartesian product of all the elements in workloadIdSet. This gives us all the possible combinations of
 	//	workloads-span groups that can be give rise to a unique issues
-	issueSource := make([]map[typedef.TWorkloadId]*tracePersistenceModel.Span, 0)
+	issueSource := make([]map[typedef.TWorkloadId]*stores.SpanFromOTel, 0)
 	for workloadId := range workloadIdListInGroup {
 		arrSpans := workloadIdToSpanArrayMap[workloadId]
 		issueSource = getCartesianProductOfSpans(issueSource, arrSpans, workloadId)
@@ -322,7 +501,7 @@ func getListOfIssuesForScenario(scenario *model.Scenario, spanMap TMapOfSpanIdTo
 			}
 
 			// 4.a.3. get the group_by object from span for the current scenario
-			groupByForScenario, ok := span.GroupByMap[tracePersistenceModel.ScenarioId(scenario.Id)]
+			groupByForScenario, ok := span.GroupByMap[zkUtilsCommonModel.ScenarioId(scenario.Id)]
 			if !ok {
 				//not sure why would this happen
 				continue
@@ -357,21 +536,10 @@ func getListOfIssuesForScenario(scenario *model.Scenario, spanMap TMapOfSpanIdTo
 			if !ok {
 				continue
 			}
-			if span.IssueHashList == nil {
-				span.IssueHashList = make([]string, 0)
+			if span.GroupByTitleSet == nil {
+				span.GroupByTitleSet = make(ds.Set[string])
 			}
-
-			// iterate over span.IssueHashList and check for the existence of duplicate issueHash. If not present, add.
-			isIssueHashPresent := false
-			for _, issueHash := range span.IssueHashList {
-				if issueHash == hash {
-					isIssueHashPresent = true
-					break
-				}
-			}
-			if !isIssueHashPresent {
-				span.IssueHashList = append(span.IssueHashList, hash)
-			}
+			span.GroupByTitleSet.Add(title)
 		}
 	}
 
@@ -384,18 +552,18 @@ func getListOfIssuesForScenario(scenario *model.Scenario, spanMap TMapOfSpanIdTo
 	return issues
 }
 
-func getCartesianProductOfSpans(previousResult []map[typedef.TWorkloadId]*tracePersistenceModel.Span, multiplier []*tracePersistenceModel.Span, workload typedef.TWorkloadId) []map[typedef.TWorkloadId]*tracePersistenceModel.Span {
+func getCartesianProductOfSpans(previousResult []map[typedef.TWorkloadId]*stores.SpanFromOTel, multiplier []*stores.SpanFromOTel, workload typedef.TWorkloadId) []map[typedef.TWorkloadId]*stores.SpanFromOTel {
 
 	if len(multiplier) == 0 {
 		return previousResult
 	}
 
 	if len(previousResult) == 0 {
-		previousResult = append(previousResult, make(map[typedef.TWorkloadId]*tracePersistenceModel.Span))
+		previousResult = append(previousResult, make(map[typedef.TWorkloadId]*stores.SpanFromOTel))
 	}
 
 	//e.g. [w2:s1,w1:s2] x w3:[s3,s4] = [w2:s1,w1:s2,w3:s3] [w2:s1,w1:s2,w3:s4]
-	result := make([]map[typedef.TWorkloadId]*tracePersistenceModel.Span, 0)
+	result := make([]map[typedef.TWorkloadId]*stores.SpanFromOTel, 0)
 	for _, s1 := range previousResult {
 		for _, s2 := range multiplier {
 			newMap := s1
@@ -404,20 +572,6 @@ func getCartesianProductOfSpans(previousResult []map[typedef.TWorkloadId]*traceP
 		}
 	}
 	return result
-}
-
-type ErrorCacheSaveHooks[T any] struct {
-	oTelMessageConsumer *QueueWorkerOTel
-}
-
-func (errorCacheSaveHooks *ErrorCacheSaveHooks[T]) PreCacheSaveHookAsync(key string, value *T) *zkErrors.ZkError {
-
-	if value != nil {
-		strToSave := fmt.Sprintf("%v", *value)
-		return (*errorCacheSaveHooks.oTelMessageConsumer.tracePersistenceService).SaveErrors([]tracePersistenceModel.ErrorData{{Id: key, Data: strToSave}})
-	}
-
-	return nil
 }
 
 func (worker *QueueWorkerOTel) Consume(delivery rmq.Delivery) {
@@ -431,12 +585,16 @@ func (worker *QueueWorkerOTel) Consume(delivery rmq.Delivery) {
 	}
 
 	// perform task
-	zkLogger.DebugF(LoggerTagOTel, "got message %v", oTelMessage)
+	//zkLogger.DebugF(LoggerTagOTel, "got message %v", oTelMessage)
 
 	startTime := time.Now()
 	worker.handleMessage(oTelMessage)
 	endTime := time.Now()
-	zkLogger.Info(LoggerTagOTel, "Time taken to to process oTel message ", endTime.Sub(startTime))
+	zkLogger.InfoF(LoggerTagOTel, "Time taken to to process %s scenario oTel message with trace count: %d  is: %s  ", oTelMessage.Scenario.Title, len(oTelMessage.Traces), endTime.Sub(startTime))
+	timeTakenForNTraces := endTime.Sub(startTime).Seconds()
+	// Calculate and publish the average time taken per trace
+	averageTimePerTrace := timeTakenForNTraces / float64(len(oTelMessage.Traces))
+	promMetrics.TimeTakenByOtelWorkerToProcessATrace.WithLabelValues(oTelMessage.Scenario.Title).Observe(averageTimePerTrace)
 
 	if err := delivery.Ack(); err != nil {
 		// handle ack error

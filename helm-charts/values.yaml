@@ -3,7 +3,7 @@
 # Declare variables to be passed into your templates.
 
 global:
-  dockerBase: "us-west1-docker.pkg.dev/zerok-dev/zk-client"
+  dockerBase: "zerokai"
 
 obfuscate: false
 
@@ -13,6 +13,10 @@ serviceConfigs:
   logs:
     color: true
     level: DEBUG
+
+workLoadTtl: 900
+workLoadTickerDuration: 60
+otelQueueWorkerCount: 4
 
 redis:
   host: redis.zk-client.svc.cluster.local
@@ -26,26 +30,14 @@ redis:
     pod_details: 7
     error_details: 8
 
-postgres:
-  host: "postgres.zk-client.svc.cluster.local"
-  port: 5432
-  password: ""
-  database: "pl"
-  user: "postgres"
-
 zkScenarioManager:
   resources:
     limits:
-      cpu: 512m
-      memory: 128Mi
+      cpu: 1
+      memory: 1024Mi
     requests:
-      cpu: 256m
-      memory: 64Mi
-
-obfuscatorImage:
-  repo: "zk-obfuscator"
-  tag: "0.1.0-alpha"
-  imagePullPolicy: IfNotPresent
+      cpu: 512m
+      memory: 512Mi
 
 image:
   repo: "zk-scenario-manager"
@@ -54,10 +46,6 @@ image:
   migrationRestartPolicy: Never
   migrationRepo: "zk-scenario-manager-migration"
   migrationTag: "latest"
-
-initImage:
-  repo: "us-west1-docker.pkg.dev/black-scope-358204/zk-client/prod/curl"
-  tag: latest
 
 serviceAccount:
   # Specifies whether a service account should be created
@@ -125,3 +113,9 @@ nodeSelector: {}
 tolerations: []
 
 affinity: {}
+
+ports:
+- port: 80
+  protocol: TCP
+  targetPort: 80
+

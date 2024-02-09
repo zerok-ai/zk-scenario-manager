@@ -21,9 +21,11 @@ const (
 	timeRangeForRawDataQuery = "-15m" // -5m, -10m, -1h etc
 
 	/*
-		Workload id sets (these are created by OTLP receiver)
+		Workload id sets are created by OTLP receiver
 		-----------
 		<workloadId>_<number>
+		Ex. cc13b872-b3d9-52ed-aa64-210114c0cbef_1
+		-----------
 
 		OTel
 		-----------

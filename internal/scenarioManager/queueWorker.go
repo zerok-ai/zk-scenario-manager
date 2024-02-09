@@ -6,9 +6,7 @@ import (
 )
 
 const (
-	OTelQueue        = "oTel"
-	ebpfQueue        = "eBPF"
-	ebpfConsumerName = "eBPF"
+	OTelQueue = "oTel"
 )
 
 type OTELTraceMessage struct {

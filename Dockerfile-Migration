@@ -1,3 +1,0 @@
-FROM migrate/migrate
-WORKDIR /zk
-COPY db/migrations ./migrations

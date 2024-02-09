@@ -11,42 +11,26 @@ data:
         executor_attr: {{ .Values.redis.dbs.executor_attr }}
         pod_details: {{ .Values.redis.dbs.pod_details }}
         error_details: {{ .Values.redis.dbs.error_details }}
-    postgres:
-      host: "{{ .Values.postgres.host }}"
-      port: {{ .Values.postgres.port }}
-      user: "{{ .Values.postgres.user }}"
-      password: ""
-      dbname: "{{ .Values.postgres.database }}"
-      max_connections: 5
-      max_idle_connections: 5
-      connection_max_lifetime_in_minutes: 10
+        resource_and_scope_attr: 5
     server:
       host: 0.0.0.0
       port: 80
     scenarioConfig:
-      ebpfLocalWorkers: 2
       processingIntervalInSeconds: 10
-      ebpfSchemaVersion: "0.1.1-alpha"
     logs:
       color: {{ .Values.serviceConfigs.logs.color }}
       level: {{ .Values.serviceConfigs.logs.level }}
+    workLoad:
+      ttl: {{ .Values.workLoadTtl }}
+      tickerDuration: {{ .Values.workLoadTickerDuration }}
+    exporter:
+      host: 0.0.0.0
+      port: 4319
+    otelQueueWorkerCount: {{ .Values.otelQueueWorkerCount }}
 kind: ConfigMap
 metadata:
   name: {{ include "zk-scenario-manager.fullname" . }}
   labels:
     app: {{ include "zk-scenario-manager.fullname" . }}
     name: {{ include "zk-scenario-manager.fullname" . }}
-  namespace: zk-client
----
-apiVersion: v1
-data:
-  config.yaml: |+
-    redis_obfuscation_rules_db: 10
-    redis_obfuscation_rules_sync_interval: 30
-    http_port: 9103
-    logs_color: true
-    logs_level: DEBUG
-kind: ConfigMap
-metadata:
-  name: zk-obfuscator
   namespace: zk-client

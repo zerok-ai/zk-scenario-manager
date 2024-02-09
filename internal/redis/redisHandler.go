@@ -83,6 +83,10 @@ func (h *RedisHandler) HGetAll(key string) (map[string]string, error) {
 	return h.RedisClient.HGetAll(h.ctx, key).Result()
 }
 
+func (h *RedisHandler) Eval(script string, keys []string, args ...interface{}) *redis.Cmd {
+	return h.RedisClient.Eval(h.ctx, script, keys, args...)
+}
+
 func (h *RedisHandler) HMSet(key string, value interface{}) error {
 	statusCmd := h.RedisClient.HMSet(h.ctx, key, value)
 	return statusCmd.Err()
@@ -112,6 +116,10 @@ func (h *RedisHandler) GetKeysByPattern(pattern string) ([]string, error) {
 
 func (h *RedisHandler) SetWithTTL(key string, value interface{}, ttl time.Duration) error {
 	return h.RedisClient.Set(h.ctx, key, value, ttl).Err()
+}
+
+func (h *RedisHandler) SetNXWithTTL(key string, value interface{}, ttl time.Duration) error {
+	return h.RedisClient.SetNX(h.ctx, key, value, ttl).Err()
 }
 
 func (h *RedisHandler) RemoveKey(key string) error {
