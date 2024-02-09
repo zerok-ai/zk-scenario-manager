@@ -1,9 +1,9 @@
 # Zerok Scenario Manager
 The Zerok Scenario Manager is part of the [Zerok System](https://zerok-ai.github.io/helm-charts/), which is a set of tools for observability in Kubernetes clusters. The Zerok System works along with the OpenTelemetry Operator. Check out these docs [add link here] to learn more about how Zerok can benefit you.
 
-The Zerok Scenario Manager uses filtered OpenTelementry Span data retrieved from Redis. Zerok observer populates this data in Redis. The Zerok Scenario Manager collates the data for filtered traces across different Zerok Observer pods and exports the data to OpenTelemetry Collector. You can write an OpenTelemetry Collector pipeline to export this data to another tracing platform like Jaeger. 
+The Zerok Scenario Manager uses filtered OpenTelementry Span data retrieved from Redis. [Zerok Observer](https://github.com/zerok-ai/zk-observer) populates this data in Redis. The Zerok Scenario Manager collates the data for filtered traces across different Zerok Observer pods and exports the data to OpenTelemetry Collector. You can write an OpenTelemetry Collector pipeline to export this data to another tracing platform like Jaeger. 
 ## Prerequisites
-Zerok Operator and Zerok Observer need to be installed in the cluster in the zk-client namespace for the scenario manager to work. You can refer to the links [zk-operator](https://github.com/zerok-ai/zk-operator) and [zk-observer](https://github.com/zerok-ai/zk-observer) for details about installing the Zerok Operator and Zerok Observer.
+[Zerok Operator](https://github.com/zerok-ai/zk-operator) and [Zerok Observer](https://github.com/zerok-ai/zk-observer) need to be installed in the cluster in the zk-client namespace for the scenario manager to work. 
 
 ## Get Helm Repositories Info
 
