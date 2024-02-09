@@ -14,23 +14,23 @@ const (
 	CLIENT             = "CLIENT"
 	SERVER             = "SERVER"
 
-	ScenarioRefreshInterval  = 20 * time.Minute
+	ScenarioRefreshInterval  = 1 * time.Minute
 	TTLForTransientSets      = 30 * time.Second
 	TTLForScenarioSets       = 15 * time.Minute
 	scenarioProcessingTime   = 5 * time.Minute
 	timeRangeForRawDataQuery = "-15m" // -5m, -10m, -1h etc
 
-	/*
-		Workload id sets are created by OTLP receiver
-		-----------
-		<workloadId>_<number>
-		Ex. cc13b872-b3d9-52ed-aa64-210114c0cbef_1
-		-----------
+	/*g
+	Workload id sets are created by OTLP receiver
+	-----------
+	<workloadId>_<number>
+	Ex. cc13b872-b3d9-52ed-aa64-210114c0cbef_1
+	-----------
 
-		OTel
-		-----------
-		OTel_P_<scenarioID>_<time>
-		OTel_P_All_<scenarioID>_<time>
+	OTel
+	-----------
+	OTel_P_<scenarioID>_<time>
+	OTel_P_All_<scenarioID>_<time>
 	*/
 	SetPrefixOTelProcessed          = "OTel_P"
 	SetPrefixOTelProcessedAggregate = "OTel_P_All"
