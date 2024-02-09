@@ -20,7 +20,7 @@ const (
 	scenarioProcessingTime   = 5 * time.Minute
 	timeRangeForRawDataQuery = "-15m" // -5m, -10m, -1h etc
 
-	/*g
+	/*
 	Workload id sets are created by OTLP receiver
 	-----------
 	<workloadId>_<number>
