@@ -1,11 +1,13 @@
 apiVersion: v1
 kind: Service
 metadata:
-  name: zk-scenario-manager
+  name: {{ include "zk-scenario-manager.fullname" . }}
   labels:
-    app.kubernetes.io/name: zk-scenario-manager
+  {{- include "zk-scenario-manager.labels" . | nindent 4 }}
 spec:
+  type: ClusterIP
   selector:
+    app: zk-scenario-manager
     app.kubernetes.io/name: zk-scenario-manager
   ports:
   {{- .Values.ports | toYaml | nindent 2 -}}
