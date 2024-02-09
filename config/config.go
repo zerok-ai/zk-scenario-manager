@@ -36,8 +36,6 @@ type AppConfigs struct {
 	Server               ServerConfig            `yaml:"server"`
 	LogsConfig           zkLogsConfig.LogsConfig `yaml:"logs"`
 	Http                 zkHttpConfig.HttpConfig `yaml:"http"`
-	Router               RouterConfigs           `yaml:"router"`
-	Greeting             string                  `env:"GREETING" env-description:"Greeting phrase" env-default:"Hello!"`
 	ScenarioConfig       ScenariosConfig         `yaml:"scenarioConfig"`
 	Workload             WorkLoadConfig          `yaml:"workLoad"`
 	Exporter             Exporter                `yaml:"exporter"`
