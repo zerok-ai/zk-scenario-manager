@@ -14,7 +14,7 @@ const (
 	CLIENT             = "CLIENT"
 	SERVER             = "SERVER"
 
-	ScenarioRefreshInterval  = 20 * time.Minute
+	ScenarioRefreshInterval  = 1 * time.Minute
 	TTLForTransientSets      = 30 * time.Second
 	TTLForScenarioSets       = 15 * time.Minute
 	scenarioProcessingTime   = 5 * time.Minute

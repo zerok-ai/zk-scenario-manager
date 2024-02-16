@@ -97,7 +97,7 @@ func (t OTelDataHandler) GetSpansForTracesFromDB(keys []typedef.TTraceid) (resul
 	// 3. Execute the transaction
 	_, err = pipe.Exec(ctx)
 	if err != nil {
-		fmt.Println("Error executing transaction:", err)
+		zkLogger.Error(LogTag, "Error executing transaction:", err)
 		return nil, err
 	}
 
@@ -165,7 +165,6 @@ func (t OTelDataHandler) fetchSpanData(keys []typedef.TTraceid, hashResults []*r
 		}
 	}
 
-	//zkLogger.Info(LoggerTag, fmt.Sprintf("NodeIp-traceList map in redis for all traces: %s", nodeIpMap))
 	//make an api call to fetch all the data for each trace id in go routine
 	var otlpReceiverResultMap map[string]map[string]*zkUtilsOtel.OtelEnrichedRawSpanForProto
 	otlpReceiverResultMap, err := t.getSpanData(nodeIpMap)
@@ -173,7 +172,6 @@ func (t OTelDataHandler) fetchSpanData(keys []typedef.TTraceid, hashResults []*r
 		zkLogger.Error(LoggerTag, "Error retrieving data from OTLP receiver", err)
 		return otlpReceiverResultMap, err
 	}
-	//zkLogger.Info("OTLP receiver final result map of traces and span data", fmt.Sprintf("%s", otlpReceiverResultMap))
 
 	return otlpReceiverResultMap, nil
 }
@@ -183,9 +181,6 @@ func (t OTelDataHandler) getSpanData(nodeIpTraceIdMap map[string][]string) (map[
 	otlpReceiverResultMap := make(map[string]map[string]*zkUtilsOtel.OtelEnrichedRawSpanForProto)
 
 	for nodeIp, traceIdSpanIdList := range nodeIpTraceIdMap {
-
-		//get data from receiver
-		//Ques: How is the node port 8147?
 		traceDataFromOtlpReceiver, err := otlpReceiverClient.GetSpanData(nodeIp, traceIdSpanIdList, "8147") //TODO: get from config
 		if err != nil {
 			zkLogger.Error(LoggerTag, fmt.Sprintf("Error retrieving data from OTLP receiver with nodeIP: %s for traces : %s", nodeIp, traceIdSpanIdList), err)
@@ -214,7 +209,6 @@ func (t OTelDataHandler) getSpanData(nodeIpTraceIdMap map[string][]string) (map[
 				otlpReceiverResultMap[traceId][spanId] = spanData
 			}
 		}
-
 		//Iterate over the ebpf response list and update the map of traceId to spanId to spanData with ebpf data.
 		for _, response := range traceDataFromOtlpReceiver.EbpfResponseList {
 
@@ -281,8 +275,6 @@ func (t OTelDataHandler) getAttribute(key, value string) *otlpCommonV1.KeyValue 
 }
 
 func (t OTelDataHandler) processResult(keys []typedef.TTraceid, traceSpanData map[string]map[string]*zkUtilsOtel.OtelEnrichedRawSpanForProto) (result map[typedef.TTraceid]*TraceFromOTel) {
-
-	//zkLogger.Info(LoggerTag, fmt.Sprintf("Processing data received from OTLP receiver for traceList: %s", traceSpanData))
 	result = make(map[typedef.TTraceid]*TraceFromOTel)
 	for i := range keys {
 		traceId := keys[i]
@@ -317,16 +309,6 @@ func (t OTelDataHandler) processResult(keys []typedef.TTraceid, traceSpanData ma
 			sp.ParentSpanID = typedef.TSpanId(hex.EncodeToString(sp.Span.ParentSpanId))
 
 			traceFromOTel.Spans[typedef.TSpanId(spanId)] = &sp
-
-			//var sp SpanFromOTel
-			//err2 := json.Unmarshal([]byte(spanData), &sp)
-			//if err2 != nil {
-			//	zkLogger.Error(LoggerTag, "Error retrieving span:", err2)
-			//	continue
-			//}
-			//sp.TraceID = traceId
-			//sp.SpanID = typedef.TSpanId(spanId)
-			//sp.ParentSpanID = typedef.TSpanId(hex.EncodeToString(sp.Span.ParentSpanId))
 
 			traceFromOTel.Spans[typedef.TSpanId(spanId)] = &sp
 		}

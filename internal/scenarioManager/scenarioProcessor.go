@@ -10,7 +10,7 @@ import (
 	ticker "github.com/zerok-ai/zk-utils-go/ticker"
 	"scenario-manager/config"
 	typedef "scenario-manager/internal"
-	promMetrics "scenario-manager/internal/prometheusMetrics"
+	promMetrics "scenario-manager/internal/metrics"
 	"scenario-manager/internal/stores"
 	"sort"
 	"strings"
@@ -133,12 +133,9 @@ func (scenarioProcessor *ScenarioProcessor) findScenarioToProcess() *model.Scena
 	return scenarioToProcess
 }
 
-func (scenarioProcessor *ScenarioProcessor) markProcessingEnd(scenario *model.Scenario) {
-	scenarioProcessor.FinishedProcessingScenario(scenario.Id, scenarioProcessor.id)
-}
-
-func (scenarioProcessor *ScenarioProcessor) FinishedProcessingScenario(scenarioId, scenarioProcessorId string) {
+func (scenarioProcessor *ScenarioProcessor) FinishedProcessingScenario(scenarioId string) {
 	// remove the Key for currently processing worker
+	scenarioProcessorId := scenarioProcessor.id
 	key := fmt.Sprintf("%s_%s", currentProcessingWorkerKeyPrefix, scenarioId)
 	result := scenarioProcessor.traceStore.GetValueForKey(key)
 	if result != scenarioProcessorId {
@@ -174,7 +171,7 @@ func (scenarioProcessor *ScenarioProcessor) processScenario(scenario *model.Scen
 		return
 	}
 	// mark the processing end for the current scenario
-	defer scenarioProcessor.markProcessingEnd(scenario)
+	defer scenarioProcessor.FinishedProcessingScenario(scenario.Id)
 
 	// get all the workload sets to process for the current scenario
 	namesOfAllSets := scenarioProcessor.getWorkLoadSetsToProcess(scenario)
@@ -192,8 +189,6 @@ func (scenarioProcessor *ScenarioProcessor) processScenario(scenario *model.Scen
 		}
 		allValues = append(allValues, value...)
 	}
-
-	fmt.Println("allValues: ", len(allValues))
 
 	// evaluate scenario and get all traceIds
 	allTraceIds := NewTraceEvaluator(scenarioProcessor.cfg, scenario, scenarioProcessor.traceStore, namesOfAllSets, TTLForScenarioSets).EvalScenario()

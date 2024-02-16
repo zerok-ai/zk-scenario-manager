@@ -3,7 +3,7 @@
 # Declare variables to be passed into your templates.
 
 global:
-  dockerBase: "us-west1-docker.pkg.dev/zerok-dev/zk-client"
+  dockerBase: "zerokai"
 
 obfuscate: false
 
@@ -39,11 +39,6 @@ zkScenarioManager:
       cpu: 512m
       memory: 512Mi
 
-obfuscatorImage:
-  repo: "zk-obfuscator"
-  tag: "0.1.0-alpha"
-  imagePullPolicy: IfNotPresent
-
 image:
   repo: "zk-scenario-manager"
   tag: "latest"
@@ -51,10 +46,6 @@ image:
   migrationRestartPolicy: Never
   migrationRepo: "zk-scenario-manager-migration"
   migrationTag: "latest"
-
-initImage:
-  repo: "us-west1-docker.pkg.dev/black-scope-358204/zk-client/prod/curl"
-  tag: latest
 
 serviceAccount:
   # Specifies whether a service account should be created

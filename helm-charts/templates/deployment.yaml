@@ -18,53 +18,7 @@ spec:
         app: zk-scenario-manager
       {{- include "zk-scenario-manager.selectorLabels" . | nindent 8 }}
     spec:
-{{/*      initContainers:*/}}
-{{/*        - command:*/}}
-{{/*            - sh*/}}
-{{/*            - -c*/}}
-{{/*            - 'set -xe; URL="${PROTOCOL}://${SERVICE_NAME}:${SERVICE_PORT}${HEALTH_PATH}";*/}}
-{{/*              until [ $(curl -m 0.5 -s -o /dev/null -w "%{http_code}" -k ${URL}) -eq 200 ];*/}}
-{{/*              do echo "waiting for ${URL}"; sleep 2; done;'*/}}
-{{/*          name: operator-wait*/}}
-{{/*          env:*/}}
-{{/*            - name: SERVICE_NAME*/}}
-{{/*              value: zk-operator.zk-client.svc.cluster.local*/}}
-{{/*            - name: SERVICE_PORT*/}}
-{{/*              value: "8081"*/}}
-{{/*            - name: PROTOCOL*/}}
-{{/*              value: http*/}}
-{{/*            - name: HEALTH_PATH*/}}
-{{/*              value: "/healthz"*/}}
-{{/*          image: "{{ .Values.initImage.repo}}:{{ .Values.initImage.tag}}"*/}}
-{{/*          imagePullPolicy: IfNotPresent*/}}
-{{/*          resources: { }*/}}
-{{/*          securityContext:*/}}
-{{/*            allowPrivilegeEscalation: false*/}}
-{{/*            capabilities:*/}}
-{{/*              drop:*/}}
-{{/*                - ALL*/}}
       containers:
-      {{ if .Values.obfuscate }}
-      - name: zk-obfuscator
-        image:  "{{ .Values.global.dockerBase}}/{{ .Values.obfuscatorImage.repo}}:{{ .Values.obfuscatorImage.tag}}"
-        imagePullPolicy: {{ .Values.obfuscatorImage.imagePullPolicy }}
-        ports:
-          - containerPort: 9103
-        volumeMounts:
-          - name: obfuscator-config
-            mountPath: /zk/config
-        env:
-          - name: ZK_REDIS_PASSWORD # Setting Redis password from Secret
-            valueFrom:
-              secretKeyRef:
-                name: redis
-                key: redis-password
-          - name: ZK_REDIS_HOST # Setting Redis password from Config
-            valueFrom:
-              configMapKeyRef:
-                name: zk-redis-config
-                key: redisHost
-      {{ end }}
       - image: "{{ .Values.global.dockerBase}}/{{ .Values.image.repo}}:{{ .Values.image.tag}}"
         imagePullPolicy: {{ .Values.image.imagePullPolicy }}
         name: zk-scenario-manager
@@ -80,8 +34,6 @@ spec:
         - mountPath: /zk/config
           name: config
         env: # Setting Enviornmental Variables
-          - name: OBFUSCATE
-            value: "{{ .Values.obfuscate}}"
           - name: ZK_REDIS_PASSWORD # Setting Redis password from Secret
             valueFrom:
               secretKeyRef:
@@ -96,6 +48,3 @@ spec:
       - configMap:
           name: {{ include "zk-scenario-manager.fullname" . }}
         name: config
-      - name: obfuscator-config
-        configMap:
-          name: zk-obfuscator
