@@ -192,8 +192,7 @@ func (t OTelDataHandler) getSpanData(nodeIpTraceIdMap map[string][]string) (map[
 
 			traceIdSpanId := response.Key
 			spanData := response.Value
-			//TODO: This separator might change if we decide to -o- as separator.
-			traceId, spanId, err := smUtils.SplitTraceIdSpanId(traceIdSpanId, "-")
+			traceId, spanId, err := smUtils.SplitTraceIdSpanId(traceIdSpanId, "-o-")
 
 			if err != nil {
 				zkLogger.Error(LoggerTag, fmt.Sprintf("Error splitting traceIdSpanId: %s", traceIdSpanId), err)
