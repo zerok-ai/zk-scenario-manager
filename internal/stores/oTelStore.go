@@ -2,6 +2,7 @@ package stores
 
 import (
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"github.com/redis/go-redis/v9"
 	"github.com/zerok-ai/zk-rawdata-reader/vzReader/utils"
@@ -254,22 +255,21 @@ func (t OTelDataHandler) getEbpfAttributes(ebpfData *zkUtilsOtel.EbpfEntryDataFo
 		respStatus := ebpfData.RespStatus
 		keyValueList = append(keyValueList, t.getAttribute("zk_response_status", respStatus))
 
-		//TODO: Change the headers to keyvalue list after checking the string format.
-		requestHeaders := ebpfData.ReqHeaders
-		keyValueList = append(keyValueList, t.getListAttribute("zk_request_headers", requestHeaders))
+		//requestHeaders := GetHeaders(ebpfData.ReqHeaders)
+		keyValueList = append(keyValueList, t.getAttribute("zk_request_headers", ebpfData.ReqHeaders))
 
-		responseHeaders := ebpfData.RespHeaders
-		keyValueList = append(keyValueList, t.getListAttribute("zk_response_headers", responseHeaders))
+		//responseHeaders := GetHeaders(ebpfData.RespHeaders)
+		keyValueList = append(keyValueList, t.getAttribute("zk_response_headers", ebpfData.RespHeaders))
 
 	}
 
 	return keyValueList
 }
 
-func (t OTelDataHandler) getListAttribute(key string, value *otlpCommonV1.KeyValueList) *otlpCommonV1.KeyValue {
+func (t OTelDataHandler) getListAttribute(key string, value []*otlpCommonV1.KeyValue) *otlpCommonV1.KeyValue {
 	return &otlpCommonV1.KeyValue{
 		Key:   key,
-		Value: &otlpCommonV1.AnyValue{Value: &otlpCommonV1.AnyValue_KvlistValue{KvlistValue: value}},
+		Value: &otlpCommonV1.AnyValue{Value: &otlpCommonV1.AnyValue_KvlistValue{KvlistValue: &otlpCommonV1.KeyValueList{Values: value}}},
 	}
 }
 
@@ -364,4 +364,24 @@ func isValidNodeIP(ip string) bool {
 	ipRegex := regexp.MustCompile(`^(\d{1,3}\.){3}\d{1,3}$|^([0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}$`)
 
 	return ipRegex.MatchString(ip) && isValidIP(ip)
+}
+
+func GetHeaders(jsonStr string) []*otlpCommonV1.KeyValue {
+	var result map[string]string
+	var keyValueList []*otlpCommonV1.KeyValue
+	err := json.Unmarshal([]byte(jsonStr), &result)
+
+	if err != nil {
+		zkLogger.Error(LoggerTag, "Error while unmarshalling headers: ", err)
+		return keyValueList
+	}
+
+	for key, value := range result {
+		keyValueList = append(keyValueList, &otlpCommonV1.KeyValue{
+			Key:   key,
+			Value: &otlpCommonV1.AnyValue{Value: &otlpCommonV1.AnyValue_StringValue{StringValue: value}},
+		})
+	}
+
+	return keyValueList
 }
