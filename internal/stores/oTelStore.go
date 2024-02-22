@@ -256,14 +256,21 @@ func (t OTelDataHandler) getEbpfAttributes(ebpfData *zkUtilsOtel.EbpfEntryDataFo
 
 		//TODO: Change the headers to keyvalue list after checking the string format.
 		requestHeaders := ebpfData.ReqHeaders
-		keyValueList = append(keyValueList, t.getAttribute("zk_request_headers", requestHeaders))
+		keyValueList = append(keyValueList, t.getListAttribute("zk_request_headers", requestHeaders))
 
 		responseHeaders := ebpfData.RespHeaders
-		keyValueList = append(keyValueList, t.getAttribute("zk_response_headers", responseHeaders))
+		keyValueList = append(keyValueList, t.getListAttribute("zk_response_headers", responseHeaders))
 
 	}
 
 	return keyValueList
+}
+
+func (t OTelDataHandler) getListAttribute(key string, value *otlpCommonV1.KeyValueList) *otlpCommonV1.KeyValue {
+	return &otlpCommonV1.KeyValue{
+		Key:   key,
+		Value: &otlpCommonV1.AnyValue{Value: &otlpCommonV1.AnyValue_KvlistValue{KvlistValue: value}},
+	}
 }
 
 func (t OTelDataHandler) getAttribute(key, value string) *otlpCommonV1.KeyValue {
