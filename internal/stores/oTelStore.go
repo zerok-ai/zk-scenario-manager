@@ -55,7 +55,7 @@ type OTelError struct {
 
 type SpanFromOTel struct {
 	Span                   *otlpTraceV1.Span               `json:"span"`
-	SpanAttributes         zkUtilsCommonModel.GenericMap   `json:"span_attributes,omitempty"`
+	SpanAttributes         []*otlpCommonV1.KeyValue        `json:"span_attributes,omitempty"`
 	SpanEvents             []zkUtilsCommonModel.GenericMap `json:"span_events,omitempty"`
 	ResourceAttributesHash string                          `json:"resource_attributes_hash,omitempty"`
 	ScopeAttributesHash    string                          `json:"scope_attributes_hash,omitempty"`
@@ -255,11 +255,11 @@ func (t OTelDataHandler) getEbpfAttributes(ebpfData *zkUtilsOtel.EbpfEntryDataFo
 		respStatus := ebpfData.RespStatus
 		keyValueList = append(keyValueList, t.getAttribute("zk_response_status", respStatus))
 
-		//requestHeaders := GetHeaders(ebpfData.ReqHeaders)
-		keyValueList = append(keyValueList, t.getAttribute("zk_request_headers", ebpfData.ReqHeaders))
+		requestHeaders := GetHeaders(ebpfData.ReqHeaders)
+		keyValueList = append(keyValueList, t.getListAttribute("zk_request_headers", requestHeaders))
 
-		//responseHeaders := GetHeaders(ebpfData.RespHeaders)
-		keyValueList = append(keyValueList, t.getAttribute("zk_response_headers", ebpfData.RespHeaders))
+		responseHeaders := GetHeaders(ebpfData.RespHeaders)
+		keyValueList = append(keyValueList, t.getListAttribute("zk_response_headers", responseHeaders))
 
 	}
 
@@ -301,15 +301,16 @@ func (t OTelDataHandler) processResult(keys []typedef.TTraceid, traceSpanData ma
 		// 4.1 Unmarshal the Spans
 		for spanId, protoSpan := range spanMap {
 			var sp SpanFromOTel
-			x := zkUtilsEnrichedSpan.GetEnrichedSpan(protoSpan)
 
-			sp.Span = x.Span
-			sp.SpanAttributes = x.SpanAttributes
-			sp.SpanEvents = x.SpanEvents
-			sp.ResourceAttributesHash = x.ResourceAttributesHash
-			sp.ScopeAttributesHash = x.ScopeAttributesHash
-			sp.WorkloadIDList = x.WorkloadIdList
-			sp.GroupByMap = x.GroupBy
+			sp.Span = protoSpan.Span
+			if protoSpan.SpanAttributes != nil {
+				sp.SpanAttributes = protoSpan.SpanAttributes.KeyValueList
+			}
+			sp.SpanEvents = zkUtilsEnrichedSpan.ConvertListOfKVListToMap(protoSpan.SpanEvents)
+			sp.ResourceAttributesHash = protoSpan.ResourceAttributesHash
+			sp.ScopeAttributesHash = protoSpan.ScopeAttributesHash
+			sp.WorkloadIDList = protoSpan.WorkloadIdList
+			sp.GroupByMap = zkUtilsEnrichedSpan.ConvertKVListToGroupByMap(protoSpan.GroupBy)
 			sp.TraceID = traceId
 			sp.SpanID = typedef.TSpanId(spanId)
 			sp.ParentSpanID = typedef.TSpanId(hex.EncodeToString(sp.Span.ParentSpanId))
