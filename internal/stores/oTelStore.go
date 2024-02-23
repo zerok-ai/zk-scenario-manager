@@ -2,14 +2,15 @@ package stores
 
 import (
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"github.com/redis/go-redis/v9"
 	"github.com/zerok-ai/zk-rawdata-reader/vzReader/utils"
 	zkUtilsCommonModel "github.com/zerok-ai/zk-utils-go/common"
 	"github.com/zerok-ai/zk-utils-go/ds"
 	zkLogger "github.com/zerok-ai/zk-utils-go/logs"
+	zkUtilsOtel "github.com/zerok-ai/zk-utils-go/proto"
 	zkUtilsEnrichedSpan "github.com/zerok-ai/zk-utils-go/proto/enrichedSpan"
-	zkUtilsOtel "github.com/zerok-ai/zk-utils-go/proto/opentelemetry"
 	"github.com/zerok-ai/zk-utils-go/storage/redis/clientDBNames"
 	"github.com/zerok-ai/zk-utils-go/storage/redis/config"
 	otlpCommonV1 "go.opentelemetry.io/proto/otlp/common/v1"
@@ -54,7 +55,7 @@ type OTelError struct {
 
 type SpanFromOTel struct {
 	Span                   *otlpTraceV1.Span               `json:"span"`
-	SpanAttributes         zkUtilsCommonModel.GenericMap   `json:"span_attributes,omitempty"`
+	SpanAttributes         []*otlpCommonV1.KeyValue        `json:"span_attributes,omitempty"`
 	SpanEvents             []zkUtilsCommonModel.GenericMap `json:"span_events,omitempty"`
 	ResourceAttributesHash string                          `json:"resource_attributes_hash,omitempty"`
 	ScopeAttributesHash    string                          `json:"scope_attributes_hash,omitempty"`
@@ -181,29 +182,50 @@ func (t OTelDataHandler) getSpanData(nodeIpTraceIdMap map[string][]string) (map[
 	otlpReceiverResultMap := make(map[string]map[string]*zkUtilsOtel.OtelEnrichedRawSpanForProto)
 
 	for nodeIp, traceIdSpanIdList := range nodeIpTraceIdMap {
-		//get data from receiver
 		traceDataFromOtlpReceiver, err := otlpReceiverClient.GetSpanData(nodeIp, traceIdSpanIdList, "8147") //TODO: get from config
 		if err != nil {
 			zkLogger.Error(LoggerTag, fmt.Sprintf("Error retrieving data from OTLP receiver with nodeIP: %s for traces : %s", nodeIp, traceIdSpanIdList), err)
 			continue
 		}
 
+		//Iterate over the response list and create a map of traceId to spanId to spanData.
 		for _, response := range traceDataFromOtlpReceiver.ResponseList {
+
 			traceIdSpanId := response.Key
 			spanData := response.Value
-			traceId, spanId, err := smUtils.SplitTraceIdSpanId(traceIdSpanId)
+			traceId, spanId, err := smUtils.SplitTraceIdSpanId(traceIdSpanId, "-o-")
+
 			if err != nil {
 				zkLogger.Error(LoggerTag, fmt.Sprintf("Error splitting traceIdSpanId: %s", traceIdSpanId), err)
 				continue
 			}
+
 			if len(otlpReceiverResultMap[traceId]) == 0 || otlpReceiverResultMap[traceId] == nil {
 				otlpReceiverResultMap[traceId] = make(map[string]*zkUtilsOtel.OtelEnrichedRawSpanForProto)
-				var spanDataMap map[string]*zkUtilsOtel.OtelEnrichedRawSpanForProto
-				spanDataMap = make(map[string]*zkUtilsOtel.OtelEnrichedRawSpanForProto)
+				spanDataMap := make(map[string]*zkUtilsOtel.OtelEnrichedRawSpanForProto)
 				spanDataMap[spanId] = spanData
 				otlpReceiverResultMap[traceId] = spanDataMap
 			} else {
 				otlpReceiverResultMap[traceId][spanId] = spanData
+			}
+		}
+		//Iterate over the ebpf response list and update the map of traceId to spanId to spanData with ebpf data.
+		for _, response := range traceDataFromOtlpReceiver.EbpfResponseList {
+
+			traceIdSpanId := response.Key
+			ebpfData := response.Value
+			traceId, spanId, err := smUtils.SplitTraceIdSpanId(traceIdSpanId, "-e-")
+
+			if err != nil {
+				zkLogger.Error(LoggerTag, fmt.Sprintf("Error splitting traceIdSpanId: %s", traceIdSpanId), err)
+				continue
+			}
+
+			if otlpReceiverResultMap[traceId] != nil {
+				spanData, ok := otlpReceiverResultMap[traceId][spanId]
+				if ok {
+					spanData.SpanAttributes.KeyValueList = append(spanData.SpanAttributes.KeyValueList, t.getEbpfAttributes(ebpfData)...)
+				}
 			}
 		}
 	}
@@ -211,8 +233,54 @@ func (t OTelDataHandler) getSpanData(nodeIpTraceIdMap map[string][]string) (map[
 	return otlpReceiverResultMap, nil
 }
 
-func (t OTelDataHandler) processResult(keys []typedef.TTraceid, traceSpanData map[string]map[string]*zkUtilsOtel.OtelEnrichedRawSpanForProto) (result map[typedef.TTraceid]*TraceFromOTel) {
+func (t OTelDataHandler) getEbpfAttributes(ebpfData *zkUtilsOtel.EbpfEntryDataForSpan) []*otlpCommonV1.KeyValue {
+	keyValueList := []*otlpCommonV1.KeyValue{}
+	if ebpfData != nil {
 
+		requestBody := ebpfData.ReqBody
+		keyValueList = append(keyValueList, t.getAttribute("zk_request_body", requestBody))
+
+		responseBody := ebpfData.RespBody
+		keyValueList = append(keyValueList, t.getAttribute("zk_response_body", responseBody))
+
+		contentType := ebpfData.ContentType
+		keyValueList = append(keyValueList, t.getAttribute("zk_content_type", contentType))
+
+		reqPath := ebpfData.ReqPath
+		keyValueList = append(keyValueList, t.getAttribute("zk_request_path", reqPath))
+
+		reqMethod := ebpfData.ReqMethod
+		keyValueList = append(keyValueList, t.getAttribute("zk_request_method", reqMethod))
+
+		respStatus := ebpfData.RespStatus
+		keyValueList = append(keyValueList, t.getAttribute("zk_response_status", respStatus))
+
+		requestHeaders := GetHeaders(ebpfData.ReqHeaders)
+		keyValueList = append(keyValueList, t.getListAttribute("zk_request_headers", requestHeaders))
+
+		responseHeaders := GetHeaders(ebpfData.RespHeaders)
+		keyValueList = append(keyValueList, t.getListAttribute("zk_response_headers", responseHeaders))
+
+	}
+
+	return keyValueList
+}
+
+func (t OTelDataHandler) getListAttribute(key string, value []*otlpCommonV1.KeyValue) *otlpCommonV1.KeyValue {
+	return &otlpCommonV1.KeyValue{
+		Key:   key,
+		Value: &otlpCommonV1.AnyValue{Value: &otlpCommonV1.AnyValue_KvlistValue{KvlistValue: &otlpCommonV1.KeyValueList{Values: value}}},
+	}
+}
+
+func (t OTelDataHandler) getAttribute(key, value string) *otlpCommonV1.KeyValue {
+	return &otlpCommonV1.KeyValue{
+		Key:   key,
+		Value: &otlpCommonV1.AnyValue{Value: &otlpCommonV1.AnyValue_StringValue{StringValue: value}},
+	}
+}
+
+func (t OTelDataHandler) processResult(keys []typedef.TTraceid, traceSpanData map[string]map[string]*zkUtilsOtel.OtelEnrichedRawSpanForProto) (result map[typedef.TTraceid]*TraceFromOTel) {
 	result = make(map[typedef.TTraceid]*TraceFromOTel)
 	for i := range keys {
 		traceId := keys[i]
@@ -233,15 +301,16 @@ func (t OTelDataHandler) processResult(keys []typedef.TTraceid, traceSpanData ma
 		// 4.1 Unmarshal the Spans
 		for spanId, protoSpan := range spanMap {
 			var sp SpanFromOTel
-			x := zkUtilsEnrichedSpan.GetEnrichedSpan(protoSpan)
 
-			sp.Span = x.Span
-			sp.SpanAttributes = x.SpanAttributes
-			sp.SpanEvents = x.SpanEvents
-			sp.ResourceAttributesHash = x.ResourceAttributesHash
-			sp.ScopeAttributesHash = x.ScopeAttributesHash
-			sp.WorkloadIDList = x.WorkloadIdList
-			sp.GroupByMap = x.GroupBy
+			sp.Span = protoSpan.Span
+			if protoSpan.SpanAttributes != nil {
+				sp.SpanAttributes = protoSpan.SpanAttributes.KeyValueList
+			}
+			sp.SpanEvents = zkUtilsEnrichedSpan.ConvertListOfKVListToMap(protoSpan.SpanEvents)
+			sp.ResourceAttributesHash = protoSpan.ResourceAttributesHash
+			sp.ScopeAttributesHash = protoSpan.ScopeAttributesHash
+			sp.WorkloadIDList = protoSpan.WorkloadIdList
+			sp.GroupByMap = zkUtilsEnrichedSpan.ConvertKVListToGroupByMap(protoSpan.GroupBy)
 			sp.TraceID = traceId
 			sp.SpanID = typedef.TSpanId(spanId)
 			sp.ParentSpanID = typedef.TSpanId(hex.EncodeToString(sp.Span.ParentSpanId))
@@ -296,4 +365,24 @@ func isValidNodeIP(ip string) bool {
 	ipRegex := regexp.MustCompile(`^(\d{1,3}\.){3}\d{1,3}$|^([0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}$`)
 
 	return ipRegex.MatchString(ip) && isValidIP(ip)
+}
+
+func GetHeaders(jsonStr string) []*otlpCommonV1.KeyValue {
+	var result map[string]string
+	var keyValueList []*otlpCommonV1.KeyValue
+	err := json.Unmarshal([]byte(jsonStr), &result)
+
+	if err != nil {
+		zkLogger.Error(LoggerTag, "Error while unmarshalling headers: ", err)
+		return keyValueList
+	}
+
+	for key, value := range result {
+		keyValueList = append(keyValueList, &otlpCommonV1.KeyValue{
+			Key:   key,
+			Value: &otlpCommonV1.AnyValue{Value: &otlpCommonV1.AnyValue_StringValue{StringValue: value}},
+		})
+	}
+
+	return keyValueList
 }

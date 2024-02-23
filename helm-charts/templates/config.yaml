@@ -24,7 +24,7 @@ data:
       ttl: {{ .Values.workLoadTtl }}
       tickerDuration: {{ .Values.workLoadTickerDuration }}
     exporter:
-      host: 0.0.0.0
+      host: opentelemetry-collector.opentelemetry-operator-system.svc.cluster.local
       port: 4319
     otelQueueWorkerCount: {{ .Values.otelQueueWorkerCount }}
 kind: ConfigMap

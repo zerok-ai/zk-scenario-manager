@@ -165,7 +165,11 @@ func (worker *QueueWorkerOTel) handleMessage(oTelMessage OTELTraceMessage) {
 				for _, workloadId := range span.WorkloadIDList {
 					workloadIdSet.Add(workloadId)
 				}
-				span.SpanAttributes["workload_id_list"] = workloadIdSet
+				keyValue := otlpCommonV1.KeyValue{
+					Key:   "workload_id_list",
+					Value: enrichedSpan.ConvertToAnyValue(workloadIdSet),
+				}
+				span.SpanAttributes = append(span.SpanAttributes, &keyValue)
 				allWorkloadIdsInTrace = allWorkloadIdsInTrace.Union(workloadIdSet)
 				allGroupByTitleSet = allGroupByTitleSet.Union(span.GroupByTitleSet)
 			}
@@ -186,17 +190,24 @@ func (worker *QueueWorkerOTel) handleMessage(oTelMessage OTELTraceMessage) {
 		if err != nil {
 			zkLogger.Error(LoggerTagOTel, "error in getting scenario ids for workload ids", err)
 		} else {
-			rootSpan.SpanAttributes["probes"] = probesName
+			keyValue := otlpCommonV1.KeyValue{
+				Key:   "probes",
+				Value: enrichedSpan.ConvertToAnyValue(probesName),
+			}
+			rootSpan.SpanAttributes = append(rootSpan.SpanAttributes, &keyValue)
 		}
-
-		rootSpan.SpanAttributes["GroupByTitleSet"] = allGroupByTitleSet
+		keyValue := otlpCommonV1.KeyValue{
+			Key:   "GroupByTitleSet",
+			Value: enrichedSpan.ConvertToAnyValue(allGroupByTitleSet),
+		}
+		rootSpan.SpanAttributes = append(rootSpan.SpanAttributes, &keyValue)
 	}
 
 	// 4. save attributes details
 	spanBuffer := make([]*stores.SpanFromOTel, 0)
 	for _, incident := range newIncidentList {
 		for _, span := range incident.Incident.Spans {
-			span.Span.Attributes = enrichedSpan.ConvertMapToKVList(span.SpanAttributes).KeyValueList
+			span.Span.Attributes = span.SpanAttributes
 			spanBuffer = append(spanBuffer, span)
 		}
 	}
@@ -241,7 +252,6 @@ func getMin(a int, b int) int {
 func sendDataToCollector(resourceSpans []*otlpTraceV1.ResourceSpans, worker *QueueWorkerOTel, oTelMessage OTELTraceMessage) {
 	var tracesData pb.ExportTraceServiceRequest
 	tracesData.ResourceSpans = resourceSpans
-	fmt.Println("Testing")
 	// Set up a connection to the server
 	url := fmt.Sprintf("%s:%s", worker.exporter.Host, worker.exporter.Port)
 	zkLogger.Info(LoggerTagOTel, "Connecting to ", url)

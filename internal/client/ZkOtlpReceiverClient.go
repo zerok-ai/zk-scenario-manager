@@ -8,7 +8,7 @@ import (
 	"github.com/golang/protobuf/proto"
 	zkhttp "github.com/zerok-ai/zk-utils-go/http"
 	zklogger "github.com/zerok-ai/zk-utils-go/logs"
-	badgerResponse "github.com/zerok-ai/zk-utils-go/proto/opentelemetry"
+	badgerResponse "github.com/zerok-ai/zk-utils-go/proto"
 	"io"
 	promMetrics "scenario-manager/internal/metrics"
 	"time"
