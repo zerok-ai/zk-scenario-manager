@@ -196,8 +196,6 @@ func (scenarioProcessor *ScenarioProcessor) processScenario(scenario *model.Scen
 		zkLogger.DebugF(LoggerTagScenarioProcessor, "No traces satisfying the scenario")
 		return
 	}
-	fmt.Println("-------------")
-	fmt.Println("allTraceIds: ", len(allTraceIds))
 
 	// mark all traceIds as processed in redis
 	setName := fmt.Sprintf("%s_%s_%d", SetPrefixOTelProcessed, scenario.Id, time.Now().UnixMilli())

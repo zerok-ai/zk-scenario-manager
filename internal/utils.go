@@ -2,8 +2,11 @@ package internal
 
 import (
 	"fmt"
+	zklogger "github.com/zerok-ai/zk-utils-go/logs"
 	"strings"
 )
+
+var LogTag = "utils"
 
 func SplitTraceIdSpanId(traceIdSpanId string, separator string) (string, string, error) {
 	parts := strings.Split(traceIdSpanId, separator)
@@ -14,7 +17,7 @@ func SplitTraceIdSpanId(traceIdSpanId string, separator string) (string, string,
 		spanId := parts[1]
 		return traceId, spanId, nil
 	} else {
-		fmt.Println("Invalid input string, does not contain '-'")
+		zklogger.Error(LogTag, "Invalid input string, does not contain '-'")
 		return "", "", fmt.Errorf("invalid traceIdSpanId string, does not contain '-'")
 	}
 }

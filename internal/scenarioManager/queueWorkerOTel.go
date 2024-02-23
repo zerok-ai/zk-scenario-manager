@@ -252,7 +252,6 @@ func getMin(a int, b int) int {
 func sendDataToCollector(resourceSpans []*otlpTraceV1.ResourceSpans, worker *QueueWorkerOTel, oTelMessage OTELTraceMessage) {
 	var tracesData pb.ExportTraceServiceRequest
 	tracesData.ResourceSpans = resourceSpans
-	fmt.Println("Testing")
 	// Set up a connection to the server
 	url := fmt.Sprintf("%s:%s", worker.exporter.Host, worker.exporter.Port)
 	zkLogger.Info(LoggerTagOTel, "Connecting to ", url)
